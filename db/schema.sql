@@ -34,12 +34,15 @@ CREATE TABLE IF NOT EXISTS players (
     id INT AUTO_INCREMENT PRIMARY KEY,
     steamid VARCHAR(20) NOT NULL,
     name VARCHAR(100) DEFAULT '',
+    game VARCHAR(50) NOT NULL COMMENT 'Game type: csgo, counterstrike2, etc.',
     playtime INT DEFAULT 0 COMMENT 'Playtime in seconds',
     server_ip VARCHAR(45),
     server_port INT,
     last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_player_game (steamid, game),
     INDEX idx_steamid (steamid),
+    INDEX idx_game (game),
     INDEX idx_server (server_ip, server_port),
     INDEX idx_last_seen (last_seen)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -48,12 +51,15 @@ CREATE TABLE IF NOT EXISTS players (
 CREATE TABLE IF NOT EXISTS maps (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
+    game VARCHAR(50) NOT NULL COMMENT 'Game type: csgo, counterstrike2, etc.',
     playtime INT DEFAULT 0 COMMENT 'Total playtime in seconds',
     server_ip VARCHAR(45),
     server_port INT,
     last_played TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_map_game (name, game),
     INDEX idx_name (name),
+    INDEX idx_game (game),
     INDEX idx_server (server_ip, server_port),
     INDEX idx_playtime (playtime DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -294,10 +294,10 @@ async function updateLoop() {
         if (result.players && result.players.length > 0) {
           for (const player of result.players) {
             if (player.steamid) {
-              // Insert or update player record
+              // Insert or update player record (separated by game)
               await pool.query(
-                `INSERT INTO players (steamid, name, playtime, server_ip, server_port, last_seen)
-                 VALUES (?, ?, 1, ?, ?, NOW())
+                `INSERT INTO players (steamid, name, game, playtime, server_ip, server_port, last_seen)
+                 VALUES (?, ?, ?, 1, ?, ?, NOW())
                  ON DUPLICATE KEY UPDATE 
                    name=VALUES(name), 
                    playtime=playtime+1, 
@@ -307,6 +307,7 @@ async function updateLoop() {
                 [
                   player.steamid,
                   player.name || "Unknown",
+                  server.game,
                   server.ip,
                   server.port,
                 ],
@@ -328,17 +329,17 @@ async function updateLoop() {
           });
         }
 
-        // Track map playtime
+        // Track map playtime (separated by game)
         if (result.map) {
           await pool.query(
-            `INSERT INTO maps (name, playtime, server_ip, server_port, last_played)
-             VALUES (?, 1, ?, ?, NOW())
+            `INSERT INTO maps (name, game, playtime, server_ip, server_port, last_played)
+             VALUES (?, ?, 1, ?, ?, NOW())
              ON DUPLICATE KEY UPDATE 
                playtime=playtime+1, 
                server_ip=VALUES(server_ip), 
                server_port=VALUES(server_port), 
                last_played=NOW()`,
-            [result.map, server.ip, server.port],
+            [result.map, server.game, server.ip, server.port],
           );
         }
       } else {

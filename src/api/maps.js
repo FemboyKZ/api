@@ -16,7 +16,7 @@ const {
 // Cache for 30 seconds
 router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
   try {
-    const { page, limit, sort, order, server, name } = req.query;
+    const { page, limit, sort, order, server, name, game } = req.query;
     const { limit: validLimit, offset } = validatePagination(page, limit, 100);
 
     const validSortFields = ["total_playtime", "name"];
@@ -24,8 +24,13 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
     const sortOrder = order === "asc" ? "ASC" : "DESC";
 
     let query =
-      "SELECT name, SUM(playtime) AS total_playtime FROM maps WHERE 1=1";
+      "SELECT name, game, SUM(playtime) AS total_playtime FROM maps WHERE 1=1";
     const params = [];
+
+    if (game) {
+      query += " AND game = ?";
+      params.push(sanitizeString(game, 50));
+    }
 
     if (server) {
       const [ip, port] = server.split(":");
@@ -40,13 +45,17 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
       params.push(`%${sanitizeString(name, 100)}%`);
     }
 
-    query += ` GROUP BY name ORDER BY ${sortField} ${sortOrder} LIMIT ? OFFSET ?`;
+    query += ` GROUP BY name, game ORDER BY ${sortField} ${sortOrder} LIMIT ? OFFSET ?`;
     params.push(validLimit, offset);
 
     const [maps] = await pool.query(query, params);
 
-    let countQuery = "SELECT COUNT(DISTINCT name) as total FROM maps WHERE 1=1";
+    let countQuery = "SELECT COUNT(DISTINCT CONCAT(name, '-', game)) as total FROM maps WHERE 1=1";
     const countParams = [];
+    if (game) {
+      countQuery += " AND game = ?";
+      countParams.push(sanitizeString(game, 50));
+    }
     if (server) {
       const [ip, port] = server.split(":");
       if (ip && port && isValidIP(ip) && isValidPort(port)) {
