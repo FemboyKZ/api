@@ -7,8 +7,13 @@ const {
   sanitizeString,
 } = require("../utils/validators");
 const logger = require("../utils/logger");
+const {
+  cacheMiddleware,
+  playersKeyGenerator,
+} = require("../utils/cacheMiddleware");
 
-router.get("/", async (req, res) => {
+// Cache for 30 seconds
+router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
   try {
     const { page, limit, sort, order, name } = req.query;
     const { limit: validLimit, offset } = validatePagination(page, limit, 100);

@@ -8,8 +8,13 @@ const {
   isValidPort,
 } = require("../utils/validators");
 const logger = require("../utils/logger");
+const {
+  cacheMiddleware,
+  mapsKeyGenerator,
+} = require("../utils/cacheMiddleware");
 
-router.get("/", async (req, res) => {
+// Cache for 30 seconds
+router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
   try {
     const { page, limit, sort, order, server, name } = req.query;
     const { limit: validLimit, offset } = validatePagination(page, limit, 100);

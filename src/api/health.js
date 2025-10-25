@@ -2,15 +2,23 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
+const { isRedisConnected } = require("../db/redis");
+const { getWebSocketStats } = require("../services/websocket");
 
 router.get("/", async (req, res) => {
   try {
     await pool.query("SELECT 1");
 
+    const wsStats = getWebSocketStats();
+    const redisStatus = isRedisConnected();
+
     res.json({
       status: "ok",
       timestamp: new Date().toISOString(),
       database: "connected",
+      redis: redisStatus ? "connected" : "disconnected",
+      websocket: wsStats.connected ? "active" : "inactive",
+      websocketClients: wsStats.clients,
     });
   } catch (e) {
     logger.error(`Health check failed: ${e.message}`);
@@ -42,6 +50,7 @@ router.get("/stats", async (req, res) => {
     );
 
     const uptime = process.uptime();
+    const wsStats = getWebSocketStats();
 
     res.json({
       servers: {
@@ -55,6 +64,13 @@ router.get("/stats", async (req, res) => {
       },
       maps: {
         total: mapStats[0].total,
+      },
+      websocket: {
+        connected: wsStats.connected,
+        clients: wsStats.clients,
+      },
+      cache: {
+        enabled: isRedisConnected(),
       },
       uptime: Math.floor(uptime),
     });

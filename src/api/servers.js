@@ -3,8 +3,13 @@ const router = express.Router();
 const pool = require("../db");
 const { isValidIP, sanitizeString } = require("../utils/validators");
 const logger = require("../utils/logger");
+const {
+  cacheMiddleware,
+  serversKeyGenerator,
+} = require("../utils/cacheMiddleware");
 
-router.get("/", async (req, res) => {
+// Cache for 30 seconds
+router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
   try {
     const { game, status } = req.query;
     let query = "SELECT * FROM servers WHERE 1=1";

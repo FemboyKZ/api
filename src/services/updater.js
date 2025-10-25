@@ -2,6 +2,13 @@ const pool = require("../db");
 const { queryServer } = require("./serverQuery");
 const logger = require("../utils/logger");
 const fs = require("fs");
+const {
+  emitServerUpdate,
+  emitServerStatusChange,
+  emitPlayerUpdate,
+  emitMapUpdate,
+} = require("./websocket");
+const { deleteCache } = require("../db/redis");
 
 let serversConfig = [];
 
@@ -14,6 +21,14 @@ async function updateLoop() {
   for (const server of serversConfig) {
     try {
       const result = await queryServer(server.ip, server.port, server.game);
+
+      // Get previous server status for comparison
+      const [prevStatus] = await pool.query(
+        "SELECT status, map, player_count FROM servers WHERE ip=? AND port=?",
+        [server.ip, server.port],
+      );
+      const previousServer = prevStatus[0];
+
       if (result.status === 1) {
         // Insert/update server status and map
         await pool.query(
@@ -31,6 +46,36 @@ async function updateLoop() {
           ],
         );
 
+        // Emit WebSocket events for server changes
+        const serverData = {
+          ip: server.ip,
+          port: server.port,
+          game: server.game,
+          status: result.status,
+          map: result.map,
+          players: result.playerCount,
+          version: result.version,
+        };
+
+        emitServerUpdate(serverData);
+
+        // Emit status change if server came online
+        if (!previousServer || previousServer.status === 0) {
+          emitServerStatusChange({
+            ...serverData,
+            statusChange: "online",
+          });
+        }
+
+        // Emit map change event
+        if (previousServer && previousServer.map !== result.map) {
+          emitMapUpdate({
+            server: `${server.ip}:${server.port}`,
+            oldMap: previousServer.map,
+            newMap: result.map,
+          });
+        }
+
         // Track players
         if (result.players && result.players.length > 0) {
           for (const player of result.players) {
@@ -47,6 +92,13 @@ async function updateLoop() {
                    last_seen=NOW()`,
                 [player.id, player.name || "Unknown", server.ip, server.port],
               );
+
+              // Emit player update event
+              emitPlayerUpdate({
+                steamid: player.id,
+                name: player.name || "Unknown",
+                server: `${server.ip}:${server.port}`,
+              });
             }
           }
           logger.info(
@@ -72,7 +124,24 @@ async function updateLoop() {
           `UPDATE servers SET status=0, last_update=NOW() WHERE ip=? AND port=?`,
           [server.ip, server.port],
         );
+
+        // Emit status change if server went offline
+        if (previousServer && previousServer.status === 1) {
+          emitServerStatusChange({
+            ip: server.ip,
+            port: server.port,
+            game: server.game,
+            status: 0,
+            statusChange: "offline",
+          });
+        }
       }
+
+      // Invalidate relevant caches
+      await deleteCache("cache:servers:*");
+      await deleteCache("cache:players:*");
+      await deleteCache("cache:maps:*");
+
       logger.info(`Updated server ${server.ip}:${server.port} status`);
     } catch (e) {
       logger.error(
