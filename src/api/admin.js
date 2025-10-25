@@ -1,0 +1,153 @@
+const express = require("express");
+const router = express.Router();
+const pool = require("../db");
+const logger = require("../utils/logger");
+
+/**
+ * POST /api/admin/aggregate-daily
+ * Manually trigger daily stats aggregation
+ * Should be run via cron job daily at midnight
+ */
+router.post("/aggregate-daily", async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const { date } = req.query;
+    const targetDate = date || new Date().toISOString().split("T")[0];
+
+    logger.info("Starting daily aggregation", { date: targetDate });
+
+    // Aggregate stats for each server
+    const [servers] = await pool.query(
+      "SELECT DISTINCT server_ip, server_port FROM server_history WHERE DATE(recorded_at) = ?",
+      [targetDate],
+    );
+
+    let aggregated = 0;
+
+    for (const server of servers) {
+      const [stats] = await pool.query(
+        `SELECT 
+          COUNT(DISTINCT steamid) as unique_players,
+          MAX(player_count) as peak_players,
+          AVG(player_count) as avg_players,
+          COUNT(*) as data_points
+        FROM server_history sh
+        LEFT JOIN player_sessions ps ON 
+          ps.server_ip = sh.server_ip AND 
+          ps.server_port = sh.server_port AND 
+          DATE(ps.joined_at) = DATE(sh.recorded_at)
+        WHERE sh.server_ip = ? 
+          AND sh.server_port = ? 
+          AND DATE(sh.recorded_at) = ?`,
+        [server.server_ip, server.server_port, targetDate],
+      );
+
+      const [mapStats] = await pool.query(
+        `SELECT COUNT(*) as total_maps
+        FROM map_history
+        WHERE server_ip = ? 
+          AND server_port = ? 
+          AND DATE(started_at) = ?`,
+        [server.server_ip, server.server_port, targetDate],
+      );
+
+      // Calculate uptime (assuming 30-second polling interval)
+      const uptime_minutes = Math.round((stats[0].data_points * 30) / 60);
+
+      await pool.query(
+        `INSERT INTO daily_stats 
+        (stat_date, server_ip, server_port, total_players, unique_players, peak_players, avg_players, uptime_minutes, total_maps_played)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+          total_players = VALUES(total_players),
+          unique_players = VALUES(unique_players),
+          peak_players = VALUES(peak_players),
+          avg_players = VALUES(avg_players),
+          uptime_minutes = VALUES(uptime_minutes),
+          total_maps_played = VALUES(total_maps_played)`,
+        [
+          targetDate,
+          server.server_ip,
+          server.server_port,
+          stats[0].data_points,
+          stats[0].unique_players || 0,
+          stats[0].peak_players || 0,
+          parseFloat(stats[0].avg_players) || 0,
+          uptime_minutes,
+          mapStats[0].total_maps || 0,
+        ],
+      );
+
+      aggregated++;
+    }
+
+    logger.info("Daily aggregation complete", {
+      date: targetDate,
+      servers: aggregated,
+    });
+    logger.logRequest(req, res, Date.now() - startTime);
+
+    res.json({
+      success: true,
+      date: targetDate,
+      servers: aggregated,
+      message: "Daily statistics aggregated successfully",
+    });
+  } catch (error) {
+    logger.error("Failed to aggregate daily stats", { error: error.message });
+    res.status(500).json({ error: "Failed to aggregate daily statistics" });
+  }
+});
+
+/**
+ * POST /api/admin/cleanup-history
+ * Cleanup old historical data
+ */
+router.post("/cleanup-history", async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const { days = 30 } = req.query;
+    const daysInt = parseInt(days, 10);
+
+    logger.info("Starting history cleanup", { days: daysInt });
+
+    // Cleanup server history
+    const [serverResult] = await pool.query(
+      "DELETE FROM server_history WHERE recorded_at < DATE_SUB(NOW(), INTERVAL ? DAY)",
+      [daysInt],
+    );
+
+    // Cleanup player sessions
+    const [sessionResult] = await pool.query(
+      "DELETE FROM player_sessions WHERE joined_at < DATE_SUB(NOW(), INTERVAL ? DAY)",
+      [daysInt],
+    );
+
+    // Cleanup map history
+    const [mapResult] = await pool.query(
+      "DELETE FROM map_history WHERE started_at < DATE_SUB(NOW(), INTERVAL ? DAY)",
+      [daysInt],
+    );
+
+    logger.info("History cleanup complete", {
+      serverRecords: serverResult.affectedRows,
+      sessionRecords: sessionResult.affectedRows,
+      mapRecords: mapResult.affectedRows,
+    });
+    logger.logRequest(req, res, Date.now() - startTime);
+
+    res.json({
+      success: true,
+      deleted: {
+        serverHistory: serverResult.affectedRows,
+        playerSessions: sessionResult.affectedRows,
+        mapHistory: mapResult.affectedRows,
+      },
+    });
+  } catch (error) {
+    logger.error("Failed to cleanup history", { error: error.message });
+    res.status(500).json({ error: "Failed to cleanup history" });
+  }
+});
+
+module.exports = router;

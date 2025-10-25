@@ -7,7 +7,9 @@ async function queryServer(ip, port, game) {
     // We use the game type directly from config
     const queryType = game;
 
-    logger.info(`Querying ${ip}:${port} as type '${queryType}' (original: ${game})`);
+    logger.info(
+      `Querying ${ip}:${port} as type '${queryType}' (original: ${game})`,
+    );
 
     const state = await GameDig.query({
       type: queryType,

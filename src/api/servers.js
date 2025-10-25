@@ -27,12 +27,14 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
       query += " AND status = 1";
     }
 
-    logger.info(`Executing query: ${query} with params: ${JSON.stringify(params)}`);
-    
+    logger.info(
+      `Executing query: ${query} with params: ${JSON.stringify(params)}`,
+    );
+
     const [rows] = await pool.query(query, params);
-    
+
     logger.info(`Query returned ${rows.length} rows`);
-    
+
     const response = {
       playersTotal: rows.reduce((a, s) => a + s.player_count, 0),
       serversOnline: rows.length,
