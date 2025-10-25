@@ -1,4 +1,16 @@
 [
-  { "ip": "1.2.3.4", "port": 27015, "game": "csgo" },
-  { "ip": "5.6.7.8", "port": 27016, "game": "counterstrike2" }
+  {
+    "ip": "1.2.3.4",
+    "port": 27015,
+    "game": "csgo",
+    "rconPort": 27015,
+    "rconPassword": "your_rcon_password_here"
+  },
+  {
+    "ip": "5.6.7.8",
+    "port": 27016,
+    "game": "counterstrike2",
+    "rconPort": 27016,
+    "rconPassword": ""
+  }
 ]

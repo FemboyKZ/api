@@ -182,7 +182,13 @@ async function updateLoop() {
   loadConfig();
   for (const server of serversConfig) {
     try {
-      const result = await queryServer(server.ip, server.port, server.game);
+      const result = await queryServer(
+        server.ip,
+        server.port,
+        server.game,
+        server.rconPort,
+        server.rconPassword,
+      );
 
       logger.debug("Server query result", {
         server: `${server.ip}:${server.port}`,
@@ -203,30 +209,50 @@ async function updateLoop() {
         const playersList =
           result.players && result.players.length > 0 ? result.players : [];
 
+        // Debug log the values being inserted
+        logger.debug("Inserting server data", {
+          server: `${server.ip}:${server.port}`,
+          map: result.map || "",
+          playerCount: result.playerCount || 0,
+          maxplayers: result.maxplayers || 0,
+          playersListLength: playersList.length,
+          playersListType: typeof playersList,
+          playersListSample: playersList.length > 0 ? playersList[0] : null,
+          version: result.version || "",
+        });
+
         // Insert/update server status and map
         await pool.query(
-          `INSERT INTO servers (ip, port, game, status, map, player_count, maxplayers, players_list, version)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE status=VALUES(status), map=VALUES(map), player_count=VALUES(player_count), maxplayers=VALUES(maxplayers), players_list=VALUES(players_list), version=VALUES(version), last_update=NOW()`,
+          `INSERT INTO servers (ip, port, game, version, hostname, os, secure, steamid, status, map, player_count, maxplayers, bot_count, players_list)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE version=VALUES(version), hostname=VALUES(hostname), os=VALUES(os), secure=VALUES(secure), steamid=VALUES(steamid), status=VALUES(status), map=VALUES(map), player_count=VALUES(player_count), maxplayers=VALUES(maxplayers), bot_count=VALUES(bot_count), players_list=VALUES(players_list), last_update=NOW()`,
           [
             server.ip,
             server.port,
             server.game,
+            result.version || "",
+            result.hostname || null,
+            result.os || null,
+            result.secure !== undefined ? result.secure : null,
+            result.steamid || null,
             result.status,
             result.map || "",
             result.playerCount || 0,
             result.maxplayers || 0,
-            playersList, // MySQL JSON column handles encoding automatically
-            result.version || "",
+            result.bots || 0,
+            JSON.stringify(playersList), // MariaDB needs stringified JSON
           ],
         );
 
         // Record historical data
         await recordServerHistory(server, result);
 
-        // Track player sessions
+        // Track player sessions (only if we have Steam IDs from RCON)
         if (result.players && result.players.length > 0) {
-          await trackPlayerSessions(server, result.players);
+          const playersWithSteamId = result.players.filter((p) => p.steamid);
+          if (playersWithSteamId.length > 0) {
+            await trackPlayerSessions(server, playersWithSteamId);
+          }
         }
 
         // Track map changes
@@ -264,7 +290,7 @@ async function updateLoop() {
           });
         }
 
-        // Track players
+        // Track individual players (only those with Steam IDs from RCON)
         if (result.players && result.players.length > 0) {
           for (const player of result.players) {
             if (player.steamid) {
@@ -294,9 +320,11 @@ async function updateLoop() {
               });
             }
           }
+          const playersWithSteamId = result.players.filter((p) => p.steamid);
           logger.debug("Tracked players", {
             server: `${server.ip}:${server.port}`,
-            count: result.players.length,
+            total: result.players.length,
+            withSteamId: playersWithSteamId.length,
           });
         }
 
