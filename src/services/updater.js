@@ -205,19 +205,19 @@ async function updateLoop() {
 
         // Insert/update server status and map
         await pool.query(
-          `INSERT INTO servers (ip, port, game, status, map, player_count, maxplayers, players_list, version, last_update)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+          `INSERT INTO servers (ip, port, game, status, map, player_count, maxplayers, players_list, version)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE status=VALUES(status), map=VALUES(map), player_count=VALUES(player_count), maxplayers=VALUES(maxplayers), players_list=VALUES(players_list), version=VALUES(version), last_update=NOW()`,
           [
             server.ip,
             server.port,
             server.game,
             result.status,
-            result.map,
-            result.playerCount,
+            result.map || "",
+            result.playerCount || 0,
             result.maxplayers || 0,
             playersList, // MySQL JSON column handles encoding automatically
-            result.version,
+            result.version || "",
           ],
         );
 
