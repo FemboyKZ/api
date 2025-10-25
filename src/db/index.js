@@ -21,6 +21,7 @@ function createPool() {
     queueLimit: 0,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
+    jsonStrings: false, // Automatically parse JSON columns to objects
   });
 }
 

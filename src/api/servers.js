@@ -40,14 +40,14 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
       serversOnline: rows.length,
     };
     rows.forEach((server) => {
-      // Parse players_list - handle both JSON array and stringified JSON
+      // Parse players_list - MariaDB JSON columns return as strings even with jsonStrings: false
       let playersList = [];
       if (server.players_list) {
         try {
-          // If it's already an object/array, use it directly
-          playersList = Array.isArray(server.players_list)
-            ? server.players_list
-            : JSON.parse(server.players_list);
+          playersList =
+            typeof server.players_list === "string"
+              ? JSON.parse(server.players_list)
+              : server.players_list;
         } catch (e) {
           logger.error(
             `Failed to parse players_list for ${server.ip}:${server.port}`,
@@ -67,6 +67,11 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
         maxplayers: server.maxplayers,
         playersList: playersList,
         version: server.version,
+        hostname: server.hostname,
+        os: server.os,
+        secure: server.secure,
+        steamid: server.steamid,
+        botCount: server.bot_count,
       };
     });
     res.json(response);
