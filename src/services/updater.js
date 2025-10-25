@@ -216,7 +216,7 @@ async function updateLoop() {
             result.map,
             result.playerCount,
             result.maxplayers || 0,
-            JSON.stringify(playersList),
+            playersList, // MySQL JSON column handles encoding automatically
             result.version,
           ],
         );
