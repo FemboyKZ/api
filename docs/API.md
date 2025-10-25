@@ -44,7 +44,7 @@ Currently, the API does not require authentication. All endpoints are publicly a
 
 **Rate Limit Headers:**
 
-```
+```txt
 X-RateLimit-Limit: 100
 X-RateLimit-Remaining: 99
 X-RateLimit-Reset: 1234567890

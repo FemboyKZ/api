@@ -77,7 +77,7 @@ The API will be available at `http://localhost:3000` (or your configured PORT).
 
 ### Base URL
 
-```
+```txt
 http://localhost:3000/api
 ```
 
@@ -385,7 +385,7 @@ startUpdateLoop(30 * 1000); // 30 seconds
 
 ### Project Structure
 
-```
+```txt
 server-api/
 ├── config/           # Server configuration files
 ├── db/              # Database schemas and migrations
