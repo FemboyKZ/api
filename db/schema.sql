@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS servers (
     status TINYINT NOT NULL DEFAULT 0,
     map VARCHAR(100) DEFAULT '',
     player_count INT DEFAULT 0,
+    maxplayers INT DEFAULT 0,
     players_list JSON DEFAULT NULL COMMENT 'JSON array of current players on server',
     version VARCHAR(50) DEFAULT '',
     last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
