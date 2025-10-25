@@ -21,6 +21,10 @@ async function updateLoop() {
   for (const server of serversConfig) {
     try {
       const result = await queryServer(server.ip, server.port, server.game);
+      
+      logger.info(
+        `Query result for ${server.ip}:${server.port} - status: ${result.status}, players: ${result.playerCount || 0}`,
+      );
 
       // Get previous server status for comparison
       const [prevStatus] = await pool.query(
@@ -120,9 +124,12 @@ async function updateLoop() {
           );
         }
       } else {
+        // Server is offline or query failed - still insert/update the record
         await pool.query(
-          `UPDATE servers SET status=0, last_update=NOW() WHERE ip=? AND port=?`,
-          [server.ip, server.port],
+          `INSERT INTO servers (ip, port, game, status, last_update)
+           VALUES (?, ?, ?, 0, NOW())
+           ON DUPLICATE KEY UPDATE status=0, last_update=NOW()`,
+          [server.ip, server.port, server.game],
         );
 
         // Emit status change if server went offline
