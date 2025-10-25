@@ -26,7 +26,7 @@ async function queryServer(ip, port, game) {
       players: state.players.map((p) => ({ name: p.name, id: p.id })) || [],
       playersRaw: state.players.raw || {},
       maxplayers: state.maxplayers || 0,
-      version: state.raw?.version || "",
+      version: state.version || "",
       playerCount: state.players.length || state.numplayers || 0,
       ping: state.ping || 0,
     };

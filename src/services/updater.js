@@ -34,11 +34,16 @@ async function updateLoop() {
       const previousServer = prevStatus[0];
 
       if (result.status === 1) {
+        // Prepare players list for storage
+        const playersList = result.players && result.players.length > 0 
+          ? JSON.stringify(result.players) 
+          : null;
+
         // Insert/update server status and map
         await pool.query(
-          `INSERT INTO servers (ip, port, game, status, map, player_count, version, last_update)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
-           ON DUPLICATE KEY UPDATE status=VALUES(status), map=VALUES(map), player_count=VALUES(player_count), version=VALUES(version), last_update=NOW()`,
+          `INSERT INTO servers (ip, port, game, status, map, player_count, players_list, version, last_update)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+           ON DUPLICATE KEY UPDATE status=VALUES(status), map=VALUES(map), player_count=VALUES(player_count), players_list=VALUES(players_list), version=VALUES(version), last_update=NOW()`,
           [
             server.ip,
             server.port,
@@ -46,6 +51,7 @@ async function updateLoop() {
             result.status,
             result.map,
             result.playerCount,
+            playersList,
             result.version,
           ],
         );

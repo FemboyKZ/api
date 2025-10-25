@@ -45,6 +45,8 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
         status: server.status,
         map: server.map,
         players: server.player_count,
+        maxplayers: server.maxplayers,
+        playersList: server.players_list ? JSON.parse(server.players_list) : [],
         version: server.version,
       };
     });
