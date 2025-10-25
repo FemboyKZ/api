@@ -9,5 +9,11 @@
   "devDependencies": {
     "eslint": "^9.38.0",
     "prettier": "^3.6.2"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "lint": "eslint src/**/*.js",
+    "format": "prettier --write ."
   }
 }
