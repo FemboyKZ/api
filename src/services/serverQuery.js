@@ -29,28 +29,28 @@ async function queryServer(ip, port, game, rconPort, rconPassword) {
       rconData = await queryRcon(ip, rconPort, rconPassword);
     }
 
-    // Merge GameDig and RCON data
-    const players = state.players.map((p) => {
-      const basePlayer = {
+    // Use RCON player data if available, otherwise fall back to GameDig
+    let players = [];
+    if (rconData && rconData.players && rconData.players.length > 0) {
+      // Use RCON data exclusively - it has steamid, accurate ping, etc.
+      players = rconData.players.map((p) => ({
+        name: p.name || "Unknown",
+        steamid: p.steamid ? convertToSteamID64(p.steamid) : null,
+        time: p.time || "00:00",
+        ping: p.ping || 0,
+        loss: p.loss || 0,
+        userid: p.userid || 0,
+        state: p.state || "active",
+        bot: p.bot || false,
+      }));
+    } else {
+      // Fall back to GameDig data (no steamids available)
+      players = state.players.map((p) => ({
         name: p.name || "Unknown",
         score: p.raw?.score || 0,
         time: p.raw?.time || 0,
-      };
-
-      // Try to find matching player in RCON data by name
-      if (rconData && rconData.players) {
-        const rconPlayer = rconData.players.find(
-          (rp) => rp.name.toLowerCase() === p.name?.toLowerCase(),
-        );
-        if (rconPlayer) {
-          basePlayer.steamid = convertToSteamID64(rconPlayer.steamid);
-          basePlayer.ping = rconPlayer.ping;
-          basePlayer.userid = rconPlayer.userid;
-        }
-      }
-
-      return basePlayer;
-    });
+      }));
+    }
 
     const result = {
       status: 1,
