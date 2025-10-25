@@ -1,13 +1,25 @@
-const Gamedig = require("gamedig");
+const { GameDig } = require("gamedig");
+const logger = require("../utils/logger");
 
 async function queryServer(ip, port, game) {
   try {
-    const state = await Gamedig.query({
-      type: game === "counterstrike2" ? "csgo" : game,
+    // GameDig now supports 'valve' protocol which works for both CS:GO and CS2
+    // We use the game type directly from config
+    const queryType = game;
+
+    logger.info(`Querying ${ip}:${port} as type '${queryType}' (original: ${game})`);
+
+    const state = await GameDig.query({
+      type: queryType,
       host: ip,
       port: port,
       socketTimeout: 3000,
     });
+
+    logger.info(
+      `Successfully queried ${ip}:${port} - ${state.players.length} players`,
+    );
+
     return {
       status: 1,
       map: state.map || "",
@@ -19,6 +31,7 @@ async function queryServer(ip, port, game) {
       ping: state.ping || 0,
     };
   } catch (error) {
+    logger.error(`Failed to query ${ip}:${port} - ${error.message}`);
     return { status: 0 };
   }
 }
