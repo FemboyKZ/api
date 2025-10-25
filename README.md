@@ -85,10 +85,10 @@ http://localhost:3000/api
 
 ### Servers
 
-#### Get All Servers
+### List All Servers
 
 ```http
-GET /api/servers
+GET /servers
 ```
 
 **Query Parameters:**
@@ -99,7 +99,7 @@ GET /api/servers
 **Example Request:**
 
 ```bash
-curl http://localhost:3000/api/servers?game=counterstrike2
+curl http://localhost:3000/servers?game=counterstrike2
 ```
 
 **Example Response:**
@@ -123,7 +123,7 @@ curl http://localhost:3000/api/servers?game=counterstrike2
 #### Get Servers by IP
 
 ```http
-GET /api/servers/:ip
+GET /servers/:ip
 ```
 
 **Parameters:**
@@ -133,7 +133,7 @@ GET /api/servers/:ip
 **Example Request:**
 
 ```bash
-curl http://localhost:3000/api/servers/1.2.3.4
+curl http://localhost:3000/servers/1.2.3.4
 ```
 
 **Example Response:**
@@ -158,10 +158,10 @@ curl http://localhost:3000/api/servers/1.2.3.4
 
 ### Players
 
-#### Get All Players
+### List All Players
 
 ```http
-GET /api/players
+GET /players
 ```
 
 **Query Parameters:**
@@ -175,7 +175,7 @@ GET /api/players
 **Example Request:**
 
 ```bash
-curl "http://localhost:3000/api/players?page=1&limit=20&sort=total_playtime&order=desc"
+curl "http://localhost:3000/players?page=1&limit=20&sort=total_playtime&order=desc"
 ```
 
 **Example Response:**
@@ -197,10 +197,10 @@ curl "http://localhost:3000/api/players?page=1&limit=20&sort=total_playtime&orde
 }
 ```
 
-#### Get Player by SteamID
+#### Get Player Details
 
 ```http
-GET /api/players/:steamid
+GET /players/:steamid
 ```
 
 **Parameters:**
@@ -210,7 +210,7 @@ GET /api/players/:steamid
 **Example Request:**
 
 ```bash
-curl http://localhost:3000/api/players/76561198012345678
+curl http://localhost:3000/players/76561198012345678
 ```
 
 **Example Response:**
@@ -238,10 +238,10 @@ curl http://localhost:3000/api/players/76561198012345678
 
 ### Maps
 
-#### Get All Maps
+### List All Maps
 
 ```http
-GET /api/maps
+GET /maps
 ```
 
 **Query Parameters:**
@@ -256,7 +256,7 @@ GET /api/maps
 **Example Request:**
 
 ```bash
-curl "http://localhost:3000/api/maps?page=1&limit=10&sort=total_playtime"
+curl "http://localhost:3000/maps?page=1&limit=10&sort=total_playtime"
 ```
 
 **Example Response:**
@@ -289,7 +289,7 @@ curl "http://localhost:3000/api/maps?page=1&limit=10&sort=total_playtime"
 #### Health Check
 
 ```http
-GET /api/health
+GET /health
 ```
 
 **Example Response:**
@@ -305,7 +305,7 @@ GET /api/health
 #### API Statistics
 
 ```http
-GET /api/stats
+GET /stats
 ```
 
 **Example Response:**

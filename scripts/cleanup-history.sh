@@ -10,6 +10,6 @@ RETENTION_DAYS=30
 echo "$(date): Running history cleanup (${RETENTION_DAYS} days)..." >> "$LOG_FILE"
 
 # Trigger cleanup
-curl -X POST "$API_URL/api/admin/cleanup-history?days=${RETENTION_DAYS}" >> "$LOG_FILE" 2>&1
+curl -X POST "$API_URL/admin/cleanup-history?days=${RETENTION_DAYS}" >> "$LOG_FILE" 2>&1
 
 echo "$(date): History cleanup complete" >> "$LOG_FILE"

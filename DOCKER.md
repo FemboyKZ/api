@@ -63,7 +63,7 @@ docker run -p 3000:3000 --env-file .env server-api
 
 - **Port:** 3000 (configurable)
 - **Depends on:** MySQL and Redis
-- **Health check:** Built-in at `/api/health`
+- **Health check:** Built-in at `/health`
 - **Volumes:**
   - `./config:/app/config:ro` - Read-only server configuration
   - `./logs:/app/logs` - Persistent log files
@@ -74,7 +74,7 @@ All services include health checks:
 
 ```bash
 # Check API health
-curl http://localhost:3000/api/health
+curl http://localhost:3000/health
 
 # Check MySQL
 docker-compose exec mysql mysqladmin ping

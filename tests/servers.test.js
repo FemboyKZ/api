@@ -2,10 +2,10 @@ const request = require("supertest");
 const app = require("../src/app");
 
 describe("Server Endpoints", () => {
-  describe("GET /api/servers", () => {
+  describe("GET /servers", () => {
     it("should return servers list with metadata", async () => {
       const response = await request(app)
-        .get("/api/servers")
+        .get("/servers")
         .expect("Content-Type", /json/)
         .expect(200);
 
@@ -17,7 +17,7 @@ describe("Server Endpoints", () => {
 
     it("should filter by game type", async () => {
       const response = await request(app)
-        .get("/api/servers?game=csgo")
+        .get("/servers?game=csgo")
         .expect("Content-Type", /json/)
         .expect(200);
 
@@ -27,7 +27,7 @@ describe("Server Endpoints", () => {
 
     it("should filter by status", async () => {
       const response = await request(app)
-        .get("/api/servers?status=1")
+        .get("/servers?status=1")
         .expect("Content-Type", /json/)
         .expect(200);
 
@@ -35,10 +35,10 @@ describe("Server Endpoints", () => {
     });
   });
 
-  describe("GET /api/servers/:ip", () => {
+  describe("GET /servers/:ip", () => {
     it("should return 400 for invalid IP", async () => {
       const response = await request(app)
-        .get("/api/servers/invalid-ip")
+        .get("/servers/invalid-ip")
         .expect("Content-Type", /json/)
         .expect(400);
 
@@ -46,7 +46,7 @@ describe("Server Endpoints", () => {
     });
 
     it("should return 404 for non-existent server", async () => {
-      await request(app).get("/api/servers/192.168.1.1").expect(404);
+      await request(app).get("/servers/192.168.1.1").expect(404);
     });
   });
 });

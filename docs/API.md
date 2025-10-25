@@ -119,7 +119,7 @@ Paginated endpoints return:
 #### Get All Servers
 
 ```http
-GET /api/servers
+GET /servers
 ```
 
 Returns all tracked servers with their current status.
@@ -158,7 +158,7 @@ Returns all tracked servers with their current status.
 **Example:**
 
 ```bash
-curl http://localhost:3000/api/servers?game=csgo&status=1
+curl http://localhost:3000/servers?game=csgo&status=1
 ```
 
 ---
@@ -166,7 +166,7 @@ curl http://localhost:3000/api/servers?game=csgo&status=1
 #### Get Server by IP
 
 ```http
-GET /api/servers/:ip
+GET /servers/:ip
 ```
 
 Returns all servers with the specified IP address.
@@ -199,7 +199,7 @@ Returns all servers with the specified IP address.
 **Example:**
 
 ```bash
-curl http://localhost:3000/api/servers/37.27.107.76
+curl http://localhost:3000/servers/37.27.107.76
 ```
 
 ---
@@ -209,7 +209,7 @@ curl http://localhost:3000/api/servers/37.27.107.76
 #### Get All Players
 
 ```http
-GET /api/players
+GET /players
 ```
 
 Returns aggregated player statistics.
@@ -248,8 +248,8 @@ Returns aggregated player statistics.
 **Example:**
 
 ```bash
-curl http://localhost:3000/api/players?page=1&limit=20&sort=playtime&order=desc
-curl http://localhost:3000/api/players?name=john
+curl http://localhost:3000/players?page=1&limit=20&sort=playtime&order=desc
+curl http://localhost:3000/players?name=john
 ```
 
 ---
@@ -257,7 +257,7 @@ curl http://localhost:3000/api/players?name=john
 #### Get Player by SteamID
 
 ```http
-GET /api/players/:steamid
+GET /players/:steamid
 ```
 
 Returns detailed information about a specific player.
@@ -285,9 +285,9 @@ Returns detailed information about a specific player.
 **Example:**
 
 ```bash
-curl http://localhost:3000/api/players/76561198000000000
-curl http://localhost:3000/api/players/STEAM_0:1:12345
-curl http://localhost:3000/api/players/[U:1:12345]
+curl http://localhost:3000/players/76561198000000000
+curl http://localhost:3000/players/STEAM_0:1:12345
+curl http://localhost:3000/players/[U:1:12345]
 ```
 
 ---
@@ -297,7 +297,7 @@ curl http://localhost:3000/api/players/[U:1:12345]
 #### Get All Maps
 
 ```http
-GET /api/maps
+GET /maps
 ```
 
 Returns aggregated map statistics.
@@ -336,9 +336,9 @@ Returns aggregated map statistics.
 **Example:**
 
 ```bash
-curl http://localhost:3000/api/maps?page=1&limit=20
-curl http://localhost:3000/api/maps?server=37.27.107.76:27015
-curl http://localhost:3000/api/maps?name=dust
+curl http://localhost:3000/maps?page=1&limit=20
+curl http://localhost:3000/maps?server=37.27.107.76:27015
+curl http://localhost:3000/maps?name=dust
 ```
 
 ---
@@ -348,7 +348,7 @@ curl http://localhost:3000/api/maps?name=dust
 #### Get Server History
 
 ```http
-GET /api/history/servers/:ip/:port
+GET /history/servers/:ip/:port
 ```
 
 Returns historical data for a specific server.
@@ -392,7 +392,7 @@ Returns historical data for a specific server.
 **Example:**
 
 ```bash
-curl http://localhost:3000/api/history/servers/37.27.107.76/27015?hours=48&interval=120
+curl http://localhost:3000/history/servers/37.27.107.76/27015?hours=48&interval=120
 ```
 
 ---
@@ -400,7 +400,7 @@ curl http://localhost:3000/api/history/servers/37.27.107.76/27015?hours=48&inter
 #### Get Player Session History
 
 ```http
-GET /api/history/players/:steamid
+GET /history/players/:steamid
 ```
 
 Returns session history for a specific player.
@@ -444,7 +444,7 @@ Returns session history for a specific player.
 **Example:**
 
 ```bash
-curl http://localhost:3000/api/history/players/76561198000000000?page=1&limit=20
+curl http://localhost:3000/history/players/76561198000000000?page=1&limit=20
 ```
 
 ---
@@ -452,7 +452,7 @@ curl http://localhost:3000/api/history/players/76561198000000000?page=1&limit=20
 #### Get Map History
 
 ```http
-GET /api/history/maps
+GET /history/maps
 ```
 
 Returns map rotation history across all servers.
@@ -493,8 +493,8 @@ Returns map rotation history across all servers.
 **Example:**
 
 ```bash
-curl http://localhost:3000/api/history/maps?server=37.27.107.76:27015
-curl http://localhost:3000/api/history/maps?map=dust2
+curl http://localhost:3000/history/maps?server=37.27.107.76:27015
+curl http://localhost:3000/history/maps?map=dust2
 ```
 
 ---
@@ -502,7 +502,7 @@ curl http://localhost:3000/api/history/maps?map=dust2
 #### Get Daily Trends
 
 ```http
-GET /api/history/trends/daily
+GET /history/trends/daily
 ```
 
 Returns daily aggregated statistics.
@@ -539,8 +539,8 @@ Returns daily aggregated statistics.
 **Example:**
 
 ```bash
-curl http://localhost:3000/api/history/trends/daily?days=30
-curl http://localhost:3000/api/history/trends/daily?server=37.27.107.76:27015
+curl http://localhost:3000/history/trends/daily?days=30
+curl http://localhost:3000/history/trends/daily?server=37.27.107.76:27015
 ```
 
 ---
@@ -548,7 +548,7 @@ curl http://localhost:3000/api/history/trends/daily?server=37.27.107.76:27015
 #### Get Hourly Trends
 
 ```http
-GET /api/history/trends/hourly
+GET /history/trends/hourly
 ```
 
 Returns hourly player count trends.
@@ -582,8 +582,8 @@ Returns hourly player count trends.
 **Example:**
 
 ```bash
-curl http://localhost:3000/api/history/trends/hourly?hours=48
-curl http://localhost:3000/api/history/trends/hourly?server=37.27.107.76:27015
+curl http://localhost:3000/history/trends/hourly?hours=48
+curl http://localhost:3000/history/trends/hourly?server=37.27.107.76:27015
 ```
 
 ---
@@ -593,7 +593,7 @@ curl http://localhost:3000/api/history/trends/hourly?server=37.27.107.76:27015
 #### Health Check
 
 ```http
-GET /api/health
+GET /health
 ```
 
 Returns API health status and database connectivity.
@@ -614,7 +614,7 @@ Returns API health status and database connectivity.
 **Example:**
 
 ```bash
-curl http://localhost:3000/api/health
+curl http://localhost:3000/health
 ```
 
 ---
@@ -622,7 +622,7 @@ curl http://localhost:3000/api/health
 #### Health Statistics
 
 ```http
-GET /api/health/stats
+GET /health/stats
 ```
 
 Returns comprehensive API statistics.
@@ -660,7 +660,7 @@ Returns comprehensive API statistics.
 **Example:**
 
 ```bash
-curl http://localhost:3000/api/health/stats
+curl http://localhost:3000/health/stats
 ```
 
 ---
@@ -771,7 +771,7 @@ const axios = require("axios");
 
 async function getServers() {
   try {
-    const response = await axios.get("http://localhost:3000/api/servers");
+    const response = await axios.get("http://localhost:3000/servers");
     console.log(response.data);
   } catch (error) {
     console.error("Error:", error.response.data);
@@ -786,7 +786,7 @@ import requests
 
 def get_servers():
     try:
-        response = requests.get('http://localhost:3000/api/servers')
+        response = requests.get('http://localhost:3000/servers')
         response.raise_for_status()
         print(response.json())
     except requests.exceptions.HTTPError as error:
@@ -797,16 +797,16 @@ def get_servers():
 
 ```bash
 # Get all online servers
-curl http://localhost:3000/api/servers?status=1
+curl http://localhost:3000/servers?status=1
 
 # Get server history for the last 48 hours
-curl http://localhost:3000/api/history/servers/37.27.107.76/27015?hours=48
+curl http://localhost:3000/history/servers/37.27.107.76/27015?hours=48
 
 # Get top 20 players by playtime
-curl http://localhost:3000/api/players?limit=20&sort=playtime&order=desc
+curl http://localhost:3000/players?limit=20&sort=playtime&order=desc
 
 # Get daily trends for the last 30 days
-curl http://localhost:3000/api/history/trends/daily?days=30
+curl http://localhost:3000/history/trends/daily?days=30
 ```
 
 ---
@@ -816,5 +816,5 @@ curl http://localhost:3000/api/history/trends/daily?days=30
 For issues or questions:
 
 - Check logs: `logs/error.log`
-- Health endpoint: `/api/health`
+- Health endpoint: `/health`
 - GitHub Issues: (your repository URL)

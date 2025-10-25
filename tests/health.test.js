@@ -2,10 +2,10 @@ const request = require("supertest");
 const app = require("../src/app");
 
 describe("Health Endpoints", () => {
-  describe("GET /api/health", () => {
+  describe("GET /health", () => {
     it("should return 200 and healthy status", async () => {
       const response = await request(app)
-        .get("/api/health")
+        .get("/health")
         .expect("Content-Type", /json/)
         .expect(200);
 
@@ -15,10 +15,10 @@ describe("Health Endpoints", () => {
     });
   });
 
-  describe("GET /api/health/stats", () => {
+  describe("GET /health/stats", () => {
     it("should return 200 and statistics", async () => {
       const response = await request(app)
-        .get("/api/health/stats")
+        .get("/health/stats")
         .expect("Content-Type", /json/)
         .expect(200);
 

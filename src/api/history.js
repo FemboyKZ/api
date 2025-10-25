@@ -9,7 +9,7 @@ const {
 } = require("../utils/cacheMiddleware");
 
 /**
- * GET /api/history/servers/:ip/:port
+ * GET /history/servers/:ip/:port
  * Get historical data for a specific server
  */
 router.get(
@@ -84,7 +84,7 @@ router.get(
 );
 
 /**
- * GET /api/history/players/:steamid
+ * GET /history/players/:steamid
  * Get player session history
  */
 router.get(
@@ -142,7 +142,7 @@ router.get(
 );
 
 /**
- * GET /api/history/maps
+ * GET /history/maps
  * Get map rotation history across all servers
  */
 router.get(
@@ -197,7 +197,7 @@ router.get(
 );
 
 /**
- * GET /api/history/trends/daily
+ * GET /history/trends/daily
  * Get daily aggregated statistics
  */
 router.get(
@@ -254,7 +254,7 @@ router.get(
 );
 
 /**
- * GET /api/history/trends/hourly
+ * GET /history/trends/hourly
  * Get hourly player count trends
  */
 router.get(

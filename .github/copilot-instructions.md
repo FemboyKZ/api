@@ -12,7 +12,7 @@ This is a game server tracking API built with Express that polls game servers vi
 
 **Key Components:**
 
-- `src/app.js` - Express app with `/api/servers`, `/api/players`, `/api/maps` routes
+- `src/app.js` - Express app with `/servers`, `/players`, `/maps` routes
 - `src/services/updater.js` - Background polling loop that reloads `config/servers.json` on each iteration
 - `src/services/serverQuery.js` - GameDig wrapper with CS2 → CSGO type mapping
 - `src/db/index.js` - MySQL2 connection pool (promise-based)
@@ -29,11 +29,11 @@ This is a game server tracking API built with Express that polls game servers vi
 
 - `config/servers.json` is reloaded on each update loop iteration (hot-reload without restart)
 - GameDig type mapping: `counterstrike2` → `csgo` (see `serverQuery.js`)
-- Server identity is `ip:port` composite (used as object keys in `/api/servers` response)
+- Server identity is `ip:port` composite (used as object keys in `/servers` response)
 
 ### Response Formats
 
-- `/api/servers` returns custom format with `playersTotal`, `serversOnline` top-level keys, then server objects keyed by `ip:port`
+- `/servers` returns custom format with `playersTotal`, `serversOnline` top-level keys, then server objects keyed by `ip:port`
 - API routes use inline error handling (try/catch) instead of next(error) pattern
 - Player and map aggregations use `SUM(playtime)` and `GROUP BY`
 

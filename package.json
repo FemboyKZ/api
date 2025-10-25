@@ -22,8 +22,8 @@
     "docker:compose": "docker-compose up -d",
     "docker:compose:down": "docker-compose down",
     "docker:compose:logs": "docker-compose logs -f api",
-    "admin:aggregate": "curl -X POST http://localhost:3000/api/admin/aggregate-daily",
-    "admin:cleanup": "curl -X POST http://localhost:3000/api/admin/cleanup-history?days=30"
+    "admin:aggregate": "curl -X POST http://localhost:3000/admin/aggregate-daily",
+    "admin:cleanup": "curl -X POST http://localhost:3000/admin/cleanup-history?days=30"
   },
   "dependencies": {
     "cors": "^2.8.5",

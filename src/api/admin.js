@@ -4,8 +4,8 @@ const pool = require("../db");
 const logger = require("../utils/logger");
 
 /**
- * POST /api/admin/aggregate-daily
- * Manually trigger daily stats aggregation
+ * POST /admin/aggregate-daily
+ * Manually trigger daily statistics aggregation
  * Should be run via cron job daily at midnight
  */
 router.post("/aggregate-daily", async (req, res) => {
@@ -100,8 +100,8 @@ router.post("/aggregate-daily", async (req, res) => {
 });
 
 /**
- * POST /api/admin/cleanup-history
- * Cleanup old historical data
+ * POST /admin/cleanup-history
+ * Clean up old historical data based on retention policy
  */
 router.post("/cleanup-history", async (req, res) => {
   const startTime = Date.now();
