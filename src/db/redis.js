@@ -37,9 +37,7 @@ async function initRedis() {
     });
 
     client.on("connect", () => {
-      logger.info(
-        `Redis connected to ${redisConfig.host}:${redisConfig.port}`,
-      );
+      logger.info(`Redis connected to ${redisConfig.host}:${redisConfig.port}`);
       isConnected = true;
     });
 
@@ -56,7 +54,9 @@ async function initRedis() {
     return client;
   } catch (error) {
     logger.error(`Failed to connect to Redis: ${error.message}`);
-    logger.info("Continuing without cache - all requests will hit the database");
+    logger.info(
+      "Continuing without cache - all requests will hit the database",
+    );
     client = null;
     isConnected = false;
     return null;

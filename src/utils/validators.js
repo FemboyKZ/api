@@ -38,10 +38,7 @@ function sanitizeString(str, maxLength = 255) {
 
 function validatePagination(page, limit, maxLimit = 100) {
   const validPage = Math.max(1, parseInt(page, 10) || 1);
-  const validLimit = Math.min(
-    maxLimit,
-    Math.max(1, parseInt(limit, 10) || 10),
-  );
+  const validLimit = Math.min(maxLimit, Math.max(1, parseInt(limit, 10) || 10));
   const offset = (validPage - 1) * validLimit;
 
   return { page: validPage, limit: validLimit, offset };

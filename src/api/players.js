@@ -19,13 +19,10 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
     const { limit: validLimit, offset } = validatePagination(page, limit, 100);
 
     const validSortFields = ["total_playtime", "steamid"];
-    const sortField = validSortFields.includes(sort)
-      ? sort
-      : "total_playtime";
+    const sortField = validSortFields.includes(sort) ? sort : "total_playtime";
     const sortOrder = order === "asc" ? "ASC" : "DESC";
 
-    let query =
-      "SELECT steamid, SUM(playtime) as total_playtime FROM players";
+    let query = "SELECT steamid, SUM(playtime) as total_playtime FROM players";
     const params = [];
 
     if (name) {
