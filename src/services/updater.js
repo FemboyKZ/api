@@ -15,7 +15,7 @@ async function updateLoop() {
     try {
       const result = await queryServer(server.ip, server.port, server.game);
       if (result.status === 1) {
-        // Simple example: insert/update server status and map
+        // Insert/update server status and map
         await pool.query(
           `INSERT INTO servers (ip, port, game, status, map, player_count, version, last_update)
            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
@@ -31,7 +31,42 @@ async function updateLoop() {
           ],
         );
 
-        // Track players and maps more in depth here (example only updating servers table)
+        // Track players
+        if (result.players && result.players.length > 0) {
+          for (const player of result.players) {
+            if (player.id) {
+              // Insert or update player record
+              await pool.query(
+                `INSERT INTO players (steamid, name, playtime, server_ip, server_port, last_seen)
+                 VALUES (?, ?, 1, ?, ?, NOW())
+                 ON DUPLICATE KEY UPDATE 
+                   name=VALUES(name), 
+                   playtime=playtime+1, 
+                   server_ip=VALUES(server_ip), 
+                   server_port=VALUES(server_port), 
+                   last_seen=NOW()`,
+                [player.id, player.name || "Unknown", server.ip, server.port],
+              );
+            }
+          }
+          logger.info(
+            `Tracked ${result.players.length} players on ${server.ip}:${server.port}`,
+          );
+        }
+
+        // Track map playtime
+        if (result.map) {
+          await pool.query(
+            `INSERT INTO maps (name, playtime, server_ip, server_port, last_played)
+             VALUES (?, 1, ?, ?, NOW())
+             ON DUPLICATE KEY UPDATE 
+               playtime=playtime+1, 
+               server_ip=VALUES(server_ip), 
+               server_port=VALUES(server_port), 
+               last_played=NOW()`,
+            [result.map, server.ip, server.port],
+          );
+        }
       } else {
         await pool.query(
           `UPDATE servers SET status=0, last_update=NOW() WHERE ip=? AND port=?`,
