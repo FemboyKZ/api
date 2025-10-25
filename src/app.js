@@ -7,7 +7,9 @@ const serversRouter = require("./api/servers");
 const playersRouter = require("./api/players");
 const mapsRouter = require("./api/maps");
 const healthRouter = require("./api/health");
+const historyRouter = require("./api/history");
 const errorHandler = require("./utils/errorHandler");
+const logger = require("./utils/logger");
 
 // CORS configuration
 app.use(
@@ -18,6 +20,15 @@ app.use(
   }),
 );
 
+// Request logging middleware
+app.use((req, res, next) => {
+  const startTime = Date.now();
+  res.on("finish", () => {
+    logger.logRequest(req, res, Date.now() - startTime);
+  });
+  next();
+});
+
 // Rate limiting - 100 requests per 15 minutes per IP
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -27,14 +38,15 @@ const limiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
-app.use("/api/", limiter);
+app.use("/", limiter);
 
 app.use(express.json());
 
-app.use("/api/servers", serversRouter);
-app.use("/api/players", playersRouter);
-app.use("/api/maps", mapsRouter);
-app.use("/api/health", healthRouter);
+app.use("/servers", serversRouter);
+app.use("/players", playersRouter);
+app.use("/maps", mapsRouter);
+app.use("/health", healthRouter);
+app.use("/history", historyRouter);
 
 app.use(errorHandler);
 
