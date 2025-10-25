@@ -21,22 +21,26 @@ FKZ API for tracking game servers - A robust server tracking API that polls game
 ## Installation
 
 1. Clone the repository:
+
 ```bash
 git clone <repository-url>
 cd server-api
 ```
 
 2. Install dependencies:
+
 ```bash
 npm install
 ```
 
 3. Create your environment configuration:
+
 ```bash
 cp .env.example .env
 ```
 
 4. Configure your `.env` file:
+
 ```env
 DB_HOST=localhost
 DB_USER=your_db_user
@@ -46,12 +50,14 @@ PORT=3000
 ```
 
 5. Set up the database:
+
 ```bash
 # Run the schema SQL file in your MySQL database
 mysql -u your_user -p your_database < db/schema.sql
 ```
 
 6. Configure servers to monitor:
+
 ```bash
 cp config/servers.example.json config/servers.json
 # Edit config/servers.json with your server list
@@ -60,6 +66,7 @@ cp config/servers.example.json config/servers.json
 ## Usage
 
 Start the server:
+
 ```bash
 node src/server.js
 ```
@@ -69,6 +76,7 @@ The API will be available at `http://localhost:3000` (or your configured PORT).
 ## API Documentation
 
 ### Base URL
+
 ```
 http://localhost:3000/api
 ```
@@ -78,20 +86,24 @@ http://localhost:3000/api
 ### Servers
 
 #### Get All Servers
+
 ```http
 GET /api/servers
 ```
 
 **Query Parameters:**
+
 - `game` (optional) - Filter by game type (e.g., `csgo`, `counterstrike2`)
 - `status` (optional) - Filter by status (0 = offline, 1 = online)
 
 **Example Request:**
+
 ```bash
 curl http://localhost:3000/api/servers?game=counterstrike2
 ```
 
 **Example Response:**
+
 ```json
 {
   "playersTotal": 45,
@@ -109,19 +121,23 @@ curl http://localhost:3000/api/servers?game=counterstrike2
 ```
 
 #### Get Servers by IP
+
 ```http
 GET /api/servers/:ip
 ```
 
 **Parameters:**
+
 - `ip` (required) - Server IP address
 
 **Example Request:**
+
 ```bash
 curl http://localhost:3000/api/servers/1.2.3.4
 ```
 
 **Example Response:**
+
 ```json
 [
   {
@@ -143,11 +159,13 @@ curl http://localhost:3000/api/servers/1.2.3.4
 ### Players
 
 #### Get All Players
+
 ```http
 GET /api/players
 ```
 
 **Query Parameters:**
+
 - `page` (optional, default: 1) - Page number
 - `limit` (optional, default: 10, max: 100) - Results per page
 - `sort` (optional, default: `total_playtime`) - Sort field (`total_playtime`, `steamid`)
@@ -155,11 +173,13 @@ GET /api/players
 - `name` (optional) - Filter by player name (partial match)
 
 **Example Request:**
+
 ```bash
 curl "http://localhost:3000/api/players?page=1&limit=20&sort=total_playtime&order=desc"
 ```
 
 **Example Response:**
+
 ```json
 {
   "data": [
@@ -178,19 +198,23 @@ curl "http://localhost:3000/api/players?page=1&limit=20&sort=total_playtime&orde
 ```
 
 #### Get Player by SteamID
+
 ```http
 GET /api/players/:steamid
 ```
 
 **Parameters:**
+
 - `steamid` (required) - Player's SteamID (SteamID64, SteamID3, or SteamID2 format)
 
 **Example Request:**
+
 ```bash
 curl http://localhost:3000/api/players/76561198012345678
 ```
 
 **Example Response:**
+
 ```json
 {
   "steamid": "76561198012345678",
@@ -215,11 +239,13 @@ curl http://localhost:3000/api/players/76561198012345678
 ### Maps
 
 #### Get All Maps
+
 ```http
 GET /api/maps
 ```
 
 **Query Parameters:**
+
 - `page` (optional, default: 1) - Page number
 - `limit` (optional, default: 10, max: 100) - Results per page
 - `sort` (optional, default: `total_playtime`) - Sort field (`total_playtime`, `name`)
@@ -228,11 +254,13 @@ GET /api/maps
 - `name` (optional) - Filter by map name (partial match)
 
 **Example Request:**
+
 ```bash
 curl "http://localhost:3000/api/maps?page=1&limit=10&sort=total_playtime"
 ```
 
 **Example Response:**
+
 ```json
 {
   "data": [
@@ -259,11 +287,13 @@ curl "http://localhost:3000/api/maps?page=1&limit=10&sort=total_playtime"
 ### Health & Stats
 
 #### Health Check
+
 ```http
 GET /api/health
 ```
 
 **Example Response:**
+
 ```json
 {
   "status": "ok",
@@ -273,11 +303,13 @@ GET /api/health
 ```
 
 #### API Statistics
+
 ```http
 GET /api/stats
 ```
 
 **Example Response:**
+
 ```json
 {
   "servers": {
@@ -309,6 +341,7 @@ All endpoints return errors in the following format:
 ```
 
 **Common HTTP Status Codes:**
+
 - `200` - Success
 - `400` - Bad Request (invalid input)
 - `404` - Not Found
@@ -333,6 +366,7 @@ Edit `config/servers.json` to add or remove servers to monitor:
 ```
 
 **Supported Games:**
+
 - `csgo` - Counter-Strike: Global Offensive
 - `counterstrike2` - Counter-Strike 2 (automatically mapped to csgo query type)
 - Any game type supported by [GameDig](https://github.com/gamedig/node-gamedig#games-list)
@@ -350,6 +384,7 @@ startUpdateLoop(30 * 1000); // 30 seconds
 ## Development
 
 ### Project Structure
+
 ```
 server-api/
 ├── config/           # Server configuration files
@@ -367,12 +402,14 @@ server-api/
 ### Logging
 
 Logs are written to:
+
 - Console (all levels)
 - `app.log` file (info and error levels)
 
 ### Database Schema
 
 See `db/schema.sql` for the complete database structure. Main tables:
+
 - `servers` - Server status and information
 - `players` - Player activity and playtime
 - `maps` - Map playtime statistics
