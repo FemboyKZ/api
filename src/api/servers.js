@@ -40,6 +40,23 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
       serversOnline: rows.length,
     };
     rows.forEach((server) => {
+      // Parse players_list - handle both JSON array and stringified JSON
+      let playersList = [];
+      if (server.players_list) {
+        try {
+          // If it's already an object/array, use it directly
+          playersList = Array.isArray(server.players_list)
+            ? server.players_list
+            : JSON.parse(server.players_list);
+        } catch (e) {
+          logger.error(
+            `Failed to parse players_list for ${server.ip}:${server.port}`,
+            { error: e.message },
+          );
+          playersList = [];
+        }
+      }
+
       response[`${server.ip}:${server.port}`] = {
         ip: server.ip,
         port: server.port,
@@ -48,7 +65,7 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
         map: server.map,
         players: server.player_count,
         maxplayers: server.maxplayers,
-        playersList: server.players_list ? JSON.parse(server.players_list) : [],
+        playersList: playersList,
         version: server.version,
       };
     });

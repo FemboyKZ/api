@@ -53,20 +53,20 @@ async function trackPlayerSessions(server, currentPlayers) {
   const serverKey = `${server.ip}:${server.port}`;
   const previousPlayers = previousServerStates.get(serverKey) || new Set();
   const currentPlayerIds = new Set(
-    currentPlayers.map((p) => p.id).filter((id) => id),
+    currentPlayers.map((p) => p.steamid).filter((id) => id),
   );
 
   // Players who joined
   for (const player of currentPlayers) {
-    if (player.id && !previousPlayers.has(player.id)) {
+    if (player.steamid && !previousPlayers.has(player.steamid)) {
       try {
         await pool.query(
           `INSERT INTO player_sessions (steamid, name, server_ip, server_port, joined_at)
            VALUES (?, ?, ?, ?, NOW())`,
-          [player.id, player.name || "Unknown", server.ip, server.port],
+          [player.steamid, player.name || "Unknown", server.ip, server.port],
         );
         logger.debug("Player joined", {
-          steamid: player.id,
+          steamid: player.steamid,
           server: serverKey,
         });
       } catch (error) {
@@ -199,17 +199,15 @@ async function updateLoop() {
       const previousServer = prevStatus[0];
 
       if (result.status === 1) {
-        // Prepare players list for storage
+        // Prepare players list for storage - store as JSON array or empty array
         const playersList =
-          result.players && result.players.length > 0
-            ? JSON.stringify(result.players)
-            : null;
+          result.players && result.players.length > 0 ? result.players : [];
 
         // Insert/update server status and map
         await pool.query(
-          `INSERT INTO servers (ip, port, game, status, map, player_count, players_list, version, last_update)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
-           ON DUPLICATE KEY UPDATE status=VALUES(status), map=VALUES(map), player_count=VALUES(player_count), players_list=VALUES(players_list), version=VALUES(version), last_update=NOW()`,
+          `INSERT INTO servers (ip, port, game, status, map, player_count, maxplayers, players_list, version, last_update)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+           ON DUPLICATE KEY UPDATE status=VALUES(status), map=VALUES(map), player_count=VALUES(player_count), maxplayers=VALUES(maxplayers), players_list=VALUES(players_list), version=VALUES(version), last_update=NOW()`,
           [
             server.ip,
             server.port,
@@ -217,7 +215,8 @@ async function updateLoop() {
             result.status,
             result.map,
             result.playerCount,
-            playersList,
+            result.maxplayers || 0,
+            JSON.stringify(playersList),
             result.version,
           ],
         );
@@ -268,7 +267,7 @@ async function updateLoop() {
         // Track players
         if (result.players && result.players.length > 0) {
           for (const player of result.players) {
-            if (player.id) {
+            if (player.steamid) {
               // Insert or update player record
               await pool.query(
                 `INSERT INTO players (steamid, name, playtime, server_ip, server_port, last_seen)
@@ -279,12 +278,17 @@ async function updateLoop() {
                    server_ip=VALUES(server_ip), 
                    server_port=VALUES(server_port), 
                    last_seen=NOW()`,
-                [player.id, player.name || "Unknown", server.ip, server.port],
+                [
+                  player.steamid,
+                  player.name || "Unknown",
+                  server.ip,
+                  server.port,
+                ],
               );
 
               // Emit player update event
               emitPlayerUpdate({
-                steamid: player.id,
+                steamid: player.steamid,
                 name: player.name || "Unknown",
                 server: `${server.ip}:${server.port}`,
               });
