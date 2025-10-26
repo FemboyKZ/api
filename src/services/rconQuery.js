@@ -2,7 +2,36 @@ const Rcon = require("rcon-srcds").default;
 const logger = require("../utils/logger");
 
 /**
+ * RCON Query Service for CS:GO and CS2 Servers
+ * 
+ * Provides extended server information and player data including Steam IDs.
+ * 
+ * CS:GO servers (version 1.38.x):
+ * - Uses 'status' command for player list with STEAM_X:Y:Z format Steam IDs
+ * - Player lines format: # userid1 userid2 "name" STEAM_1:0:123 H:MM:SS ping loss state rate address
+ * 
+ * CS2 servers (version 1.40.x+):
+ * - Uses 'status' command for player names and basic info (no Steam IDs in status)
+ * - Uses 'status_json' command to get Steam IDs from server.clients array
+ * - Player lines format: userid H:MM:SS ping loss state rate address 'name'
+ * - JSON format includes steamid, steamid64, bot flag, and name
+ * 
+ * Auto-detection:
+ * - CS:GO vs CS2 is detected by parsing version number from status output
+ * - Version 1.40+ = CS2, Version 1.38.x = CS:GO
+ * 
+ * Returns:
+ * - players: Array of player objects with steamid, name, ping, time, etc.
+ * - serverInfo: hostname, os, secure status, server owner steamid, bot count
+ */
+
+/**
  * Query server via RCON to get player details including Steam IDs
+ * 
+ * @param {string} ip - Server IP address
+ * @param {number} port - RCON port
+ * @param {string} password - RCON password
+ * @returns {Object|null} { players: [], serverInfo: {} } or null on error
  */
 async function queryRcon(ip, port, password) {
   if (!password) {
@@ -91,11 +120,26 @@ async function queryRcon(ip, port, password) {
 
 /**
  * Parse CS2/CS:GO 'status' command output to extract player info and server details
- * CS:GO format: hostname: X, version : X, os: X, players: X
- * CS2 format: hostname : X (with timestamp prefix), version  : X, os/type  : X, steamid  : X
- * Player line examples:
- * CS:GO: # 123 "PlayerName" STEAM_1:0:12345678 01:23 45 0 active 192.168.1.1:27005
- * CS2:  # 123      01:23   45    0   active  16000 adr "PlayerName"
+ * 
+ * Format Detection:
+ * - Checks version line: CS:GO = 1.38.x, CS2 = 1.40.x+
+ * 
+ * CS:GO Format:
+ * - hostname: X, version : X, os: X, players: X
+ * - Player line: # userid1 userid2 "name" STEAM_1:0:12345  H:MM:SS ping loss state rate address
+ * - Steam IDs included directly in player lines (STEAM_X:Y:Z or [U:1:Z] format)
+ * 
+ * CS2 Format:
+ * - hostname : X (may have timestamp prefix), version  : X, os/type  : X, steamid  : X
+ * - Player line: userid H:MM:SS ping loss state rate address 'name' (NO # prefix)
+ * - Steam IDs NOT in status output - must use status_json command instead
+ * - Names enclosed in single quotes instead of double quotes
+ * 
+ * Time Format Support:
+ * - Handles MM:SS, H:MM:SS, and HH:MM:SS formats
+ * 
+ * @param {string} statusText - Raw output from RCON status command
+ * @returns {Object} { players: [], serverInfo: {}, isCS2: boolean }
  */
 function parseStatusResponse(statusText) {
   logger.info(`=== PARSING RCON STATUS RESPONSE ===`);
@@ -282,13 +326,40 @@ function parseStatusResponse(statusText) {
 
 /**
  * Enrich CS2 players with Steam IDs from status_json command
- * status_json returns JSON with clients array containing steamid64, steamid, bot, name
+ * 
+ * CS2's status command doesn't include Steam IDs, so we must use status_json
+ * which returns a JSON object with server.clients array containing:
+ * - steamid64: SteamID64 format (76561198...)
+ * - steamid: SteamID3 format ([U:1:...])
+ * - bot: Boolean flag
+ * - name: Player name
+ * 
+ * Players are matched by name (trimmed) since CS2 doesn't provide a consistent
+ * userid mapping between status and status_json commands.
+ * 
+ * @param {Array} players - Array of player objects from parseStatusResponse (missing steamid)
+ * @param {string} statusJsonResponse - Raw JSON output from RCON status_json command
  */
 function enrichCS2PlayersWithSteamIDs(players, statusJsonResponse) {
   try {
     logger.debug(`Parsing status_json response (${statusJsonResponse.length} chars)`);
     
-    const data = JSON.parse(statusJsonResponse);
+    // Clean up the response - sometimes RCON responses have extra text before/after JSON
+    let jsonText = statusJsonResponse.trim();
+    
+    // Find the first { and last } to extract just the JSON part
+    const firstBrace = jsonText.indexOf('{');
+    const lastBrace = jsonText.lastIndexOf('}');
+    
+    if (firstBrace === -1 || lastBrace === -1) {
+      logger.error(`No JSON found in status_json response`);
+      logger.debug(`Raw response:\n${statusJsonResponse}`);
+      return;
+    }
+    
+    jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+    
+    const data = JSON.parse(jsonText);
     
     // Clients array is nested in server.clients
     const clients = data.server?.clients;
@@ -330,13 +401,20 @@ function enrichCS2PlayersWithSteamIDs(players, statusJsonResponse) {
     logger.info(`Enriched ${enrichedCount} CS2 players with Steam IDs from status_json`);
   } catch (error) {
     logger.error(`Failed to parse status_json response: ${error.message}`);
+    logger.debug(`Raw status_json response:\n${statusJsonResponse}`);
   }
 }
 
 /**
  * Convert Steam ID formats to SteamID64
- * STEAM_1:0:12345678 -> 76561197960265728 + (12345678 * 2) + 0
- * [U:1:12345678] -> 76561197960265728 + 12345678 - 1
+ * 
+ * Supported input formats:
+ * - STEAM_X:Y:Z (SteamID2) -> 76561197960265728 + (Z * 2) + Y
+ * - [U:1:Z] (SteamID3) -> 76561197960265728 + Z
+ * - [G:1:Z] (GameServer ID) -> 85568392932669440 + Z
+ * 
+ * @param {string} steamid - Steam ID in any supported format
+ * @returns {string|null} SteamID64 or null if invalid/bot
  */
 function convertToSteamID64(steamid) {
   if (!steamid) return null;
