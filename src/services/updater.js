@@ -10,6 +10,33 @@ const {
 } = require("./websocket");
 const { deleteCache } = require("../db/redis");
 
+/**
+ * Server Update Service
+ * 
+ * Polls all configured game servers in parallel at regular intervals (default: 30 seconds).
+ * 
+ * For each server:
+ * 1. Queries via GameDig for basic status (map, player count, online/offline)
+ * 2. Queries via RCON (if configured) for Steam IDs and extended data
+ * 3. Stores current status in servers table (with RCON data if available)
+ * 4. Records historical snapshots in server_history table
+ * 5. Tracks player sessions (join/leave) when Steam IDs available from RCON
+ * 6. Tracks map changes and rotation in map_history table
+ * 7. Updates player statistics (separated by game type)
+ * 8. Updates map statistics (separated by game type)
+ * 9. Emits WebSocket events for real-time updates
+ * 
+ * Data Separation:
+ * - Players and maps use composite unique keys (steamid+game, name+game)
+ * - Same player on CS:GO and CS2 has separate playtime tracking
+ * - Same map on CS:GO and CS2 has separate playtime tracking
+ * 
+ * Performance:
+ * - All servers queried in parallel using Promise.all()
+ * - Update time = slowest server response, not sum of all servers
+ * - Cache invalidated once after all updates complete
+ */
+
 let serversConfig = [];
 const previousServerStates = new Map(); // Track previous state for session tracking
 const currentMapStates = new Map(); // Track current maps for map history
@@ -180,7 +207,11 @@ async function trackMapChange(server, newMap, playerCount) {
 
 async function updateLoop() {
   loadConfig();
-  for (const server of serversConfig) {
+  
+  logger.info(`Starting update loop for ${serversConfig.length} servers (parallel mode)`);
+  
+  // Query all servers in parallel
+  const updatePromises = serversConfig.map(async (server) => {
     try {
       const result = await queryServer(
         server.ip,
@@ -363,12 +394,6 @@ async function updateLoop() {
         }
       }
 
-      // Invalidate relevant caches
-      await deleteCache("cache:servers:*");
-      await deleteCache("cache:players:*");
-      await deleteCache("cache:maps:*");
-      await deleteCache("cache:history:*");
-
       logger.debug("Server update complete", {
         server: `${server.ip}:${server.port}`,
       });
@@ -377,7 +402,18 @@ async function updateLoop() {
         `Failed to update server ${server.ip}:${server.port} - ${e.message}`,
       );
     }
-  }
+  });
+  
+  // Wait for all server updates to complete
+  await Promise.all(updatePromises);
+  
+  // Invalidate caches once after all updates (moved from inside loop)
+  await deleteCache("cache:servers:*");
+  await deleteCache("cache:players:*");
+  await deleteCache("cache:maps:*");
+  await deleteCache("cache:history:*");
+  
+  logger.info(`Update loop complete for ${serversConfig.length} servers`);
 }
 
 function startUpdateLoop(intervalMs) {
