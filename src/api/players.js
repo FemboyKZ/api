@@ -268,6 +268,12 @@ router.get("/:steamid", async (req, res) => {
 
     const [stats] = await pool.query(statsQuery, statsParams);
 
+    // Remove IP addresses and deprecated fields from session data for privacy and cleanliness
+    const sessionsWithoutIp = rows.map(session => {
+      const { latest_ip, name, ...sessionWithoutIp } = session;
+      return sessionWithoutIp;
+    });
+
     res.json({
       steamid,
       stats: stats.map(s => ({
@@ -275,7 +281,7 @@ router.get("/:steamid", async (req, res) => {
         total_playtime: s.total_playtime || 0,
         last_seen: s.last_seen,
       })),
-      sessions: rows,
+      sessions: sessionsWithoutIp,
     });
   } catch (e) {
     logger.error(`Player fetch error for ${req.params.steamid}: ${e.message}`);

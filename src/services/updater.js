@@ -303,19 +303,24 @@ async function updateLoop() {
         if (result.players && result.players.length > 0) {
           for (const player of result.players) {
             if (player.steamid) {
+              // Extract name from player data (handle various formats and empty strings)
+              const playerName = (player.name && player.name.trim()) ? player.name.trim() : null;
+              
               // Insert or update player record (separated by game)
               await pool.query(
-                `INSERT INTO players (steamid, name, game, playtime, server_ip, server_port, last_seen)
-                 VALUES (?, ?, ?, 1, ?, ?, NOW())
+                `INSERT INTO players (steamid, latest_name, latest_ip, game, playtime, server_ip, server_port, last_seen)
+                 VALUES (?, ?, ?, ?, 1, ?, ?, NOW())
                  ON DUPLICATE KEY UPDATE 
-                   name=VALUES(name), 
+                   latest_name=VALUES(latest_name), 
+                   latest_ip=VALUES(latest_ip),
                    playtime=playtime+1, 
                    server_ip=VALUES(server_ip), 
                    server_port=VALUES(server_port), 
                    last_seen=NOW()`,
                 [
                   player.steamid,
-                  player.name || "Unknown",
+                  playerName,
+                  player.ip || null,
                   server.game,
                   server.ip,
                   server.port,
@@ -325,7 +330,7 @@ async function updateLoop() {
               // Emit player update event
               emitPlayerUpdate({
                 steamid: player.steamid,
-                name: player.name || "Unknown",
+                name: playerName || "Unknown",
                 server: `${server.ip}:${server.port}`,
               });
             }
