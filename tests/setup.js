@@ -14,5 +14,14 @@ jest.mock("../src/utils/logger", () => ({
   logQuery: jest.fn(),
 }));
 
+// Mock cache middleware
+jest.mock("../src/utils/cacheMiddleware", () => ({
+  cacheMiddleware: () => (req, res, next) => next(),
+  serversKeyGenerator: jest.fn(),
+  playersKeyGenerator: jest.fn(),
+  mapsKeyGenerator: jest.fn(),
+  generateCacheKey: jest.fn(),
+}));
+
 // Global test timeout
 jest.setTimeout(10000);

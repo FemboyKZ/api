@@ -96,9 +96,8 @@ router.get(
     const startTime = Date.now();
     try {
       const { steamid } = req.params;
-      const { page, limit } = validatePagination(req.query);
-
-      const offset = (page - 1) * limit;
+      const { page = 1, limit = 20 } = req.query;
+      const { limit: validLimit, offset } = validatePagination(page, limit);
 
       const [sessions] = await pool.query(
         `SELECT 
@@ -113,7 +112,7 @@ router.get(
         WHERE steamid = ?
         ORDER BY joined_at DESC
         LIMIT ? OFFSET ?`,
-        [steamid, limit, offset],
+        [steamid, validLimit, offset],
       );
 
       const [[{ total }]] = await pool.query(
@@ -151,10 +150,9 @@ router.get(
   async (req, res) => {
     const startTime = Date.now();
     try {
-      const { page, limit } = validatePagination(req.query);
-      const { server, map } = req.query;
+      const { page = 1, limit = 20, server, map } = req.query;
+      const { limit: validLimit, offset } = validatePagination(page, limit);
 
-      const offset = (page - 1) * limit;
       let query = "SELECT * FROM map_history WHERE 1=1";
       const params = [];
 
@@ -172,7 +170,7 @@ router.get(
       }
 
       query += " ORDER BY started_at DESC LIMIT ? OFFSET ?";
-      params.push(limit, offset);
+      params.push(validLimit, offset);
 
       const [rows] = await pool.query(query, params);
 

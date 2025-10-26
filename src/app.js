@@ -10,6 +10,7 @@ const playersRouter = require("./api/players");
 const mapsRouter = require("./api/maps");
 const healthRouter = require("./api/health");
 const historyRouter = require("./api/history");
+const adminRouter = require("./api/admin");
 const errorHandler = require("./utils/errorHandler");
 const logger = require("./utils/logger");
 
@@ -61,6 +62,7 @@ app.use("/players", playersRouter);
 app.use("/maps", mapsRouter);
 app.use("/health", healthRouter);
 app.use("/history", historyRouter);
+app.use("/admin", adminRouter);
 
 app.use(errorHandler);
 
