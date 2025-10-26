@@ -184,4 +184,116 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /maps/{mapname}:
+ *   get:
+ *     summary: Get map by name
+ *     description: Returns detailed statistics for a specific map
+ *     tags: [Maps]
+ *     parameters:
+ *       - in: path
+ *         name: mapname
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Map name
+ *         example: "kz_synergy_x"
+ *       - in: query
+ *         name: game
+ *         schema:
+ *           type: string
+ *         description: Filter by game type
+ *         example: csgo
+ *     responses:
+ *       200:
+ *         description: Successful response with map details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 name:
+ *                   type: string
+ *                   description: Map name
+ *                 stats:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       game:
+ *                         type: string
+ *                       total_playtime:
+ *                         type: integer
+ *                       last_played:
+ *                         type: string
+ *                         format: date-time
+ *                 sessions:
+ *                   type: array
+ *                   description: Individual play sessions for this map
+ *                   items:
+ *                     type: object
+ *       404:
+ *         description: Map not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Map not found"
+ *       500:
+ *         description: Server error
+ */
+router.get("/:mapname", async (req, res) => {
+  try {
+    const { mapname } = req.params;
+    const { game } = req.query;
+
+    // Validate and sanitize map name
+    const sanitizedMapName = sanitizeString(mapname, 100);
+
+    let query = "SELECT * FROM maps WHERE name = ?";
+    const params = [sanitizedMapName];
+
+    if (game) {
+      query += " AND game = ?";
+      params.push(sanitizeString(game, 50));
+    }
+
+    query += " ORDER BY last_played DESC";
+
+    const [rows] = await pool.query(query, params);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Map not found" });
+    }
+
+    let statsQuery = "SELECT game, SUM(playtime) as total_playtime, MAX(last_played) as last_played FROM maps WHERE name = ?";
+    const statsParams = [sanitizedMapName];
+
+    if (game) {
+      statsQuery += " AND game = ?";
+      statsParams.push(sanitizeString(game, 50));
+    }
+
+    statsQuery += " GROUP BY game";
+
+    const [stats] = await pool.query(statsQuery, statsParams);
+
+    res.json({
+      name: sanitizedMapName,
+      stats: stats.map(s => ({
+        game: s.game,
+        total_playtime: s.total_playtime || 0,
+        last_played: s.last_played,
+      })),
+      sessions: rows,
+    });
+  } catch (e) {
+    logger.error(`Map fetch error for ${req.params.mapname}: ${e.message}`);
+    res.status(500).json({ error: "Map fetch error" });
+  }
+});
+
 module.exports = router;
