@@ -1,14 +1,17 @@
 # server-api
 
-FKZ API for tracking game servers - A robust server tracking API that polls game servers via GameDig and stores status, player, and map data in MySQL.
+FKZ API for tracking game servers - A robust server tracking API that polls game servers via GameDig and RCON, storing detailed status, player, and map data in MySQL.
 
 ## Features
 
-- Real-time game server monitoring via GameDig
-- Player tracking and statistics
-- Map playtime analytics
-- Automatic polling at 30-second intervals
-- RESTful API with filtering, pagination, and sorting
+- **Real-time game server monitoring** via GameDig
+- **RCON integration** for detailed player data including Steam IDs (CS:GO and CS2)
+- **Player tracking and statistics** with Steam ID support
+- **Map playtime analytics** separated by game type
+- **Parallel server queries** for fast updates across multiple servers
+- **Automatic polling** at 30-second intervals
+- **RESTful API** with filtering, pagination, and sorting
+- **Per-game statistics** - Player and map data separated by CS:GO vs CS2
 - Input validation and error handling
 - Rate limiting and CORS protection
 
@@ -17,6 +20,7 @@ FKZ API for tracking game servers - A robust server tracking API that polls game
 - Node.js (v14 or higher)
 - MySQL/MariaDB database
 - Game servers to monitor (CS:GO, CS2, etc.)
+- RCON access to servers (optional, for Steam IDs and extended data)
 
 ## Installation
 
@@ -63,6 +67,33 @@ cp config/servers.example.json config/servers.json
 # Edit config/servers.json with your server list
 ```
 
+**Server Configuration Format:**
+
+```json
+[
+  {
+    "ip": "37.27.107.76",
+    "port": 27015,
+    "game": "csgo",
+    "rconPort": 27015,
+    "rconPassword": "your_rcon_password"
+  },
+  {
+    "ip": "169.150.198.105",
+    "port": 25126,
+    "game": "counterstrike2",
+    "rconPort": 25126,
+    "rconPassword": "your_rcon_password"
+  }
+]
+```
+
+**Note:** RCON configuration is optional but highly recommended for:
+- Steam ID tracking (required for player statistics)
+- Extended server information (hostname, OS, secure status)
+- Bot count tracking
+- Server owner Steam ID
+
 ## Usage
 
 Start the server:
@@ -72,6 +103,13 @@ node src/server.js
 ```
 
 The API will be available at `http://localhost:3000` (or your configured PORT).
+
+The server will:
+- Query all configured servers in parallel every 30 seconds
+- Use GameDig for basic server info (status, map, player count)
+- Use RCON (if configured) for detailed player data with Steam IDs
+- Store historical data for players, maps, and server status
+- Automatically detect CS:GO vs CS2 based on version number
 
 ## API Documentation
 
@@ -115,7 +153,24 @@ curl http://localhost:3000/servers?game=counterstrike2
     "status": 1,
     "map": "de_dust2",
     "players": 15,
-    "version": "1.0.0"
+    "maxplayers": 20,
+    "version": "1.41.1.7",
+    "hostname": "My CS2 Server",
+    "os": "Linux",
+    "secure": true,
+    "steamid": "85568392932669237",
+    "botCount": 0,
+    "playersList": [
+      {
+        "name": "PlayerName",
+        "steamid": "85568392932669237",
+        "time": "12:34",
+        "ping": 45,
+        "loss": 0,
+        "state": "active",
+        "bot": false
+      }
+    ]
   }
 }
 ```
@@ -171,6 +226,9 @@ GET /players
 - `sort` (optional, default: `total_playtime`) - Sort field (`total_playtime`, `steamid`)
 - `order` (optional, default: `desc`) - Sort order (`asc`, `desc`)
 - `name` (optional) - Filter by player name (partial match)
+- `game` (optional) - Filter by game type (`csgo`, `counterstrike2`)
+
+**Note:** Player statistics are separated by game type. A player's CS:GO and CS2 playtime are tracked independently.
 
 **Example Request:**
 
@@ -252,6 +310,9 @@ GET /maps
 - `order` (optional, default: `desc`) - Sort order (`asc`, `desc`)
 - `server` (optional) - Filter by server (format: `ip:port`)
 - `name` (optional) - Filter by map name (partial match)
+- `game` (optional) - Filter by game type (`csgo`, `counterstrike2`)
+
+**Note:** Map statistics are separated by game type. The same map played on CS:GO and CS2 servers has separate playtime tracking.
 
 **Example Request:**
 
@@ -360,24 +421,67 @@ Edit `config/servers.json` to add or remove servers to monitor:
   {
     "ip": "37.27.107.76",
     "port": 27015,
-    "game": "counterstrike2"
+    "game": "csgo",
+    "rconPort": 27015,
+    "rconPassword": "your_rcon_password"
+  },
+  {
+    "ip": "169.150.198.105",
+    "port": 25126,
+    "game": "counterstrike2",
+    "rconPort": 25126,
+    "rconPassword": "your_rcon_password"
   }
 ]
 ```
 
+**Configuration Fields:**
+
+- `ip` (required) - Server IP address
+- `port` (required) - Server game port
+- `game` (required) - Game type identifier
+- `rconPort` (optional) - RCON port (often same as game port)
+- `rconPassword` (optional) - RCON password for authentication
+
 **Supported Games:**
 
 - `csgo` - Counter-Strike: Global Offensive
-- `counterstrike2` - Counter-Strike 2 (automatically mapped to csgo query type)
+- `counterstrike2` - Counter-Strike 2 (automatically mapped to csgo query type for GameDig)
 - Any game type supported by [GameDig](https://github.com/gamedig/node-gamedig#games-list)
+
+**RCON Benefits:**
+
+When RCON is configured, the API can retrieve:
+- Player Steam IDs (required for player tracking)
+- Server hostname, OS, and security status
+- Server owner Steam ID
+- Bot count
+- Extended player details (connection time, ping, packet loss)
+
+**CS2 vs CS:GO Detection:**
+
+The system automatically detects CS2 vs CS:GO based on the server version:
+- CS:GO: version 1.38.x.x
+- CS2: version 1.40.x.x or higher
+
+For CS2 servers, the `status_json` RCON command is used to retrieve Steam IDs.
 
 ### Update Interval
 
-The default polling interval is 30 seconds. To change this, modify `src/server.js`:
+The default polling interval is 30 seconds. All servers are queried in parallel for fast updates.
+
+To change the interval, modify `src/server.js`:
 
 ```javascript
 startUpdateLoop(30 * 1000); // 30 seconds
 ```
+
+**Performance:**
+
+With parallel queries, update time is determined by the slowest server response, not the total number of servers:
+
+- 10 servers × 3 seconds each = ~3 seconds total (parallel)
+- vs. ~30 seconds if sequential
 
 ---
 
@@ -410,9 +514,18 @@ Logs are written to:
 
 See `db/schema.sql` for the complete database structure. Main tables:
 
-- `servers` - Server status and information
-- `players` - Player activity and playtime
-- `maps` - Map playtime statistics
+- `servers` - Server status and information (includes RCON data: hostname, os, secure, steamid, bot_count)
+- `players` - Player activity and playtime (separated by game with unique constraint on steamid+game)
+- `maps` - Map playtime statistics (separated by game with unique constraint on name+game)
+- `server_history` - Historical snapshots of server status
+- `player_sessions` - Player join/leave tracking with Steam IDs
+- `map_history` - Map rotation tracking with player count metrics
+
+**Key Features:**
+
+- Players and maps use composite unique keys (steamid+game, name+game) for per-game statistics
+- JSON storage for players_list with automatic parsing
+- Session tracking requires RCON for Steam IDs
 
 ---
 
