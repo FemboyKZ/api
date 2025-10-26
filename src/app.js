@@ -13,6 +13,10 @@ const historyRouter = require("./api/history");
 const errorHandler = require("./utils/errorHandler");
 const logger = require("./utils/logger");
 
+// Trust proxy - required when running behind reverse proxy (Apache, Nginx, etc.)
+// This allows Express to read the real client IP from X-Forwarded-For header
+app.set('trust proxy', true);
+
 // CORS configuration
 app.use(
   cors({
