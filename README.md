@@ -22,14 +22,18 @@ The documentation is automatically generated from JSDoc comments in the code usi
 
 ## Features
 
-- **Real-time game server monitoring** via GameDig
+- **Real-time game server monitoring** via GameDig and RCON
 - **RCON integration** for detailed player data including Steam IDs (CS:GO and CS2)
-- **Player tracking and statistics** with Steam ID support
+- **Player tracking and statistics** with Steam ID support and name history
 - **Map playtime analytics** separated by game type
 - **Parallel server queries** for fast updates across multiple servers
 - **Automatic polling** at 30-second intervals
 - **RESTful API** with filtering, pagination, and sorting
 - **Per-game statistics** - Player and map data separated by CS:GO vs CS2
+- **Player history tracking** - All names and IPs used by each player (IPs private)
+- **Interactive API documentation** at `/docs` using Swagger/OpenAPI
+- **Reverse proxy support** with proper client IP detection
+- **Production-ready logging** with file rotation and environment-based levels
 - Input validation and error handling
 - Rate limiting and CORS protection
 
@@ -107,12 +111,18 @@ cp config/servers.example.json config/servers.json
 ```
 
 **Note:** RCON configuration is optional but highly recommended for:
+
 - Steam ID tracking (required for player statistics)
+- Player IP tracking (private, for moderation)
+- Player name history tracking
 - Extended server information (hostname, OS, secure status)
 - Bot count tracking
-- Server owner Steam ID
+
+Without RCON, you'll only get basic server status (map, player count) without individual player data.
 
 ## Usage
+
+### Starting the Server
 
 Start the server:
 
@@ -122,12 +132,25 @@ node src/server.js
 
 The API will be available at `http://localhost:3000` (or your configured PORT).
 
+### How it Works
+
 The server will:
+
 - Query all configured servers in parallel every 30 seconds
-- Use GameDig for basic server info (status, map, player count)
 - Use RCON (if configured) for detailed player data with Steam IDs
+- Fall back to GameDig for basic server info if RCON is unavailable
 - Store historical data for players, maps, and server status
-- Automatically detect CS:GO vs CS2 based on version number
+- Track all player names and IPs (IPs kept private)
+- Automatically detect CS:GO vs CS2 based on version number (1.40+ = CS2)
+
+### Production Configuration
+
+For production deployment behind Apache/Nginx:
+
+1. Set `HOST=127.0.0.1` in `.env` to bind only to localhost
+2. Set `NODE_ENV=production` for optimized logging
+3. Configure reverse proxy with `X-Forwarded-For` header
+4. The app automatically trusts proxy headers for correct client IP logging
 
 ## API Documentation
 
@@ -167,19 +190,19 @@ curl http://localhost:3000/servers?game=counterstrike2
   "1.2.3.4:27015": {
     "ip": "1.2.3.4",
     "port": 27015,
-    "game": "counterstrike2",
-    "status": 1,
-    "map": "de_dust2",
-    "players": 15,
-    "maxplayers": 20,
-    "version": "1.41.1.7",
-    "hostname": "My CS2 Server",
+    "game": "csgo",
+    "hostname": "My CS:GO Server",
+    "version": "1.38.8.1",
     "os": "Linux",
-    "secure": true,
-    "steamid": "85568392932669237",
-    "botCount": 0,
+    "secure": 1,
+    "status": 1,
+    "map": "kz_synergy_x",
+    "players": 15,
+    "maxplayers": 32,
+    "bots": 0,
     "playersList": [
       {
+        "userid": 12,
         "name": "PlayerName",
         "steamid": "85568392932669237",
         "time": "12:34",
@@ -192,6 +215,8 @@ curl http://localhost:3000/servers?game=counterstrike2
   }
 }
 ```
+
+**Note:** Player IPs are collected internally but not exposed via the API for privacy.
 
 #### Get Servers by IP
 
@@ -231,7 +256,7 @@ curl http://localhost:3000/servers/1.2.3.4
 
 ### Players
 
-### List All Players
+#### List All Players
 
 ```http
 GET /players
@@ -240,11 +265,11 @@ GET /players
 **Query Parameters:**
 
 - `page` (optional, default: 1) - Page number
-- `limit` (optional, default: 10, max: 100) - Results per page
+- `limit` (optional, default: 50, max: 100) - Results per page
 - `sort` (optional, default: `total_playtime`) - Sort field (`total_playtime`, `steamid`)
 - `order` (optional, default: `desc`) - Sort order (`asc`, `desc`)
-- `name` (optional) - Filter by player name (partial match)
 - `game` (optional) - Filter by game type (`csgo`, `counterstrike2`)
+- `name` (optional) - Filter by player name (partial match)
 
 **Note:** Player statistics are separated by game type. A player's CS:GO and CS2 playtime are tracked independently.
 
@@ -261,14 +286,16 @@ curl "http://localhost:3000/players?page=1&limit=20&sort=total_playtime&order=de
   "data": [
     {
       "steamid": "76561198012345678",
+      "name": "PlayerName",
+      "game": "csgo",
       "total_playtime": 36000
     }
   ],
   "pagination": {
     "page": 1,
-    "limit": 20,
+    "limit": 50,
     "total": 150,
-    "totalPages": 8
+    "totalPages": 3
   }
 }
 ```
@@ -470,11 +497,15 @@ Edit `config/servers.json` to add or remove servers to monitor:
 **RCON Benefits:**
 
 When RCON is configured, the API can retrieve:
+
 - Player Steam IDs (required for player tracking)
-- Server hostname, OS, and security status
-- Server owner Steam ID
+- Player IP addresses (collected privately, not exposed)
+- Player connection time, ping, and packet loss statistics
+- Server hostname, OS, and VAC security status
 - Bot count
-- Extended player details (connection time, ping, packet loss)
+- Complete player name history
+
+Without RCON, only basic GameDig data is available (server status, map, player count).
 
 **CS2 vs CS:GO Detection:**
 
@@ -532,8 +563,10 @@ Logs are written to:
 
 See `db/schema.sql` for the complete database structure. Main tables:
 
-- `servers` - Server status and information (includes RCON data: hostname, os, secure, steamid, bot_count)
+- `servers` - Server status and information (includes RCON data: hostname, os, secure, bot_count)
 - `players` - Player activity and playtime (separated by game with unique constraint on steamid+game)
+- `player_names` - Complete history of all player names with use counts
+- `player_ips` - Complete history of all player IPs with use counts (PRIVATE - not exposed via API)
 - `maps` - Map playtime statistics (separated by game with unique constraint on name+game)
 - `server_history` - Historical snapshots of server status
 - `player_sessions` - Player join/leave tracking with Steam IDs
@@ -542,8 +575,89 @@ See `db/schema.sql` for the complete database structure. Main tables:
 **Key Features:**
 
 - Players and maps use composite unique keys (steamid+game, name+game) for per-game statistics
-- JSON storage for players_list with automatic parsing
+- Player history tracking with `latest_name` and `latest_ip` in players table
+- Separate history tables track all names/IPs ever used (IPs kept private)
+- JSON storage for players_list with automatic parsing and IP stripping before API response
 - Session tracking requires RCON for Steam IDs
+
+### Database Migrations
+
+Migrations are located in `db/migrations/`. To apply a migration:
+
+```bash
+mysql -u your_user -p your_database < db/migrations/migration_file.sql
+```
+
+**Available Migrations:**
+
+1. `add_server_details.sql` - Adds RCON-sourced server details
+2. `add_game_to_players_with_dedup.sql` - Adds game column and deduplicates players
+3. `add_game_to_maps_with_dedup.sql` - Adds game column and deduplicates maps
+4. `add_player_history_tracking.sql` - Adds player name and IP history tracking
+5. `remove_server_steamid.sql` - Removes unused server owner Steam ID column
+
+See `db/migrations/README.md` for detailed migration information.
+
+### Logging
+
+The application uses Winston for logging with environment-based configuration:
+
+**Production** (`NODE_ENV=production`):
+- Console: info, warn, error only
+- Files: All levels logged to `logs/combined.log`, `logs/error.log`, `logs/access.log`
+- Log rotation: 10MB max, 5 files kept
+
+**Development** (`NODE_ENV=development`):
+- Console: All levels including debug, with colors
+- Files: Same as production
+- Verbose output for debugging
+
+**Client IP Logging:**
+- Properly configured for reverse proxy environments
+- Trusts `X-Forwarded-For` header when behind Apache/Nginx
+- Logs real client IPs instead of proxy IP
+
+### API Documentation
+
+The API provides interactive Swagger documentation accessible at `/docs`:
+
+- Built with Swagger UI and OpenAPI 3.0 specification
+- Auto-generated from JSDoc comments in route files
+- Provides request/response examples, schema validation, and API testing interface
+- Available at http://localhost:3000/docs (or your production URL)
+
+To add documentation for new endpoints, use JSDoc comments:
+
+```javascript
+/**
+ * @swagger
+ * /endpoint:
+ *   get:
+ *     summary: Endpoint description
+ *     tags: [Category]
+ *     responses:
+ *       200:
+ *         description: Success
+ */
+```
+
+### Privacy & Security
+
+**Player IP Addresses:**
+- Collected from RCON for administrative/moderation purposes
+- Stored in `player_ips` table with complete history
+- **Never exposed** through public API endpoints
+- Automatically stripped from `playersList` before API response
+- Only accessible via direct database access
+
+**Rate Limiting:**
+- 100 requests per 15 minutes per IP (configurable via `RATE_LIMIT_MAX`)
+- Applies to all endpoints
+
+**Input Validation:**
+- All inputs sanitized and validated
+- SQL injection protection via parameterized queries
+- Steam ID format validation (supports SteamID64, SteamID3, SteamID2)
 
 ---
 
