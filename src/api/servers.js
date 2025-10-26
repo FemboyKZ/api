@@ -85,7 +85,7 @@ const {
  *                 type: string
  *               bot:
  *                 type: boolean
- *     ServersResponse:
+ *     Servers:
  *       type: object
  *       properties:
  *         playersTotal:

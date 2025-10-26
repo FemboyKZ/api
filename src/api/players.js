@@ -23,6 +23,10 @@ const {
  *           type: string
  *           description: Player Steam ID
  *           example: "76561198000000000"
+ *         name:
+ *           type: string
+ *           description: Player name (latest seen)
+ *           example: "PlayerName"
  *         game:
  *           type: string
  *           description: Game type
@@ -132,7 +136,7 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
     const sortField = validSortFields.includes(sort) ? sort : "total_playtime";
     const sortOrder = order === "asc" ? "ASC" : "DESC";
 
-    let query = "SELECT steamid, game, SUM(playtime) as total_playtime FROM players WHERE 1=1";
+    let query = "SELECT steamid, latest_name as name, game, SUM(playtime) as total_playtime FROM players WHERE 1=1";
     const params = [];
 
     if (game) {
@@ -141,7 +145,7 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
     }
 
     if (name) {
-      query += " AND name LIKE ?";
+      query += " AND latest_name LIKE ?";
       params.push(`%${sanitizeString(name, 100)}%`);
     }
 
@@ -157,7 +161,7 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
       countParams.push(sanitizeString(game, 50));
     }
     if (name) {
-      countQuery += " AND name LIKE ?";
+      countQuery += " AND latest_name LIKE ?";
       countParams.push(`%${sanitizeString(name, 100)}%`);
     }
     const [countResult] = await pool.query(countQuery, countParams);
