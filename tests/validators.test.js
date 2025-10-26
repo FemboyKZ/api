@@ -79,24 +79,24 @@ describe("Validators", () => {
 
   describe("validatePagination", () => {
     it("should return default values for missing params", () => {
-      const result = validatePagination({});
+      const result = validatePagination();
       expect(result.page).toBe(1);
       expect(result.limit).toBe(10);
     });
 
     it("should parse valid pagination params", () => {
-      const result = validatePagination({ page: "2", limit: "20" });
+      const result = validatePagination("2", "20");
       expect(result.page).toBe(2);
       expect(result.limit).toBe(20);
     });
 
     it("should enforce maximum limit", () => {
-      const result = validatePagination({ limit: "1000" });
+      const result = validatePagination(undefined, "1000");
       expect(result.limit).toBe(100);
     });
 
     it("should default to 1 for invalid page", () => {
-      const result = validatePagination({ page: "0" });
+      const result = validatePagination("0");
       expect(result.page).toBe(1);
     });
   });

@@ -10,6 +10,8 @@ jest.mock("../src/utils/logger", () => ({
   error: jest.fn(),
   warn: jest.fn(),
   debug: jest.fn(),
+  logRequest: jest.fn(),
+  logQuery: jest.fn(),
 }));
 
 // Global test timeout
