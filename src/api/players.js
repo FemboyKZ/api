@@ -25,33 +25,61 @@ const {
  *           example: "76561198000000000"
  *         name:
  *           type: string
- *           description: Player name (latest seen)
+ *           description: Player name (latest seen across all games)
  *           example: "PlayerName"
- *         game:
- *           type: string
- *           description: Game type
- *           example: "csgo"
- *         total_playtime:
- *           type: integer
- *           description: Total playtime in minutes
- *           example: 12450
+ *         csgo:
+ *           type: object
+ *           description: CS:GO statistics (empty object if player hasn't played CS:GO)
+ *           properties:
+ *             total_playtime:
+ *               type: integer
+ *               description: Total playtime in seconds
+ *               example: 12450
+ *             last_seen:
+ *               type: string
+ *               format: date-time
+ *               example: "2025-10-26T12:00:00Z"
+ *         counterstrike2:
+ *           type: object
+ *           description: CS2 statistics (empty object if player hasn't played CS2)
+ *           properties:
+ *             total_playtime:
+ *               type: integer
+ *               description: Total playtime in seconds
+ *               example: 8200
+ *             last_seen:
+ *               type: string
+ *               format: date-time
+ *               example: "2025-10-26T14:30:00Z"
  *     PlayerDetails:
  *       type: object
  *       properties:
  *         steamid:
  *           type: string
- *         stats:
- *           type: array
- *           items:
- *             type: object
- *             properties:
- *               game:
- *                 type: string
- *               total_playtime:
- *                 type: integer
- *               last_seen:
- *                 type: string
- *                 format: date-time
+ *         csgo:
+ *           type: object
+ *           properties:
+ *             total_playtime:
+ *               type: integer
+ *             last_seen:
+ *               type: string
+ *               format: date-time
+ *             sessions:
+ *               type: array
+ *               items:
+ *                 type: object
+ *         counterstrike2:
+ *           type: object
+ *           properties:
+ *             total_playtime:
+ *               type: integer
+ *             last_seen:
+ *               type: string
+ *               format: date-time
+ *             sessions:
+ *               type: array
+ *               items:
+ *                 type: object
  */
 
 /**
@@ -93,7 +121,7 @@ const {
  *         name: game
  *         schema:
  *           type: string
- *         description: Filter by game type
+ *         description: Filter by game type (only returns players who have played this game)
  *         example: csgo
  *       - in: query
  *         name: name
@@ -132,11 +160,21 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
     const { page, limit, sort, order, name, game } = req.query;
     const { limit: validLimit, offset } = validatePagination(page, limit, 100);
 
-    const validSortFields = ["total_playtime", "steamid"];
+    const validSortFields = ["total_playtime", "steamid", "last_seen"];
     const sortField = validSortFields.includes(sort) ? sort : "total_playtime";
     const sortOrder = order === "asc" ? "ASC" : "DESC";
 
-    let query = "SELECT steamid, latest_name as name, game, SUM(playtime) as total_playtime FROM players WHERE 1=1";
+    // Get all player data grouped by steamid and game
+    let query = `
+      SELECT 
+        steamid, 
+        latest_name as name, 
+        game, 
+        SUM(playtime) as total_playtime,
+        MAX(last_seen) as last_seen
+      FROM players 
+      WHERE 1=1
+    `;
     const params = [];
 
     if (game) {
@@ -149,30 +187,93 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
       params.push(`%${sanitizeString(name, 100)}%`);
     }
 
-    query += ` GROUP BY steamid, game ORDER BY ${sortField} ${sortOrder} LIMIT ? OFFSET ?`;
-    params.push(validLimit, offset);
+    query += " GROUP BY steamid, game";
 
-    const [players] = await pool.query(query, params);
+    const [rawPlayers] = await pool.query(query, params);
 
-    let countQuery = "SELECT COUNT(DISTINCT CONCAT(steamid, '-', game)) as total FROM players WHERE 1=1";
-    const countParams = [];
-    if (game) {
-      countQuery += " AND game = ?";
-      countParams.push(sanitizeString(game, 50));
+    // Group by steamid and structure data by game
+    const playerMap = new Map();
+    
+    for (const row of rawPlayers) {
+      if (!playerMap.has(row.steamid)) {
+        playerMap.set(row.steamid, {
+          steamid: row.steamid,
+          name: row.name, // Will be updated to most recent
+          csgo: {},
+          counterstrike2: {},
+          _lastSeen: null, // For sorting
+          _totalPlaytime: 0, // For sorting
+        });
+      }
+      
+      const player = playerMap.get(row.steamid);
+      
+      // Update name to most recent across all games
+      if (!player._lastSeen || new Date(row.last_seen) > new Date(player._lastSeen)) {
+        player.name = row.name;
+        player._lastSeen = row.last_seen;
+      }
+      
+      // Add game-specific stats
+      if (row.game === 'csgo') {
+        player.csgo = {
+          total_playtime: row.total_playtime || 0,
+          last_seen: row.last_seen,
+        };
+      } else if (row.game === 'counterstrike2') {
+        player.counterstrike2 = {
+          total_playtime: row.total_playtime || 0,
+          last_seen: row.last_seen,
+        };
+      }
+      
+      // Track combined playtime for sorting
+      player._totalPlaytime += row.total_playtime || 0;
     }
-    if (name) {
-      countQuery += " AND latest_name LIKE ?";
-      countParams.push(`%${sanitizeString(name, 100)}%`);
-    }
-    const [countResult] = await pool.query(countQuery, countParams);
+
+    // Convert map to array and remove internal sorting fields
+    let players = Array.from(playerMap.values()).map(p => {
+      const { _lastSeen, _totalPlaytime, ...playerData } = p;
+      return playerData;
+    });
+
+    // Sort based on requested field
+    players.sort((a, b) => {
+      let aVal, bVal;
+      
+      if (sortField === 'total_playtime') {
+        // Sum playtime across both games for sorting
+        aVal = (a.csgo.total_playtime || 0) + (a.counterstrike2.total_playtime || 0);
+        bVal = (b.csgo.total_playtime || 0) + (b.counterstrike2.total_playtime || 0);
+      } else if (sortField === 'last_seen') {
+        // Get most recent last_seen across both games
+        const aDate = [a.csgo.last_seen, a.counterstrike2.last_seen].filter(d => d).sort().reverse()[0] || '';
+        const bDate = [b.csgo.last_seen, b.counterstrike2.last_seen].filter(d => d).sort().reverse()[0] || '';
+        aVal = aDate;
+        bVal = bDate;
+      } else {
+        aVal = a[sortField];
+        bVal = b[sortField];
+      }
+      
+      if (sortOrder === 'DESC') {
+        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+      } else {
+        return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+      }
+    });
+
+    // Apply pagination
+    const total = players.length;
+    players = players.slice(offset, offset + validLimit);
 
     res.json({
       data: players,
       pagination: {
         page: parseInt(page, 10) || 1,
         limit: validLimit,
-        total: countResult[0].total,
-        totalPages: Math.ceil(countResult[0].total / validLimit),
+        total: total,
+        totalPages: Math.ceil(total / validLimit),
       },
     });
   } catch (e) {
@@ -200,11 +301,11 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
  *         name: game
  *         schema:
  *           type: string
- *         description: Filter by game type
+ *         description: Filter stats to specific game type (returns only that game's data)
  *         example: csgo
  *     responses:
  *       200:
- *         description: Successful response with player details
+ *         description: Successful response with player details grouped by game type
  *         content:
  *           application/json:
  *             schema:
@@ -268,21 +369,35 @@ router.get("/:steamid", async (req, res) => {
 
     const [stats] = await pool.query(statsQuery, statsParams);
 
-    // Remove IP addresses and deprecated fields from session data for privacy and cleanliness
-    const sessionsWithoutIp = rows.map(session => {
-      const { latest_ip, name, ...sessionWithoutIp } = session;
-      return sessionWithoutIp;
-    });
-
-    res.json({
+    // Structure response by game type
+    const response = {
       steamid,
-      stats: stats.map(s => ({
-        game: s.game,
-        total_playtime: s.total_playtime || 0,
-        last_seen: s.last_seen,
-      })),
-      sessions: sessionsWithoutIp,
-    });
+      csgo: {},
+      counterstrike2: {},
+    };
+
+    // Populate game-specific stats and sessions
+    for (const stat of stats) {
+      const gameKey = stat.game;
+      
+      if (gameKey === 'csgo' || gameKey === 'counterstrike2') {
+        // Get sessions for this game
+        const gameSessions = rows
+          .filter(row => row.game === gameKey)
+          .map(session => {
+            const { latest_ip, name, ...sessionWithoutIp } = session;
+            return sessionWithoutIp;
+          });
+
+        response[gameKey] = {
+          total_playtime: stat.total_playtime || 0,
+          last_seen: stat.last_seen,
+          sessions: gameSessions,
+        };
+      }
+    }
+
+    res.json(response);
   } catch (e) {
     logger.error(`Player fetch error for ${req.params.steamid}: ${e.message}`);
     res.status(500).json({ error: "Player fetch error" });
