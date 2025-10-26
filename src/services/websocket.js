@@ -18,17 +18,13 @@ function initWebSocket(httpServer) {
   });
 
   io.on("connection", (socket) => {
-    logger.info(`WebSocket client connected: ${socket.id}`);
-
-    // Track connection count
-    const clientCount = io.engine.clientsCount;
-    logger.info(`Total connected clients: ${clientCount}`);
+    logger.debug(`WebSocket client connected: ${socket.id}`);
 
     // Handle client subscription to specific channels
     socket.on("subscribe", (channel) => {
-      if (["servers", "players", "maps", "all"].includes(channel)) {
+      if (VALID_CHANNELS.includes(channel)) {
         socket.join(channel);
-        logger.info(`Client ${socket.id} subscribed to ${channel}`);
+        logger.debug(`Client ${socket.id} subscribed to ${channel}`);
         socket.emit("subscribed", { channel, success: true });
       } else {
         socket.emit("subscribed", {
@@ -41,12 +37,12 @@ function initWebSocket(httpServer) {
 
     socket.on("unsubscribe", (channel) => {
       socket.leave(channel);
-      logger.info(`Client ${socket.id} unsubscribed from ${channel}`);
+      logger.debug(`Client ${socket.id} unsubscribed from ${channel}`);
       socket.emit("unsubscribed", { channel });
     });
 
     socket.on("disconnect", (reason) => {
-      logger.info(`WebSocket client disconnected: ${socket.id} (${reason})`);
+      logger.debug(`WebSocket client disconnected: ${socket.id} (${reason})`);
     });
 
     socket.on("error", (error) => {

@@ -208,8 +208,6 @@ async function trackMapChange(server, newMap, playerCount) {
 async function updateLoop() {
   loadConfig();
   
-  logger.info(`Starting update loop for ${serversConfig.length} servers (parallel mode)`);
-  
   // Query all servers in parallel
   const updatePromises = serversConfig.map(async (server) => {
     try {
@@ -220,13 +218,6 @@ async function updateLoop() {
         server.rconPort,
         server.rconPassword,
       );
-
-      logger.debug("Server query result", {
-        server: `${server.ip}:${server.port}`,
-        status: result.status,
-        players: result.playerCount || 0,
-        map: result.map || "unknown",
-      });
 
       // Get previous server status for comparison
       const [prevStatus] = await pool.query(
@@ -240,23 +231,11 @@ async function updateLoop() {
         const playersList =
           result.players && result.players.length > 0 ? result.players : [];
 
-        // Debug log the values being inserted
-        logger.debug("Inserting server data", {
-          server: `${server.ip}:${server.port}`,
-          map: result.map || "",
-          playerCount: result.playerCount || 0,
-          maxplayers: result.maxplayers || 0,
-          playersListLength: playersList.length,
-          playersListType: typeof playersList,
-          playersListSample: playersList.length > 0 ? playersList[0] : null,
-          version: result.version || "",
-        });
-
         // Insert/update server status and map
         await pool.query(
-          `INSERT INTO servers (ip, port, game, version, hostname, os, secure, steamid, status, map, player_count, maxplayers, bot_count, players_list)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE version=VALUES(version), hostname=VALUES(hostname), os=VALUES(os), secure=VALUES(secure), steamid=VALUES(steamid), status=VALUES(status), map=VALUES(map), player_count=VALUES(player_count), maxplayers=VALUES(maxplayers), bot_count=VALUES(bot_count), players_list=VALUES(players_list), last_update=NOW()`,
+          `INSERT INTO servers (ip, port, game, version, hostname, os, secure, status, map, player_count, maxplayers, bot_count, players_list)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE version=VALUES(version), hostname=VALUES(hostname), os=VALUES(os), secure=VALUES(secure), status=VALUES(status), map=VALUES(map), player_count=VALUES(player_count), maxplayers=VALUES(maxplayers), bot_count=VALUES(bot_count), players_list=VALUES(players_list), last_update=NOW()`,
           [
             server.ip,
             server.port,
@@ -265,7 +244,6 @@ async function updateLoop() {
             result.hostname || null,
             result.os || null,
             result.secure !== undefined ? result.secure : null,
-            result.steamid || null,
             result.status,
             result.map || "",
             result.playerCount || 0,
@@ -352,12 +330,6 @@ async function updateLoop() {
               });
             }
           }
-          const playersWithSteamId = result.players.filter((p) => p.steamid);
-          logger.debug("Tracked players", {
-            server: `${server.ip}:${server.port}`,
-            total: result.players.length,
-            withSteamId: playersWithSteamId.length,
-          });
         }
 
         // Track map playtime (separated by game)
@@ -393,10 +365,6 @@ async function updateLoop() {
           });
         }
       }
-
-      logger.debug("Server update complete", {
-        server: `${server.ip}:${server.port}`,
-      });
     } catch (e) {
       logger.error(
         `Failed to update server ${server.ip}:${server.port} - ${e.message}`,
@@ -412,8 +380,6 @@ async function updateLoop() {
   await deleteCache("cache:players:*");
   await deleteCache("cache:maps:*");
   await deleteCache("cache:history:*");
-  
-  logger.info(`Update loop complete for ${serversConfig.length} servers`);
 }
 
 function startUpdateLoop(intervalMs) {

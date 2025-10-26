@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS servers (
     hostname VARCHAR(255) DEFAULT NULL COMMENT 'Server hostname from RCON',
     os VARCHAR(100) DEFAULT NULL COMMENT 'Server OS/type from RCON',
     secure TINYINT DEFAULT NULL COMMENT 'VAC secure status: 1=secure, 0=insecure',
-    steamid VARCHAR(20) DEFAULT NULL COMMENT 'Server owner Steam ID from RCON',
     bot_count INT DEFAULT 0 COMMENT 'Number of bots on server',
     last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -33,11 +32,13 @@ CREATE TABLE IF NOT EXISTS servers (
 CREATE TABLE IF NOT EXISTS players (
     id INT AUTO_INCREMENT PRIMARY KEY,
     steamid VARCHAR(20) NOT NULL,
-    name VARCHAR(100) DEFAULT '',
+    name VARCHAR(100) DEFAULT '' COMMENT 'Deprecated: use latest_name instead',
+    latest_name VARCHAR(255) DEFAULT NULL COMMENT 'Most recent name seen',
     game VARCHAR(50) NOT NULL COMMENT 'Game type: csgo, counterstrike2, etc.',
     playtime INT DEFAULT 0 COMMENT 'Playtime in seconds',
     server_ip VARCHAR(45),
     server_port INT,
+    latest_ip VARCHAR(45) DEFAULT NULL COMMENT 'Most recent IP address seen (private)',
     last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY unique_player_game (steamid, game),
@@ -45,6 +46,34 @@ CREATE TABLE IF NOT EXISTS players (
     INDEX idx_game (game),
     INDEX idx_server (server_ip, server_port),
     INDEX idx_last_seen (last_seen)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Player names history: tracks all names a player has used
+CREATE TABLE IF NOT EXISTS player_names (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    steamid VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    use_count INT DEFAULT 1 COMMENT 'Number of times this name was seen',
+    INDEX idx_steamid (steamid),
+    INDEX idx_name (name),
+    INDEX idx_last_seen (last_seen),
+    UNIQUE KEY unique_steamid_name (steamid, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Player IPs history: tracks all IP addresses a player has used (PRIVATE - not exposed via API)
+CREATE TABLE IF NOT EXISTS player_ips (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    steamid VARCHAR(255) NOT NULL,
+    ip VARCHAR(45) NOT NULL,
+    first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    use_count INT DEFAULT 1 COMMENT 'Number of times this IP was seen',
+    INDEX idx_steamid (steamid),
+    INDEX idx_ip (ip),
+    INDEX idx_last_seen (last_seen),
+    UNIQUE KEY unique_steamid_ip (steamid, ip)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Maps table: tracks map playtime statistics

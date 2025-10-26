@@ -70,7 +70,6 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
         hostname: server.hostname,
         os: server.os,
         secure: server.secure,
-        steamid: server.steamid,
         botCount: server.bot_count,
       };
     });

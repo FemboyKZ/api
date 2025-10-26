@@ -52,6 +52,7 @@ async function queryServer(ip, port, game, rconPort, rconPassword) {
       players = rconData.players.map((p) => ({
         name: p.name || "Unknown",
         steamid: p.steamid ? convertToSteamID64(p.steamid) : null,
+        ip: p.ip || null,
         time: p.time || "00:00",
         ping: p.ping || 0,
         loss: p.loss || 0,
@@ -83,10 +84,7 @@ async function queryServer(ip, port, game, rconPort, rconPassword) {
     if (rconData && rconData.serverInfo) {
       result.hostname = rconData.serverInfo.hostname || null;
       result.os = rconData.serverInfo.os || null;
-      result.secure = rconData.serverInfo.secure !== undefined 
-        ? (rconData.serverInfo.secure === 'secure' ? 1 : 0)
-        : null;
-      result.steamid = rconData.serverInfo.steamid || null;
+      result.secure = rconData.serverInfo.secure;
       result.bots = rconData.serverInfo.botCount || 0;
     }
 

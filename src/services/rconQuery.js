@@ -142,15 +142,11 @@ async function queryRcon(ip, port, password) {
  * @returns {Object} { players: [], serverInfo: {}, isCS2: boolean }
  */
 function parseStatusResponse(statusText) {
-  logger.info(`=== PARSING RCON STATUS RESPONSE ===`);
-  logger.info(`Full response:\n${statusText}`);
-  
   const players = [];
   const serverInfo = {
     hostname: null,
     os: null,
     secure: null,
-    steamid: null,
     botCount: 0,
   };
 
@@ -166,8 +162,6 @@ function parseStatusResponse(statusText) {
     // CS:GO is 1.38.x, CS2 is 1.40+ (as of late 2024/2025)
     isCS2 = majorMinor >= 1.40;
   }
-
-  logger.info(`Detected format: ${isCS2 ? 'CS2' : 'CS:GO'}`);
 
   for (const line of lines) {
     // Extract hostname - works for both formats
@@ -194,30 +188,6 @@ function parseStatusResponse(statusText) {
       serverInfo.secure = versionMatch[1].toLowerCase() === "secure";
     }
 
-    // Extract Steam ID (owner) - different locations in CS:GO vs CS2
-    // CS:GO: in version line as [G:1:5746871]
-    // CS2:   separate line "steamid  : [G:1:12629799] (85568392932669223)"
-    const steamidMatch = line.match(/steamid\s*:\s*(\[G:[0-9]:\d+\]|\d{17})/i);
-    if (steamidMatch) {
-      // CS2 format - use the bracket format or raw steamid64
-      const steamidStr = steamidMatch[1].trim();
-      if (steamidStr.startsWith('[G:')) {
-        // Convert [G:1:X] to SteamID64
-        const gMatch = steamidStr.match(/\[G:1:(\d+)\]/);
-        if (gMatch) {
-          serverInfo.steamid = (BigInt(103562079161294848) + BigInt(gMatch[1])).toString();
-        }
-      } else {
-        serverInfo.steamid = steamidStr;
-      }
-    } else {
-      // CS:GO format - extract from version line
-      const csgoSteamMatch = line.match(/\[G:1:(\d+)\]/);
-      if (csgoSteamMatch && !serverInfo.steamid) {
-        serverInfo.steamid = (BigInt(103562079161294848) + BigInt(csgoSteamMatch[1])).toString();
-      }
-    }
-
     // Parse player lines - different formats
     // CS2 player lines DON'T start with #, CS:GO lines DO
     const trimmedLine = line.trim();
@@ -240,9 +210,10 @@ function parseStatusResponse(statusText) {
       );
       
       if (match) {
-        logger.info(`Parsing CS2 player line: ${line}`);
-        logger.info(`CS2 match result: MATCHED`);
         const [, userid, time, ping, loss, state, rate, address, name] = match;
+        
+        // Extract IP from address (format: ip:port)
+        const playerIP = address ? address.split(':')[0] : null;
         
         const isBot = name.toLowerCase().includes("bot");
         if (isBot) {
@@ -253,6 +224,7 @@ function parseStatusResponse(statusText) {
           userid: parseInt(userid, 10),
           name: name.trim(),
           steamid: null, // CS2 doesn't include Steam ID in status output - needs different RCON command
+          ip: playerIP,
           time: time,
           ping: parseInt(ping, 10),
           loss: parseInt(loss, 10),
@@ -261,12 +233,9 @@ function parseStatusResponse(statusText) {
         });
       }
     } else if (trimmedLine.startsWith("#") && !trimmedLine.includes("#end")) {
-      logger.info(`Parsing CS:GO player line: ${line}`);
-      logger.info(`Trimmed line: "${trimmedLine}"`);
       try {
         // Skip the header line
         if (trimmedLine.includes("userid") && trimmedLine.includes("name")) {
-          logger.info(`Skipping header line`);
           continue;
         }
         
@@ -275,23 +244,17 @@ function parseStatusResponse(statusText) {
         // Note: There are TWO spaces between steamid and time (connected time field)
         // The first userid is display ID, second is internal ID
         
-        // Try to debug the regex step by step
-        const hasHash = /^#/.test(trimmedLine);
-        const hasUserid = /#\s+(\d+)/.test(trimmedLine);
-        const hasName = /"([^"]+)"/.test(trimmedLine);
-        const hasSteamid = /STEAM_[0-9]:[0-9]:\d+/.test(trimmedLine);
-        const hasTime = /\d+:\d+:\d+|\d+:\d+/.test(trimmedLine);
-        logger.info(`Regex checks - hash:${hasHash} userid:${hasUserid} name:${hasName} steamid:${hasSteamid} time:${hasTime}`);
-        
         // Time can be MM:SS or H:MM:SS or HH:MM:SS
+        // Capture optional address at the end (ip:port format)
         const match = trimmedLine.match(
-          /#\s+(\d+)\s+\d+\s+"([^"]+)"\s+(STEAM_[0-9]:[0-9]:\d+|\[U:[0-9]:\d+\]|BOT)\s+(\d+:\d+(?::\d+)?)\s+(\d+)\s+(\d+)\s+(\w+)/
+          /#\s+(\d+)\s+\d+\s+"([^"]+)"\s+(STEAM_[0-9]:[0-9]:\d+|\[U:[0-9]:\d+\]|BOT)\s+(\d+:\d+(?::\d+)?)\s+(\d+)\s+(\d+)\s+(\w+)(?:\s+\d+\s+(\S+))?/
         );
 
-        logger.info(`CS:GO match result: ${match ? 'MATCHED' : 'NO MATCH'}`);
         if (match) {
-          logger.info(`Match groups: ${JSON.stringify(match)}`);
-          const [, userid, name, steamid, time, ping, loss, state] = match;
+          const [, userid, name, steamid, time, ping, loss, state, , address] = match;
+          
+          // Extract IP from address (format: ip:port)
+          const playerIP = address ? address.split(':')[0] : null;
 
           const isBot = steamid === "BOT";
           if (isBot) {
@@ -302,6 +265,7 @@ function parseStatusResponse(statusText) {
             userid: parseInt(userid, 10),
             name: name.trim(),
             steamid: isBot ? null : steamid,
+            ip: playerIP,
             time: time,
             ping: parseInt(ping, 10),
             loss: parseInt(loss, 10),
