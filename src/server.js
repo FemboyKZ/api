@@ -9,6 +9,7 @@ const { initWebSocket } = require("./services/websocket");
 const { initRedis, closeRedis } = require("./db/redis");
 
 const port = process.env.PORT || 3000;
+const host = process.env.HOST || '0.0.0.0'; // Use 127.0.0.1 in production with reverse proxy
 
 /**
  * Startup sequence with proper error handling
@@ -36,9 +37,9 @@ async function startServer() {
     initWebSocket(httpServer);
 
     // Step 6: Start HTTP server
-    httpServer.listen(port, () => {
-      logger.info(`Server listening on port ${port}`);
-      logger.info(`WebSocket available at ws://localhost:${port}`);
+    httpServer.listen(port, host, () => {
+      logger.info(`Server listening on ${host}:${port}`);
+      logger.info(`WebSocket available at ws://${host}:${port}`);
       logger.info("Server initialization complete");
 
       // Step 7: Start background update loop
