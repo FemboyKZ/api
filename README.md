@@ -2,6 +2,24 @@
 
 FKZ API for tracking game servers - A robust server tracking API that polls game servers via GameDig and RCON, storing detailed status, player, and map data in MySQL.
 
+## API Documentation
+
+Interactive API documentation is available at `/docs` when the server is running:
+
+- **Local**: http://localhost:3000/docs
+- **Production**: https://api.femboy.kz/docs
+
+The documentation is automatically generated from JSDoc comments in the code using Swagger/OpenAPI 3.0.
+
+### Available Endpoints
+
+- `GET /servers` - List all servers
+- `GET /servers/:ip` - Get server by IP
+- `GET /players` - List all players with pagination
+- `GET /players/:steamid` - Get player by Steam ID
+- `GET /maps` - List all maps with pagination
+- `GET /health` - Health check endpoint
+
 ## Features
 
 - **Real-time game server monitoring** via GameDig

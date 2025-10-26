@@ -13,6 +13,105 @@ const {
   mapsKeyGenerator,
 } = require("../utils/cacheMiddleware");
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Map:
+ *       type: object
+ *       properties:
+ *         name:
+ *           type: string
+ *           description: Map name
+ *           example: "kz_synergy_x"
+ *         game:
+ *           type: string
+ *           description: Game type
+ *           example: "csgo"
+ *         total_playtime:
+ *           type: integer
+ *           description: Total playtime in minutes
+ *           example: 54320
+ */
+
+/**
+ * @swagger
+ * /maps:
+ *   get:
+ *     summary: Get all maps
+ *     description: Returns a paginated list of maps with their total playtime
+ *     tags: [Maps]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *           maximum: 100
+ *         description: Items per page
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *           enum: [total_playtime, name]
+ *           default: total_playtime
+ *         description: Sort field
+ *       - in: query
+ *         name: order
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Sort order
+ *       - in: query
+ *         name: game
+ *         schema:
+ *           type: string
+ *         description: Filter by game type
+ *         example: csgo
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: Filter by map name (partial match)
+ *       - in: query
+ *         name: server
+ *         schema:
+ *           type: string
+ *         description: Filter by server (format ip:port)
+ *         example: "185.107.96.59:27015"
+ *     responses:
+ *       200:
+ *         description: Successful response with map list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 maps:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Map'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *       500:
+ *         description: Server error
+ */
 // Cache for 30 seconds
 router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
   try {

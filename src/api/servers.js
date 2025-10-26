@@ -8,6 +8,136 @@ const {
   serversKeyGenerator,
 } = require("../utils/cacheMiddleware");
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Server:
+ *       type: object
+ *       properties:
+ *         ip:
+ *           type: string
+ *           description: Server IP address
+ *           example: "185.107.96.59"
+ *         port:
+ *           type: integer
+ *           description: Server port
+ *           example: 27015
+ *         game:
+ *           type: string
+ *           description: Game type
+ *           example: "csgo"
+ *         hostname:
+ *           type: string
+ *           description: Server hostname
+ *           example: "FemboyKZ | EU"
+ *         version:
+ *           type: string
+ *           description: Server version
+ *           example: "1.38.8.1"
+ *         os:
+ *           type: string
+ *           description: Server operating system
+ *           example: "Linux"
+ *         secure:
+ *           type: integer
+ *           description: VAC secure status (1=secure, 0=insecure)
+ *           example: 1
+ *         status:
+ *           type: integer
+ *           description: Server online status (1=online, 0=offline)
+ *           example: 1
+ *         map:
+ *           type: string
+ *           description: Current map
+ *           example: "kz_synergy_x"
+ *         players:
+ *           type: integer
+ *           description: Current player count
+ *           example: 12
+ *         maxplayers:
+ *           type: integer
+ *           description: Maximum players
+ *           example: 32
+ *         bots:
+ *           type: integer
+ *           description: Number of bots
+ *           example: 0
+ *         playersList:
+ *           type: array
+ *           description: List of current players
+ *           items:
+ *             type: object
+ *             properties:
+ *               userid:
+ *                 type: integer
+ *               name:
+ *                 type: string
+ *               steamid:
+ *                 type: string
+ *               time:
+ *                 type: string
+ *               ping:
+ *                 type: integer
+ *               loss:
+ *                 type: integer
+ *               state:
+ *                 type: string
+ *               bot:
+ *                 type: boolean
+ *     ServersResponse:
+ *       type: object
+ *       properties:
+ *         playersTotal:
+ *           type: integer
+ *           description: Total players across all servers
+ *           example: 45
+ *         serversOnline:
+ *           type: integer
+ *           description: Number of online servers
+ *           example: 3
+ *       additionalProperties:
+ *         $ref: '#/components/schemas/Server'
+ */
+
+/**
+ * @swagger
+ * /servers:
+ *   get:
+ *     summary: Get all servers
+ *     description: Returns a list of all game servers with their current status
+ *     tags: [Servers]
+ *     parameters:
+ *       - in: query
+ *         name: game
+ *         schema:
+ *           type: string
+ *         description: Filter by game type (csgo, counterstrike2)
+ *         example: csgo
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: integer
+ *         description: Filter by status (1=online, 0=offline). Default is 1 (online only)
+ *         example: 1
+ *     responses:
+ *       200:
+ *         description: Successful response with server list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ServersResponse'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Failed to fetch servers"
+ */
 // Cache for 30 seconds
 router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
   try {
@@ -48,6 +178,12 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
             typeof server.players_list === "string"
               ? JSON.parse(server.players_list)
               : server.players_list;
+          
+          // Remove IP addresses from player data for privacy
+          playersList = playersList.map(player => {
+            const { ip, ...playerWithoutIp } = player;
+            return playerWithoutIp;
+          });
         } catch (e) {
           logger.error(
             `Failed to parse players_list for ${server.ip}:${server.port}`,
@@ -80,6 +216,61 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /servers/{ip}:
+ *   get:
+ *     summary: Get server by IP address
+ *     description: Returns detailed information for a specific server by IP
+ *     tags: [Servers]
+ *     parameters:
+ *       - in: path
+ *         name: ip
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Server IP address
+ *         example: "185.107.96.59"
+ *     responses:
+ *       200:
+ *         description: Successful response with server details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Server'
+ *       400:
+ *         description: Invalid IP address format
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Invalid IP address format"
+ *       404:
+ *         description: Server not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Server not found"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Server fetch error"
+ */
 router.get("/:ip", async (req, res) => {
   try {
     const { ip } = req.params;

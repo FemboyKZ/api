@@ -1,6 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./config/swagger");
 const app = express();
 
 const serversRouter = require("./api/servers");
@@ -41,6 +43,12 @@ const limiter = rateLimit({
 app.use("/", limiter);
 
 app.use(express.json());
+
+// API Documentation
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: "Server API Documentation",
+}));
 
 app.use("/servers", serversRouter);
 app.use("/players", playersRouter);

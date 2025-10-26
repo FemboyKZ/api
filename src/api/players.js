@@ -12,6 +12,116 @@ const {
   playersKeyGenerator,
 } = require("../utils/cacheMiddleware");
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Player:
+ *       type: object
+ *       properties:
+ *         steamid:
+ *           type: string
+ *           description: Player Steam ID
+ *           example: "76561198000000000"
+ *         game:
+ *           type: string
+ *           description: Game type
+ *           example: "csgo"
+ *         total_playtime:
+ *           type: integer
+ *           description: Total playtime in minutes
+ *           example: 12450
+ *     PlayerDetails:
+ *       type: object
+ *       properties:
+ *         steamid:
+ *           type: string
+ *         stats:
+ *           type: array
+ *           items:
+ *             type: object
+ *             properties:
+ *               game:
+ *                 type: string
+ *               total_playtime:
+ *                 type: integer
+ *               last_seen:
+ *                 type: string
+ *                 format: date-time
+ */
+
+/**
+ * @swagger
+ * /players:
+ *   get:
+ *     summary: Get all players
+ *     description: Returns a paginated list of players with their total playtime per game
+ *     tags: [Players]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *           maximum: 100
+ *         description: Items per page
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *           enum: [total_playtime, steamid]
+ *           default: total_playtime
+ *         description: Sort field
+ *       - in: query
+ *         name: order
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Sort order
+ *       - in: query
+ *         name: game
+ *         schema:
+ *           type: string
+ *         description: Filter by game type
+ *         example: csgo
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: Filter by player name (partial match)
+ *     responses:
+ *       200:
+ *         description: Successful response with player list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 players:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Player'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *       500:
+ *         description: Server error
+ */
 // Cache for 30 seconds
 router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
   try {
@@ -67,6 +177,57 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /players/{steamid}:
+ *   get:
+ *     summary: Get player by Steam ID
+ *     description: Returns detailed statistics for a specific player
+ *     tags: [Players]
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Player Steam ID (SteamID64, SteamID3, or SteamID2 format)
+ *         example: "76561198000000000"
+ *       - in: query
+ *         name: game
+ *         schema:
+ *           type: string
+ *         description: Filter by game type
+ *         example: csgo
+ *     responses:
+ *       200:
+ *         description: Successful response with player details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PlayerDetails'
+ *       400:
+ *         description: Invalid Steam ID format
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Invalid SteamID format"
+ *       404:
+ *         description: Player not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Player not found"
+ *       500:
+ *         description: Server error
+ */
 router.get("/:steamid", async (req, res) => {
   try {
     const { steamid } = req.params;
