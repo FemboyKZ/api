@@ -61,16 +61,16 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
         ip: server.ip,
         port: server.port,
         game: server.game,
+        hostname: server.hostname,
+        version: server.version,
+        os: server.os,
+        secure: server.secure,
         status: server.status,
         map: server.map,
         players: server.player_count,
         maxplayers: server.maxplayers,
+        bots: server.bot_count,
         playersList: playersList,
-        version: server.version,
-        hostname: server.hostname,
-        os: server.os,
-        secure: server.secure,
-        botCount: server.bot_count,
       };
     });
     res.json(response);
