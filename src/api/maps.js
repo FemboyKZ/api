@@ -123,7 +123,7 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
     const sortOrder = order === "asc" ? "ASC" : "DESC";
 
     let query =
-      "SELECT name, game, SUM(playtime) AS total_playtime FROM maps WHERE 1=1";
+      "SELECT name, game, SUM(playtime) AS total_playtime, MAX(globalInfo) as globalInfo FROM maps WHERE 1=1";
     const params = [];
 
     if (game) {
@@ -149,6 +149,27 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
 
     const [maps] = await pool.query(query, params);
 
+    // Parse globalInfo JSON for each map
+    const parsedMaps = maps.map(map => {
+      let globalInfo = null;
+      if (map.globalInfo) {
+        try {
+          globalInfo = typeof map.globalInfo === 'string' 
+            ? JSON.parse(map.globalInfo) 
+            : map.globalInfo;
+        } catch (e) {
+          logger.error(`Failed to parse globalInfo for map ${map.name}: ${e.message}`);
+        }
+      }
+      
+      return {
+        name: map.name,
+        game: map.game,
+        total_playtime: map.total_playtime,
+        globalInfo: globalInfo,
+      };
+    });
+
     let countQuery = "SELECT COUNT(DISTINCT CONCAT(name, '-', game)) as total FROM maps WHERE 1=1";
     const countParams = [];
     if (game) {
@@ -170,7 +191,7 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
     const [countResult] = await pool.query(countQuery, countParams);
 
     res.json({
-      data: maps,
+      data: parsedMaps,
       pagination: {
         page: parseInt(page, 10) || 1,
         limit: validLimit,
@@ -281,13 +302,33 @@ router.get("/:mapname", async (req, res) => {
 
     const [stats] = await pool.query(statsQuery, statsParams);
 
-    res.json({
-      name: sanitizedMapName,
-      stats: stats.map(s => ({
+    // Parse globalInfo for each stat entry
+    const parsedStats = stats.map(s => {
+      let globalInfo = null;
+      
+      // Get globalInfo from the first matching row
+      const rowWithGlobalInfo = rows.find(r => r.game === s.game && r.globalInfo);
+      if (rowWithGlobalInfo && rowWithGlobalInfo.globalInfo) {
+        try {
+          globalInfo = typeof rowWithGlobalInfo.globalInfo === 'string'
+            ? JSON.parse(rowWithGlobalInfo.globalInfo)
+            : rowWithGlobalInfo.globalInfo;
+        } catch (e) {
+          logger.error(`Failed to parse globalInfo for ${sanitizedMapName}: ${e.message}`);
+        }
+      }
+      
+      return {
         game: s.game,
         total_playtime: s.total_playtime || 0,
         last_played: s.last_played,
-      })),
+        globalInfo: globalInfo,
+      };
+    });
+
+    res.json({
+      name: sanitizedMapName,
+      stats: parsedStats,
       sessions: rows,
     });
   } catch (e) {
