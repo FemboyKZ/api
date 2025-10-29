@@ -34,10 +34,6 @@ const options = {
         name: 'Maps',
         description: 'Map statistics and playtime endpoints',
       },
-      {
-        name: 'Records',
-        description: 'Recent records from CS2KZ API',
-      },
     ],
   },
   // Path to the API routes with JSDoc comments
