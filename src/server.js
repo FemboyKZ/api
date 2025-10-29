@@ -6,6 +6,7 @@ const { validateEnvironment } = require("./utils/envValidator");
 const { initDatabase, closeDatabase } = require("./db");
 const { startUpdateLoop } = require("./services/updater");
 const { startAvatarUpdateJob } = require("./services/steamAvatars");
+const { startGlobalInfoUpdateJob } = require("./services/mapsQuery");
 const { initWebSocket } = require("./services/websocket");
 const { initRedis, closeRedis } = require("./db/redis");
 
@@ -48,6 +49,9 @@ async function startServer() {
       
       // Step 8: Start avatar update job (runs every hour)
       startAvatarUpdateJob(60 * 60 * 1000);
+      
+      // Step 9: Start GOKZ map info update job (runs every 6 hours)
+      startGlobalInfoUpdateJob(6 * 60 * 60 * 1000);
     });
 
     return httpServer;
