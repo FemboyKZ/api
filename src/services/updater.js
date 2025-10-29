@@ -2,6 +2,7 @@ const pool = require("../db");
 const { queryServer } = require("./serverQuery");
 const logger = require("../utils/logger");
 const fs = require("fs");
+const { sanitizeMapName } = require("../utils/validators");
 const {
   emitServerUpdate,
   emitServerStatusChange,
@@ -232,6 +233,9 @@ async function updateLoop() {
         const playersList =
           result.players && result.players.length > 0 ? result.players : [];
 
+        // Sanitize map name to remove workshop paths and URL encoding
+        const sanitizedMap = result.map ? sanitizeMapName(result.map) : '';
+
         // Insert/update server status and map
         await pool.query(
           `INSERT INTO servers (ip, port, game, version, hostname, os, secure, status, map, player_count, maxplayers, bot_count, players_list, region, domain)
@@ -246,7 +250,7 @@ async function updateLoop() {
             result.os || null,
             result.secure !== undefined ? result.secure : null,
             result.status,
-            result.map || "",
+            sanitizedMap,
             result.playerCount || 0,
             result.maxplayers || 0,
             result.bots || 0,
@@ -269,7 +273,7 @@ async function updateLoop() {
 
         // Track map changes
         if (result.map) {
-          await trackMapChange(server, result.map, result.playerCount || 0);
+          await trackMapChange(server, sanitizedMap, result.playerCount || 0);
         }
 
         // Emit WebSocket events for server changes
@@ -278,7 +282,7 @@ async function updateLoop() {
           port: server.port,
           game: server.game,
           status: result.status,
-          map: result.map,
+          map: sanitizedMap,
           players: result.playerCount,
           version: result.version,
         };
@@ -294,11 +298,11 @@ async function updateLoop() {
         }
 
         // Emit map change event
-        if (previousServer && previousServer.map !== result.map) {
+        if (previousServer && previousServer.map !== sanitizedMap) {
           emitMapUpdate({
             server: `${server.ip}:${server.port}`,
             oldMap: previousServer.map,
-            newMap: result.map,
+            newMap: sanitizedMap,
           });
         }
 
@@ -343,7 +347,7 @@ async function updateLoop() {
         }
 
         // Track map playtime (separated by game)
-        if (result.map) {
+        if (result.map && sanitizedMap) {
           await pool.query(
             `INSERT INTO maps (name, game, playtime, server_ip, server_port, last_played)
              VALUES (?, ?, ?, ?, ?, NOW())
@@ -352,7 +356,7 @@ async function updateLoop() {
                server_ip=VALUES(server_ip), 
                server_port=VALUES(server_port), 
                last_played=NOW()`,
-            [result.map, server.game, UPDATE_INTERVAL_SECONDS, server.ip, server.port, UPDATE_INTERVAL_SECONDS],
+            [sanitizedMap, server.game, UPDATE_INTERVAL_SECONDS, server.ip, server.port, UPDATE_INTERVAL_SECONDS],
           );
         }
       } else {

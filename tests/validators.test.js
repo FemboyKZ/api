@@ -4,6 +4,7 @@ const {
   isValidSteamID,
   sanitizeString,
   validatePagination,
+  sanitizeMapName,
 } = require("../src/utils/validators");
 
 describe("Validators", () => {
@@ -98,6 +99,52 @@ describe("Validators", () => {
     it("should default to 1 for invalid page", () => {
       const result = validatePagination("0");
       expect(result.page).toBe(1);
+    });
+  });
+
+  describe("sanitizeMapName", () => {
+    it("should handle URL-encoded workshop paths", () => {
+      expect(sanitizeMapName("workshop%2F793414645%2Fkz_2seasons_winter_final"))
+        .toBe("kz_2seasons_winter_final");
+    });
+
+    it("should handle regular workshop paths", () => {
+      expect(sanitizeMapName("workshop/793414645/kz_synergy_x"))
+        .toBe("kz_synergy_x");
+      expect(sanitizeMapName("workshop\\793414645\\de_dust2"))
+        .toBe("de_dust2");
+    });
+
+    it("should handle maps folder paths", () => {
+      expect(sanitizeMapName("maps/kz_grotto")).toBe("kz_grotto");
+    });
+
+    it("should preserve plain map names", () => {
+      expect(sanitizeMapName("kz_grotto")).toBe("kz_grotto");
+      expect(sanitizeMapName("de_dust2")).toBe("de_dust2");
+      expect(sanitizeMapName("cs_office")).toBe("cs_office");
+    });
+
+    it("should handle various map prefixes", () => {
+      expect(sanitizeMapName("workshop/123/kzpro_aircontrol")).toBe("kzpro_aircontrol");
+      expect(sanitizeMapName("workshop/123/surf_mesa")).toBe("surf_mesa");
+      expect(sanitizeMapName("workshop/123/bhop_arcane")).toBe("bhop_arcane");
+      expect(sanitizeMapName("workshop/123/aim_redline")).toBe("aim_redline");
+    });
+
+    it("should handle empty or invalid input", () => {
+      expect(sanitizeMapName("")).toBe("");
+      expect(sanitizeMapName(null)).toBe("");
+      expect(sanitizeMapName(undefined)).toBe("");
+    });
+
+    it("should handle maps without standard prefixes by returning last part", () => {
+      expect(sanitizeMapName("workshop/123/custom_map")).toBe("custom_map");
+      expect(sanitizeMapName("maps/my_cool_map")).toBe("my_cool_map");
+    });
+
+    it("should trim whitespace", () => {
+      expect(sanitizeMapName("  kz_grotto  ")).toBe("kz_grotto");
     });
   });
 });
