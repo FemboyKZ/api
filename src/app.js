@@ -15,9 +15,12 @@ const adminRouter = require("./api/admin");
 const errorHandler = require("./utils/errorHandler");
 const logger = require("./utils/logger");
 
-// Trust proxy - required when running behind reverse proxy (Apache, Nginx, etc.)
+// Trust proxy - only when binding to localhost (behind reverse proxy like Apache, Nginx, etc.)
 // This allows Express to read the real client IP from X-Forwarded-For header
-app.set('trust proxy', true);
+if (process.env.HOST === '127.0.0.1' || process.env.HOST === 'localhost') {
+  app.set('trust proxy', true);
+  logger.info('Trust proxy enabled - running behind reverse proxy');
+}
 
 // CORS configuration
 app.use(
