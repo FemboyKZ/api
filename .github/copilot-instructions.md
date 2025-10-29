@@ -63,7 +63,7 @@ This is a game server tracking API built with Express that polls game servers vi
 - All background services export `start{Name}Job(intervalMs)` functions
 - Jobs run immediately on startup, then on interval
 - Steam avatars: Batch processes 100 players, 24-hour cache duration
-- Map metadata: Processes 50 maps per game per run, 7-day cache duration
+- Map metadata: Processes ALL maps needing updates (no limit), 7-day cache duration
 - Server updates: Invalidates cache after each cycle completes
 
 ## Environment & Dependencies
@@ -191,12 +191,12 @@ mysql -u root -p csmonitor < db/seed.sql
 - **GlobalKZ API (CS:GO)**: Fetches CS:GO map metadata
   - Endpoint: `/maps/name/{mapname}`
   - Data: workshop_url, difficulty, filesize, validated, created_on, etc.
-  - 7-day cache, processes 50 maps per run
+  - 7-day cache, processes ALL maps needing updates (no limit)
   
 - **CS2KZ API (CS2)**: Fetches CS2 map metadata
   - Endpoint: `/maps/{mapname}`
   - Data: workshop_id, mappers, description, checksum, approved_at
-  - 7-day cache, processes 50 maps per run
+  - 7-day cache, processes ALL maps needing updates (no limit)
 
 ### Logging
 
