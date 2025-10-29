@@ -153,9 +153,8 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
     if (status !== undefined) {
       query += " AND status = ?";
       params.push(parseInt(status, 10) || 0);
-    } else {
-      query += " AND status = 1";
     }
+    // Removed default status=1 filter to show all servers including offline ones
 
     logger.info(
       `Executing query: ${query} with params: ${JSON.stringify(params)}`,
@@ -167,7 +166,7 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
 
     const response = {
       playersTotal: rows.reduce((a, s) => a + s.player_count, 0),
-      serversOnline: rows.length,
+      serversOnline: rows.filter(s => s.status === 1).length,
     };
     rows.forEach((server) => {
       // Parse players_list - MariaDB JSON columns return as strings even with jsonStrings: false
@@ -207,6 +206,8 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
         maxplayers: server.maxplayers,
         bots: server.bot_count,
         playersList: playersList,
+        region: server.region,
+        domain: server.domain,
       };
     });
     res.json(response);

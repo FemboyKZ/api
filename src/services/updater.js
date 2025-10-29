@@ -233,9 +233,9 @@ async function updateLoop() {
 
         // Insert/update server status and map
         await pool.query(
-          `INSERT INTO servers (ip, port, game, version, hostname, os, secure, status, map, player_count, maxplayers, bot_count, players_list)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE version=VALUES(version), hostname=VALUES(hostname), os=VALUES(os), secure=VALUES(secure), status=VALUES(status), map=VALUES(map), player_count=VALUES(player_count), maxplayers=VALUES(maxplayers), bot_count=VALUES(bot_count), players_list=VALUES(players_list), last_update=NOW()`,
+          `INSERT INTO servers (ip, port, game, version, hostname, os, secure, status, map, player_count, maxplayers, bot_count, players_list, region, domain)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE version=VALUES(version), hostname=VALUES(hostname), os=VALUES(os), secure=VALUES(secure), status=VALUES(status), map=VALUES(map), player_count=VALUES(player_count), maxplayers=VALUES(maxplayers), bot_count=VALUES(bot_count), players_list=VALUES(players_list), region=VALUES(region), domain=VALUES(domain), last_update=NOW()`,
           [
             server.ip,
             server.port,
@@ -250,6 +250,8 @@ async function updateLoop() {
             result.maxplayers || 0,
             result.bots || 0,
             JSON.stringify(playersList), // MariaDB needs stringified JSON
+            server.region || null,
+            server.domain || null,
           ],
         );
 
@@ -353,10 +355,10 @@ async function updateLoop() {
       } else {
         // Server is offline or query failed - still insert/update the record
         await pool.query(
-          `INSERT INTO servers (ip, port, game, status, last_update)
-           VALUES (?, ?, ?, 0, NOW())
-           ON DUPLICATE KEY UPDATE status=0, last_update=NOW()`,
-          [server.ip, server.port, server.game],
+          `INSERT INTO servers (ip, port, game, status, region, domain, last_update)
+           VALUES (?, ?, ?, 0, ?, ?, NOW())
+           ON DUPLICATE KEY UPDATE status=0, region=VALUES(region), domain=VALUES(domain), last_update=NOW()`,
+          [server.ip, server.port, server.game, server.region || null, server.domain || null],
         );
 
         // Emit status change if server went offline
