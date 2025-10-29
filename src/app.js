@@ -6,6 +6,7 @@ const swaggerSpec = require("./config/swagger");
 const app = express();
 
 const serversRouter = require("./api/servers");
+const serversSteamRouter = require("./api/servers-steam");
 const playersRouter = require("./api/players");
 const mapsRouter = require("./api/maps");
 const healthRouter = require("./api/health");
@@ -58,6 +59,7 @@ app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 }));
 
 app.use("/servers", serversRouter);
+// app.use("/servers-steam", serversSteamRouter);
 app.use("/players", playersRouter);
 app.use("/maps", mapsRouter);
 app.use("/health", healthRouter);
