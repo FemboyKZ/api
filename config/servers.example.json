@@ -5,6 +5,8 @@
     "domain": "example.com",
     "region": "eu",
     "game": "csgo",
+    "tickrate": 128,
+    "kztId": 1234,
     "rconPort": 27015,
     "rconPassword": "your_rcon_password_here"
   },
@@ -14,6 +16,7 @@
     "domain": "example.org",
     "region": "na",
     "game": "counterstrike2",
+    "apiId": 1234,
     "rconPort": 27016,
     "rconPassword": ""
   }
