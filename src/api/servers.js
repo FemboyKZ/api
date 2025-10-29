@@ -31,6 +31,14 @@ const {
  *           type: string
  *           description: Server hostname
  *           example: "FemboyKZ | EU"
+ *         region:
+ *           type: string
+ *           description: Server region
+ *           example: "EU"
+ *         domain:
+ *           type: string
+ *           description: Server domain/website
+ *           example: "femoboykz.com"
  *         version:
  *           type: string
  *           description: Server version
@@ -49,7 +57,7 @@ const {
  *           example: 1
  *         map:
  *           type: string
- *           description: Current map
+ *           description: Current map (sanitized, without workshop paths)
  *           example: "kz_synergy_x"
  *         players:
  *           type: integer
@@ -65,7 +73,7 @@ const {
  *           example: 0
  *         playersList:
  *           type: array
- *           description: List of current players
+ *           description: List of current players (from RCON if available)
  *           items:
  *             type: object
  *             properties:

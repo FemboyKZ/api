@@ -190,12 +190,14 @@ mysql -u root -p csmonitor < db/seed.sql
   
 - **GlobalKZ API (CS:GO)**: Fetches CS:GO map metadata
   - Endpoint: `/maps/name/{mapname}`
-  - Data: workshop_url, difficulty, filesize, validated, created_on, etc.
+  - Data: workshop_url, difficulty, filesize, validated, created_on, updated_on, download_url, id
   - 7-day cache, processes ALL maps needing updates (no limit)
   
 - **CS2KZ API (CS2)**: Fetches CS2 map metadata
   - Endpoint: `/maps/{mapname}`
-  - Data: workshop_id, mappers, description, checksum, approved_at
+  - Data: workshop_id, mappers (array), description, checksum, approved_at, courses (array), created_at, updated_at, id
+  - Mappers stored as array of objects: `[{name: "Joee", id: 123}, ...]`
+  - Courses stored as array with filters and difficulty per course
   - 7-day cache, processes ALL maps needing updates (no limit)
 
 ### Logging

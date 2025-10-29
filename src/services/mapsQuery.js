@@ -79,18 +79,22 @@ async function fetchMapFromCS2KZ(mapName) {
     }
 
     if (response.data) {
-      // Extract mapper names
-      const mappers = response.data.mappers 
-        ? response.data.mappers.map(m => m.name).join(', ')
-        : null;
+      // Keep mappers as array of objects with full details
+      const mappers = response.data.mappers || [];
+      
+      // Keep courses with their full details
+      const courses = response.data.courses || [];
 
       return {
         workshop_id: response.data.workshop_id || null,
-        mappers: mappers,
+        mappers: mappers, // Array of {name, id} objects
         description: response.data.description || null,
         checksum: response.data.vpk_checksum || null,
         id: response.data.id || null,
         approved_at: response.data.approved_at || null,
+        courses: courses, // Array of course objects with filters, difficulty, etc.
+        created_at: response.data.created_at || null,
+        updated_at: response.data.updated_at || null,
       };
     }
 

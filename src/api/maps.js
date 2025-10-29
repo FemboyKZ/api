@@ -30,8 +30,114 @@ const {
  *           example: "csgo"
  *         total_playtime:
  *           type: integer
- *           description: Total playtime in minutes
+ *           description: Total playtime in seconds
  *           example: 54320
+ *         globalInfo:
+ *           type: object
+ *           description: Map metadata from GOKZ (CS:GO) or CS2KZ (CS2) APIs
+ *           oneOf:
+ *             - $ref: '#/components/schemas/GOKZMapInfo'
+ *             - $ref: '#/components/schemas/CS2KZMapInfo'
+ *     GOKZMapInfo:
+ *       type: object
+ *       description: GlobalKZ API map metadata (CS:GO maps)
+ *       properties:
+ *         workshop_url:
+ *           type: string
+ *           description: Steam Workshop URL
+ *           example: "https://steamcommunity.com/sharedfiles/filedetails/?id=793414645"
+ *         difficulty:
+ *           type: integer
+ *           description: Difficulty tier (1-7)
+ *           example: 3
+ *         filesize:
+ *           type: integer
+ *           description: Map file size in bytes
+ *           example: 45678901
+ *         id:
+ *           type: integer
+ *           description: GOKZ map ID
+ *           example: 123
+ *         validated:
+ *           type: boolean
+ *           description: Whether map is validated
+ *           example: true
+ *         created_on:
+ *           type: string
+ *           format: date-time
+ *           description: Creation timestamp
+ *         updated_on:
+ *           type: string
+ *           format: date-time
+ *           description: Last update timestamp
+ *         download_url:
+ *           type: string
+ *           description: Direct download URL
+ *     CS2KZMapInfo:
+ *       type: object
+ *       description: CS2KZ API map metadata (CS2 maps)
+ *       properties:
+ *         workshop_id:
+ *           type: integer
+ *           description: Steam Workshop ID
+ *           example: 3070923343
+ *         mappers:
+ *           type: array
+ *           description: Map creators
+ *           items:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: "Joee"
+ *               id:
+ *                 type: integer
+ *                 example: 123
+ *         description:
+ *           type: string
+ *           description: Map description
+ *           example: "A challenging jump map featuring multiple courses"
+ *         checksum:
+ *           type: string
+ *           description: VPK checksum for integrity verification
+ *           example: "abc123def456..."
+ *         id:
+ *           type: integer
+ *           description: CS2KZ map ID
+ *           example: 456
+ *         approved_at:
+ *           type: string
+ *           format: date-time
+ *           description: Approval timestamp
+ *         courses:
+ *           type: array
+ *           description: Map courses with difficulty and filters
+ *           items:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: integer
+ *               name:
+ *                 type: string
+ *               filters:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               difficulty:
+ *                 type: object
+ *                 properties:
+ *                   vanilla:
+ *                     type: integer
+ *                   classic:
+ *                     type: integer
+ *         created_at:
+ *           type: string
+ *           format: date-time
+ *           description: Creation timestamp
+ *         updated_at:
+ *           type: string
+ *           format: date-time
+ *           description: Last update timestamp
  */
 
 /**

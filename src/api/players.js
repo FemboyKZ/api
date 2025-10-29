@@ -27,6 +27,18 @@ const {
  *           type: string
  *           description: Player name (latest seen across all games)
  *           example: "PlayerName"
+ *         avatar_small:
+ *           type: string
+ *           description: Small avatar URL (32x32)
+ *           example: "https://avatars.steamstatic.com/abc123_small.jpg"
+ *         avatar_medium:
+ *           type: string
+ *           description: Medium avatar URL (64x64)
+ *           example: "https://avatars.steamstatic.com/abc123_medium.jpg"
+ *         avatar_full:
+ *           type: string
+ *           description: Full avatar URL (184x184)
+ *           example: "https://avatars.steamstatic.com/abc123_full.jpg"
  *         csgo:
  *           type: object
  *           description: CS:GO statistics (empty object if player hasn't played CS:GO)
@@ -56,6 +68,15 @@ const {
  *       properties:
  *         steamid:
  *           type: string
+ *         avatar_small:
+ *           type: string
+ *           description: Small avatar URL (32x32)
+ *         avatar_medium:
+ *           type: string
+ *           description: Medium avatar URL (64x64)
+ *         avatar_full:
+ *           type: string
+ *           description: Full avatar URL (184x184)
  *         csgo:
  *           type: object
  *           properties:
