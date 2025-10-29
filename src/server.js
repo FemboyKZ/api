@@ -5,6 +5,7 @@ const logger = require("./utils/logger");
 const { validateEnvironment } = require("./utils/envValidator");
 const { initDatabase, closeDatabase } = require("./db");
 const { startUpdateLoop } = require("./services/updater");
+const { startAvatarUpdateJob } = require("./services/steamAvatars");
 const { initWebSocket } = require("./services/websocket");
 const { initRedis, closeRedis } = require("./db/redis");
 
@@ -44,6 +45,9 @@ async function startServer() {
 
       // Step 7: Start background update loop
       startUpdateLoop(30 * 1000);
+      
+      // Step 8: Start avatar update job (runs every hour)
+      startAvatarUpdateJob(60 * 60 * 1000);
     });
 
     return httpServer;

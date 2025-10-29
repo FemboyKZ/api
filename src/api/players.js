@@ -171,7 +171,10 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
         latest_name as name, 
         game, 
         SUM(playtime) as total_playtime,
-        MAX(last_seen) as last_seen
+        MAX(last_seen) as last_seen,
+        MAX(avatar_small) as avatar_small,
+        MAX(avatar_medium) as avatar_medium,
+        MAX(avatar_full) as avatar_full
       FROM players 
       WHERE 1=1
     `;
@@ -199,6 +202,9 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
         playerMap.set(row.steamid, {
           steamid: row.steamid,
           name: row.name, // Will be updated to most recent
+          avatar_small: row.avatar_small,
+          avatar_medium: row.avatar_medium,
+          avatar_full: row.avatar_full,
           csgo: {},
           counterstrike2: {},
           _lastSeen: null, // For sorting
@@ -217,18 +223,18 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
       // Add game-specific stats
       if (row.game === 'csgo') {
         player.csgo = {
-          total_playtime: row.total_playtime || 0,
+          total_playtime: parseInt(row.total_playtime, 10) || 0,
           last_seen: row.last_seen,
         };
       } else if (row.game === 'counterstrike2') {
         player.counterstrike2 = {
-          total_playtime: row.total_playtime || 0,
+          total_playtime: parseInt(row.total_playtime, 10) || 0,
           last_seen: row.last_seen,
         };
       }
       
       // Track combined playtime for sorting
-      player._totalPlaytime += row.total_playtime || 0;
+      player._totalPlaytime += parseInt(row.total_playtime, 10) || 0;
     }
 
     // Convert map to array and remove internal sorting fields
@@ -372,9 +378,19 @@ router.get("/:steamid", async (req, res) => {
     // Structure response by game type
     const response = {
       steamid,
+      avatar_small: null,
+      avatar_medium: null,
+      avatar_full: null,
       csgo: {},
       counterstrike2: {},
     };
+
+    // Get avatar from any row (they should all be the same for a steamid)
+    if (rows.length > 0) {
+      response.avatar_small = rows[0].avatar_small;
+      response.avatar_medium = rows[0].avatar_medium;
+      response.avatar_full = rows[0].avatar_full;
+    }
 
     // Populate game-specific stats and sessions
     for (const stat of stats) {
@@ -390,7 +406,7 @@ router.get("/:steamid", async (req, res) => {
           });
 
         response[gameKey] = {
-          total_playtime: stat.total_playtime || 0,
+          total_playtime: parseInt(stat.total_playtime, 10) || 0,
           last_seen: stat.last_seen,
           sessions: gameSessions,
         };

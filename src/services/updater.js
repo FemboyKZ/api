@@ -40,6 +40,7 @@ const { deleteCache } = require("../db/redis");
 let serversConfig = [];
 const previousServerStates = new Map(); // Track previous state for session tracking
 const currentMapStates = new Map(); // Track current maps for map history
+let UPDATE_INTERVAL_SECONDS = 30; // Default interval in seconds
 
 function loadConfig() {
   serversConfig = JSON.parse(fs.readFileSync("config/servers.json", "utf8"));
@@ -311,11 +312,11 @@ async function updateLoop() {
               // Insert or update player record (separated by game)
               await pool.query(
                 `INSERT INTO players (steamid, latest_name, latest_ip, game, playtime, server_ip, server_port, last_seen)
-                 VALUES (?, ?, ?, ?, 1, ?, ?, NOW())
+                 VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
                  ON DUPLICATE KEY UPDATE 
                    latest_name=VALUES(latest_name), 
                    latest_ip=VALUES(latest_ip),
-                   playtime=playtime+1, 
+                   playtime=playtime+?, 
                    server_ip=VALUES(server_ip), 
                    server_port=VALUES(server_port), 
                    last_seen=NOW()`,
@@ -324,8 +325,10 @@ async function updateLoop() {
                   playerName,
                   player.ip || null,
                   server.game,
+                  UPDATE_INTERVAL_SECONDS,
                   server.ip,
                   server.port,
+                  UPDATE_INTERVAL_SECONDS,
                 ],
               );
 
@@ -343,13 +346,13 @@ async function updateLoop() {
         if (result.map) {
           await pool.query(
             `INSERT INTO maps (name, game, playtime, server_ip, server_port, last_played)
-             VALUES (?, ?, 1, ?, ?, NOW())
+             VALUES (?, ?, ?, ?, ?, NOW())
              ON DUPLICATE KEY UPDATE 
-               playtime=playtime+1, 
+               playtime=playtime+?, 
                server_ip=VALUES(server_ip), 
                server_port=VALUES(server_port), 
                last_played=NOW()`,
-            [result.map, server.game, server.ip, server.port],
+            [result.map, server.game, UPDATE_INTERVAL_SECONDS, server.ip, server.port, UPDATE_INTERVAL_SECONDS],
           );
         }
       } else {
@@ -390,6 +393,10 @@ async function updateLoop() {
 }
 
 function startUpdateLoop(intervalMs) {
+  // Store the interval in seconds for playtime calculations
+  UPDATE_INTERVAL_SECONDS = Math.floor(intervalMs / 1000);
+  logger.info(`Starting update loop with ${UPDATE_INTERVAL_SECONDS} second interval`);
+  
   updateLoop();
   setInterval(updateLoop, intervalMs);
 }
