@@ -48,24 +48,45 @@ function cacheMiddleware(ttl = 30, keyGenerator = null) {
  * Cache key generator for servers endpoint
  */
 function serversKeyGenerator(req) {
-  const { game, status } = req.query;
-  return `cache:servers:${game || "all"}:${status !== undefined ? status : "online"}`;
+  const { game, status, region } = req.query;
+  return `cache:servers:${game || "all"}:${status !== undefined ? status : "online"}:${region || "all"}`;
 }
 
 /**
  * Cache key generator for players endpoint
  */
 function playersKeyGenerator(req) {
-  const { page, limit, sort, order, name } = req.query;
-  return `cache:players:${page || 1}:${limit || 10}:${sort || "total_playtime"}:${order || "desc"}:${name || "all"}`;
+  const { page, limit, sort, order, name, game, server } = req.query;
+  return `cache:players:${page || 1}:${limit || 10}:${sort || "total_playtime"}:${order || "desc"}:${name || "all"}:${game || "all"}:${server || "all"}`;
 }
 
 /**
  * Cache key generator for maps endpoint
  */
 function mapsKeyGenerator(req) {
-  const { page, limit, sort, order, server, name } = req.query;
-  return `cache:maps:${page || 1}:${limit || 10}:${sort || "total_playtime"}:${order || "desc"}:${server || "all"}:${name || "all"}`;
+  const { page, limit, sort, order, server, name, game } = req.query;
+  return `cache:maps:${page || 1}:${limit || 10}:${sort || "total_playtime"}:${order || "desc"}:${server || "all"}:${name || "all"}:${game || "all"}`;
+}
+
+/**
+ * Generic cache key generator from params and query
+ * @param {string} prefix - Cache key prefix (e.g., "history:server")
+ * @param {object} params - Route params
+ * @param {object} query - Query params
+ * @returns {string} Generated cache key
+ */
+function generateCacheKey(prefix, params = {}, query = {}) {
+  const paramStr = Object.entries(params)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}:${v}`)
+    .join(":");
+  
+  const queryStr = Object.entries(query)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}:${v}`)
+    .join(":");
+  
+  return `cache:${prefix}${paramStr ? `:${paramStr}` : ""}${queryStr ? `:${queryStr}` : ""}`;
 }
 
 module.exports = {
@@ -73,4 +94,5 @@ module.exports = {
   serversKeyGenerator,
   playersKeyGenerator,
   mapsKeyGenerator,
+  generateCacheKey,
 };
