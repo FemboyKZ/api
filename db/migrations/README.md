@@ -10,6 +10,66 @@ mysql -u your_user -p your_database < db/migrations/migration_file.sql
 
 ## Available Migrations
 
+### sanitize_map_names.sql / sanitize-map-names.js
+
+**Purpose:** Cleans up map names that contain workshop paths or URL encoding
+
+**Problem:** Maps stored as `workshop%2F793414645%2Fkz_synergy_x` or `workshop/123/kz_grotto`
+
+**Solution:** Extracts the actual map name (e.g., `kz_synergy_x`, `kz_grotto`)
+
+**Options:**
+
+1. **SQL Migration** (basic):
+```bash
+mysql -u your_user -p your_database < db/migrations/sanitize_map_names.sql
+```
+
+2. **Node.js Script** (recommended - handles deduplication):
+
+```bash
+# Dry run to see what would change
+node scripts/sanitize-map-names.js --dry-run
+
+# Apply changes
+node scripts/sanitize-map-names.js
+
+# Only process CS:GO maps
+node scripts/sanitize-map-names.js --game=csgo
+
+# Only process CS2 maps
+node scripts/sanitize-map-names.js --game=counterstrike2
+```
+
+**Note:** After running this migration, future map names will automatically be sanitized by the updater service.
+
+### add_player_avatars.sql
+
+**Purpose:** Adds Steam avatar URL columns to players table
+
+**To apply:**
+```bash
+mysql -u your_user -p your_database < db/migrations/add_player_avatars.sql
+```
+
+### add_map_global_info.sql
+
+**Purpose:** Adds globalInfo JSON column for GOKZ/CS2KZ API data
+
+**To apply:**
+```bash
+mysql -u your_user -p your_database < db/migrations/add_map_global_info.sql
+```
+
+### add_region_domain_to_servers.sql
+
+**Purpose:** Adds region and domain columns to servers table
+
+**To apply:**
+```bash
+mysql -u your_user -p your_database < db/migrations/add_region_domain_to_servers.sql
+```
+
 ### add_player_history_tracking.sql
 
 **Purpose:** Adds player name and IP tracking functionality
@@ -63,7 +123,12 @@ mysql -u your_user -p your_database < db/migrations/add_server_details.sql
 If starting fresh, run migrations in this order:
 
 1. `add_server_details.sql`
-2. `add_game_to_players_with_dedup.sql`
-3. `add_game_to_maps_with_dedup.sql`
-4. `add_player_history_tracking.sql`
-5. `remove_server_steamid.sql` (optional cleanup)
+2. `add_region_domain_to_servers.sql`
+3. `add_game_to_players_with_dedup.sql`
+4. `add_game_to_maps_with_dedup.sql`
+5. `add_player_history_tracking.sql`
+6. `add_player_avatars.sql`
+7. `add_map_global_info.sql`
+8. `sanitize_map_names.sql` (or run `scripts/sanitize-map-names.js`)
+9. `remove_server_steamid.sql` (optional cleanup)
+10. `fix_playtime_historical_data.sql` (only if data was tracked before playtime fix)
