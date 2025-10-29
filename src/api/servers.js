@@ -39,6 +39,18 @@ const {
  *           type: string
  *           description: Server domain/website
  *           example: "femoboykz.com"
+ *         apiId:
+ *           type: integer
+ *           description: CS2KZ API server ID (for CS2 servers)
+ *           example: 4
+ *         kztId:
+ *           type: integer
+ *           description: GlobalKZ API server ID (for CS:GO servers)
+ *           example: 1279
+ *         tickrate:
+ *           type: integer
+ *           description: Server tickrate (for CS:GO servers)
+ *           example: 128
  *         version:
  *           type: string
  *           description: Server version
@@ -216,6 +228,9 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
         playersList: playersList,
         region: server.region,
         domain: server.domain,
+        apiId: server.api_id,
+        kztId: server.kzt_id,
+        tickrate: server.tickrate,
       };
     });
     res.json(response);
