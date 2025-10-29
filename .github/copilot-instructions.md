@@ -16,12 +16,13 @@ This is a game server tracking API built with Express that polls game servers vi
 
 **Key Components:**
 
-- `src/app.js` - Express app with routes: `/servers`, `/players`, `/maps`, `/history`, `/health`, `/admin`
+- `src/app.js` - Express app with routes: `/servers`, `/players`, `/maps`, `/records`, `/history`, `/health`, `/admin`
 - `src/server.js` - HTTP server initialization, background job startup, graceful shutdown handling
 - `src/services/updater.js` - Background polling loop that reloads `config/servers.json` on each iteration, invalidates cache after updates
 - `src/services/serverQuery.js` - GameDig wrapper with CS2 → CSGO type mapping
 - `src/services/steamAvatars.js` - Fetches Steam profile avatars via Steam Web API, processes 100 players per hour
 - `src/services/mapsQuery.js` - Fetches map metadata from GlobalKZ API (CS:GO) and CS2KZ API (CS2)
+- `src/services/cs2kzRecords.js` - Fetches recent records from CS2KZ API for CS2 servers
 - `src/services/websocket.js` - Socket.IO server for real-time updates
 - `src/db/index.js` - MySQL2 connection pool (promise-based)
 - `src/db/redis.js` - Optional Redis client for response caching and cache invalidation
@@ -41,7 +42,8 @@ This is a game server tracking API built with Express that polls game servers vi
 - `config/servers.json` is reloaded on each update loop iteration (hot-reload without restart)
 - GameDig type mapping: `counterstrike2` → `csgo` (see `serverQuery.js`)
 - Server identity is `ip:port` composite (used as object keys in `/servers` response)
-- Server metadata includes: `region`, `domain`, `maxplayers`, and `players_list` JSON array
+- Server metadata includes: `region`, `domain`, `maxplayers`, `players_list` JSON array, `apiId` (CS2), `kztId` (CS:GO), `tickrate` (CS:GO)
+- API identifiers: `apiId` for CS2KZ API server identification, `kztId` for GlobalKZ API server identification
 
 ### Response Formats
 
@@ -106,6 +108,8 @@ This is a game server tracking API built with Express that polls game servers vi
 - `GET /players/:steamid` - Individual player profile with game-specific stats
 - `GET /maps` - Map statistics with filters (game, server, name)
 - `GET /maps/:mapname` - Individual map details with globalInfo
+- `GET /records/recent` - Recent records from all CS2 servers
+- `GET /records/server/:ip/:port` - Recent records for specific server
 
 ### Additional Endpoints
 

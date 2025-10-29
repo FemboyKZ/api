@@ -21,11 +21,18 @@ CREATE TABLE IF NOT EXISTS servers (
     os VARCHAR(100) DEFAULT NULL COMMENT 'Server OS/type from RCON',
     secure TINYINT DEFAULT NULL COMMENT 'VAC secure status: 1=secure, 0=insecure',
     bot_count INT DEFAULT 0 COMMENT 'Number of bots on server',
+    api_id INT DEFAULT NULL COMMENT 'CS2KZ API server ID (for CS2 servers)',
+    kzt_id INT DEFAULT NULL COMMENT 'GlobalKZ API server ID (for CS:GO servers)',
+    tickrate INT DEFAULT NULL COMMENT 'Server tickrate (64, 128, etc.)',
+    region VARCHAR(50) DEFAULT NULL COMMENT 'Server region (eu, na, as, au, sa, za)',
+    domain VARCHAR(255) DEFAULT NULL COMMENT 'Server domain/website',
     last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY unique_server (ip, port),
     INDEX idx_status (status),
-    INDEX idx_last_update (last_update)
+    INDEX idx_last_update (last_update),
+    INDEX idx_api_id (api_id),
+    INDEX idx_kzt_id (kzt_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Players table: tracks player activity and playtime
