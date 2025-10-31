@@ -1,5 +1,6 @@
 const Rcon = require("rcon-srcds").default;
 const logger = require("../utils/logger");
+const { sanitizePlayerName } = require("../utils/validators");
 
 /**
  * RCON Query Service for CS:GO and CS2 Servers
@@ -39,7 +40,7 @@ async function queryRcon(ip, port, password, game) {
 
   logger.debug(`Attempting RCON connection to ${ip}:${port} for game: ${game}`);
   
-  const rcon = new Rcon({ host: ip, port: port, timeout: 5000 });
+  const rcon = new Rcon({ host: ip, port: port, timeout: 5000, maximumPacketSize: 0, encoding: 'utf8' });
 
   try {
     await rcon.authenticate(password);
@@ -189,7 +190,7 @@ function parseStatusResponse(statusText, isCS2 = false) {
       
       if (match) {
         const [, slot, name, steamid, ipAddress, ping] = match;
-        const cleanName = name?.trim() || null;
+        const cleanName = sanitizePlayerName(name);
         const isBot = cleanName?.toLowerCase().includes("bot");
         
         if (isBot) {
@@ -235,7 +236,7 @@ function parseStatusResponse(statusText, isCS2 = false) {
       if (match) {
         const [, userid, name, steamid, time, ping, loss, state, , address] = match;
         const playerIP = address ? address.split(':')[0] : null;
-        const cleanName = name?.trim() || null;
+        const cleanName = sanitizePlayerName(name);
         const isBot = steamid === "BOT";
         
         if (isBot) {

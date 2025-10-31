@@ -2,7 +2,7 @@ const pool = require("../db");
 const { queryServer } = require("./serverQuery");
 const logger = require("../utils/logger");
 const fs = require("fs");
-const { sanitizeMapName } = require("../utils/validators");
+const { sanitizeMapName, sanitizePlayerName } = require("../utils/validators");
 const {
   emitServerUpdate,
   emitServerStatusChange,
@@ -89,10 +89,12 @@ async function trackPlayerSessions(server, currentPlayers) {
   for (const player of currentPlayers) {
     if (player.steamid && !previousPlayers.has(player.steamid)) {
       try {
+        // Sanitize player name when creating session
+        const cleanName = sanitizePlayerName(player.name) || "Unknown";
         await pool.query(
           `INSERT INTO player_sessions (steamid, name, server_ip, server_port, joined_at)
            VALUES (?, ?, ?, ?, NOW())`,
-          [player.steamid, player.name || "Unknown", server.ip, server.port],
+          [player.steamid, cleanName, server.ip, server.port],
         );
         logger.debug("Player joined", {
           steamid: player.steamid,
@@ -313,8 +315,8 @@ async function updateLoop() {
         if (result.players && result.players.length > 0) {
           for (const player of result.players) {
             if (player.steamid) {
-              // Extract name from player data (handle various formats and empty strings)
-              const playerName = (player.name && player.name.trim()) ? player.name.trim() : null;
+              // Sanitize player name to remove control characters and color codes
+              const playerName = sanitizePlayerName(player.name);
               
               // Insert or update player record (separated by game)
               await pool.query(

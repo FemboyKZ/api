@@ -4,6 +4,7 @@ const {
   isValidSteamID,
   sanitizeString,
   validatePagination,
+  sanitizePlayerName,
   sanitizeMapName,
 } = require("../src/utils/validators");
 
@@ -99,6 +100,80 @@ describe("Validators", () => {
     it("should default to 1 for invalid page", () => {
       const result = validatePagination("0");
       expect(result.page).toBe(1);
+    });
+  });
+
+  describe("sanitizePlayerName", () => {
+    it("should remove ASCII control characters (color codes)", () => {
+      // Test ASCII control characters
+      expect(sanitizePlayerName("Player\x07Name")).toBe("PlayerName");
+      expect(sanitizePlayerName("\x01Test\x02Name\x03")).toBe("TestName");
+    });
+
+    it("should remove invisible Unicode formatting characters", () => {
+      // U+2067 - RIGHT-TO-LEFT ISOLATE (the actual issue from user's report)
+      expect(sanitizePlayerName("ily\u2067\u2067♥")).toBe("ily♥");
+      
+      // Zero-width spaces and joiners
+      expect(sanitizePlayerName("Player\u200BName")).toBe("PlayerName");
+      expect(sanitizePlayerName("Test\uFEFFName")).toBe("TestName");
+      expect(sanitizePlayerName("Name\u200C\u200DTest")).toBe("NameTest");
+      
+      // Directional formatting marks
+      expect(sanitizePlayerName("Test\u202AName\u202C")).toBe("TestName");
+    });
+
+    it("should KEEP visible Unicode symbols", () => {
+      // Hearts, stars, and other visible symbols should be preserved
+      expect(sanitizePlayerName("ily♥")).toBe("ily♥");
+      expect(sanitizePlayerName("Player★Name")).toBe("Player★Name");
+      expect(sanitizePlayerName("Test⚡Name")).toBe("Test⚡Name");
+      expect(sanitizePlayerName("Cool😎Player")).toBe("Cool😎Player");
+      
+      // Non-ASCII alphabets should be preserved
+      expect(sanitizePlayerName("Игрок")).toBe("Игрок"); // Cyrillic
+      expect(sanitizePlayerName("玩家")).toBe("玩家"); // Chinese
+      expect(sanitizePlayerName("プレイヤー")).toBe("プレイヤー"); // Japanese
+    });
+
+    it("should normalize whitespace", () => {
+      expect(sanitizePlayerName("Player   Name")).toBe("Player Name");
+      expect(sanitizePlayerName("Test\nName")).toBe("TestName");
+      expect(sanitizePlayerName("My\t\tName")).toBe("MyName");
+    });
+
+    it("should trim leading and trailing whitespace", () => {
+      expect(sanitizePlayerName("  PlayerName  ")).toBe("PlayerName");
+      expect(sanitizePlayerName("\n\tTest\n\t")).toBe("Test");
+    });
+
+    it("should preserve valid ASCII characters", () => {
+      expect(sanitizePlayerName("PlayerName123")).toBe("PlayerName123");
+      expect(sanitizePlayerName("Test-Name_2024")).toBe("Test-Name_2024");
+      expect(sanitizePlayerName("Player[TAG]Name")).toBe("Player[TAG]Name");
+    });
+
+    it("should return null for empty or invalid input", () => {
+      expect(sanitizePlayerName("")).toBe(null);
+      expect(sanitizePlayerName("   ")).toBe(null);
+      expect(sanitizePlayerName("\u0001\u0002\u0003")).toBe(null);
+      expect(sanitizePlayerName("\u2067\u2067\u2067")).toBe(null);
+      expect(sanitizePlayerName(null)).toBe(null);
+      expect(sanitizePlayerName(undefined)).toBe(null);
+    });
+
+    it("should handle complex real-world CS:GO/CS2 names", () => {
+      // Name with color codes (\x07) - control chars removed but color values remain as text
+      expect(sanitizePlayerName("\x07FF0000Red\x07FFFFFF Name")).toBe("FF0000RedFFFFFF Name");
+      
+      // Name with various control characters mixed in
+      expect(sanitizePlayerName("\x01\x02\x03Player\x04\x05")).toBe("Player");
+      
+      // The actual user's case: invisible U+2067 removed, heart kept
+      expect(sanitizePlayerName("ily\u2067\u2067♥")).toBe("ily♥");
+      
+      // Name that becomes empty after sanitization
+      expect(sanitizePlayerName("\x01\x02\x03\x04\x05")).toBe(null);
     });
   });
 
