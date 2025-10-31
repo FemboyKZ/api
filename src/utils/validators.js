@@ -17,8 +17,8 @@ function isValidPort(port) {
 }
 
 function isValidSteamID(steamid) {
-  // SteamID64 format (17-18 digits starting with 765611)
-  const steamid64Regex = /^765611[0-9]{11,12}$/;
+  // SteamID64 format (17-18 digits starting with 76561)
+  const steamid64Regex = /^76561[0-9]{12,13}$/;
   // SteamID3 format [U:1:XXXXXXXXX]
   const steamid3Regex = /^\[U:1:[0-9]+\]$/;
   // SteamID2 format STEAM_X:Y:Z
@@ -49,8 +49,8 @@ function isValidSteamID(steamid) {
 function convertToSteamID64(steamid) {
   if (!steamid || typeof steamid !== 'string') return null;
   
-  // Already SteamID64 format (17-18 digits starting with 765611)
-  if (/^765611[0-9]{11,12}$/.test(steamid)) {
+  // Already SteamID64 format (17-18 digits starting with 76561)
+  if (/^76561[0-9]{12,13}$/.test(steamid)) {
     return steamid;
   }
   
