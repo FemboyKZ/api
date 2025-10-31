@@ -2,30 +2,34 @@
 
 ## Architecture Overview
 
-This is a game server tracking API built with Express that polls game servers via GameDig and stores status/player/map data in MySQL/MariaDB with optional Redis caching.
+This is a game server tracking API built with Express that polls game servers via GameDig and RCON, storing status/player/map data in MySQL/MariaDB with optional Redis caching.
 
 **Data Flow:**
 
 1. `src/server.js` starts the Express app and initiates multiple background jobs:
-   - Server polling (30s interval) via `updater.js`
+   - Server polling (30s interval) via `updater.js` - queries all servers **in parallel**
    - Steam avatar fetching (1hr interval) via `steamAvatars.js`
    - Map metadata fetching (6hr interval) via `mapsQuery.js`
-2. `src/services/updater.js` reads `config/servers.json`, queries each server via `serverQuery.js`, and upserts status to MySQL
+2. `src/services/updater.js` reads `config/servers.json`, queries each server via `serverQuery.js` + `rconQuery.js`, and upserts status to MySQL
 3. REST API endpoints (`src/api/*`) expose aggregated server/player/map statistics with optional Redis caching
 4. WebSocket server broadcasts real-time server status updates to connected clients
+5. RCON integration provides Steam IDs, player IPs (private), and extended server metadata
 
 **Key Components:**
 
-- `src/app.js` - Express app with routes: `/servers`, `/players`, `/maps`, `/records`, `/history`, `/health`, `/admin`
-- `src/server.js` - HTTP server initialization, background job startup, graceful shutdown handling
-- `src/services/updater.js` - Background polling loop that reloads `config/servers.json` on each iteration, invalidates cache after updates
+- `src/app.js` - Express app with routes: `/servers`, `/players`, `/maps`, `/records`, `/history`, `/health`, `/admin`, `/docs` (Swagger)
+- `src/server.js` - HTTP server initialization, background job startup, graceful shutdown handling with signals (SIGTERM, SIGINT)
+- `src/services/updater.js` - Background polling loop that reloads `config/servers.json` on each iteration, invalidates cache after **all** updates complete
 - `src/services/serverQuery.js` - GameDig wrapper with CS2 → CSGO type mapping
+- `src/services/rconQuery.js` - RCON client for Steam IDs, player IPs, extended server metadata (hostname, OS, secure status)
 - `src/services/steamAvatars.js` - Fetches Steam profile avatars via Steam Web API, processes 100 players per hour
 - `src/services/mapsQuery.js` - Fetches map metadata from GlobalKZ API (CS:GO) and CS2KZ API (CS2)
-- `src/services/cs2kzRecords.js` - Fetches recent records from CS2KZ API for CS2 servers
-- `src/services/websocket.js` - Socket.IO server for real-time updates
-- `src/db/index.js` - MySQL2 connection pool (promise-based)
-- `src/db/redis.js` - Optional Redis client for response caching and cache invalidation
+- `src/services/websocket.js` - Socket.IO server for real-time updates (broadcasts status changes only)
+- `src/db/index.js` - MySQL2 connection pool (promise-based, 10 max connections)
+- `src/db/redis.js` - Optional Redis client for response caching and pattern-based cache invalidation
+- `src/utils/validators.js` - Input validation and map name sanitization (strips workshop paths)
+- `src/utils/logger.js` - Winston logger with environment-based configuration
+- `src/config/swagger.js` - Swagger/OpenAPI 3.0 configuration for interactive API docs at `/docs`
 
 ## Critical Patterns
 
@@ -44,6 +48,17 @@ This is a game server tracking API built with Express that polls game servers vi
 - Server identity is `ip:port` composite (used as object keys in `/servers` response)
 - Server metadata includes: `region`, `domain`, `maxplayers`, `players_list` JSON array, `apiId` (CS2), `kztId` (CS:GO), `tickrate` (CS:GO)
 - API identifiers: `apiId` for CS2KZ API server identification, `kztId` for GlobalKZ API server identification
+
+### RCON Integration Patterns
+
+- **CS:GO servers**: Execute `status` command to get Steam IDs (SteamID2 format → converted to SteamID64)
+- **CS2 servers**: Execute both `status` (metadata + connection times) and `css_status` (custom CounterStrike Sharp plugin for Steam IDs)
+  - Players matched between commands using normalized names for time correlation
+  - `css_status` format: `slot playername steamid64 ip ping`
+- RCON failures gracefully fallback to GameDig basic data (map, player count only)
+- Player IPs collected via RCON but stripped from API responses for privacy (stored in `player_ips` table)
+- RCON timeout: 5 seconds (configured in `rconQuery.js`)
+- Extended server data from RCON: `hostname`, `os`, `secure` (VAC status), `bot_count`
 
 ### Response Formats
 
@@ -64,9 +79,10 @@ This is a game server tracking API built with Express that polls game servers vi
 
 - All background services export `start{Name}Job(intervalMs)` functions
 - Jobs run immediately on startup, then on interval
-- Steam avatars: Batch processes 100 players, 24-hour cache duration
+- Steam avatars: Batch processes 100 players per hour, 24-hour cache duration
 - Map metadata: Processes ALL maps needing updates (no limit), 7-day cache duration
-- Server updates: Invalidates cache after each cycle completes
+- Server updates: Queries servers **in parallel** via `Promise.all()`, invalidates cache once after **all** updates complete
+- Update loop interval stored in `UPDATE_INTERVAL_SECONDS` global for playtime calculations
 
 ## Environment & Dependencies
 
@@ -101,25 +117,26 @@ This is a game server tracking API built with Express that polls game servers vi
 
 ### Core Endpoints
 
-- `GET /servers` - List all servers with filters (game, region, status)
-- `GET /servers/:ip/:port` - Individual server details
-- `GET /servers-steam` - Query servers via Steam Master Server API
-- `GET /players` - Player leaderboards with pagination
+- `GET /servers` - List all servers with filters (game, status) - returns custom format with `playersTotal`, `serversOnline`, then server objects keyed by `ip:port`
+- `GET /servers/:ip` - Individual server details by IP (may return multiple servers on different ports)
+- `GET /players` - Player leaderboards with pagination (page, limit, sort, order, game, name filters)
 - `GET /players/:steamid` - Individual player profile with game-specific stats
-- `GET /maps` - Map statistics with filters (game, server, name)
-- `GET /maps/:mapname` - Individual map details with globalInfo
-- `GET /records/recent` - Recent records from all CS2 servers
-- `GET /records/server/:ip/:port` - Recent records for specific server
+- `GET /maps` - Map statistics with filters (game, server, name, pagination)
+- `GET /maps/:mapname` - Individual map details
 
 ### Additional Endpoints
 
-- `GET /history/servers/:ip/:port` - Server historical data
-- `GET /history/players/:steamid` - Player historical data
-- `GET /history/maps` - Map popularity trends
-- `GET /history/trends/daily` - Daily player trends
-- `GET /history/trends/hourly` - Hourly player trends
-- `GET /health` - Health check endpoint
-- `POST /admin/cache/invalidate` - Manual cache invalidation (requires auth)
+- `GET /history/servers/:ip/:port` - Server historical data with player count trends
+- `GET /history/players/:steamid` - Player historical playtime data
+- `GET /history/maps` - Map popularity trends across servers
+- `GET /history/trends/daily` - Daily player trends aggregated
+- `GET /history/trends/hourly` - Hourly player trends for last 24 hours
+- `GET /health` - Health check endpoint (database connectivity)
+- `POST /admin/cache/invalidate` - Manual cache invalidation (requires auth header)
+- `POST /admin/aggregate-daily` - Trigger manual daily aggregation
+- `POST /admin/cleanup-history` - Remove old historical records (configurable days)
+
+**Note:** `/servers-steam` endpoint exists but is currently commented out in `app.js`
 
 ## Development Workflow
 
@@ -214,6 +231,86 @@ mysql -u root -p csmonitor < db/seed.sql
 ### Code Quality
 
 - Jest for unit testing with >80% coverage target
-- Swagger/OpenAPI documentation available at `/api-docs`
-- ESLint for code style enforcement
+- Excludes `src/server.js` and `src/services/updater.js` from coverage (configured in `jest.config.js`)
+- Swagger/OpenAPI documentation available at `/docs` endpoint
+- ESLint for code style enforcement (flat config in `eslint.config.js`)
 - Structured error handling with try/catch blocks
+
+## Docker & Production Deployment
+
+**Multi-stage Dockerfile:**
+
+- Uses Node.js 22 Alpine for minimal image size
+- Non-root user (`nodejs:nodejs`) for security
+- `dumb-init` for proper signal handling (SIGTERM/SIGINT)
+- Health check via `/health` endpoint
+- Logs directory created with proper permissions
+
+**Docker Compose Stack:**
+
+- MySQL 8.0 with auto-initialization from `db/schema.sql` and `db/seed.sql`
+- Redis 7 Alpine for caching (optional but recommended)
+- API service with health checks and dependency ordering
+- Volume mounts: `./config` (read-only), `./logs` (read-write)
+- Default ports: 3000 (API), 3306 (MySQL), 6379 (Redis)
+
+**Common Commands:**
+
+```bash
+# Development
+npm run dev              # Nodemon with auto-reload
+
+# Testing
+npm test                 # Run all tests with coverage
+npm run test:watch       # Watch mode for development
+npm run test:ci          # CI mode (limited workers)
+
+# Docker
+npm run docker:compose        # Start all services
+npm run docker:compose:down   # Stop all services
+npm run docker:compose:logs   # View API logs
+```
+
+## Database Migrations
+
+**Migration Pattern:**
+
+- Located in `db/migrations/` with descriptive filenames
+- Applied manually via `mysql -u user -p database < db/migrations/filename.sql`
+- Common migration types:
+  - Adding game-specific columns with deduplication (`add_game_to_players_with_dedup.sql`)
+  - Adding server metadata (`add_server_details.sql`, `add_region_domain_to_servers.sql`)
+  - Historical tracking (`add_historical_tables.sql`, `add_player_history_tracking.sql`)
+  - Data cleanup (`sanitize_map_names.sql`, `fix_playtime_historical_data.sql`)
+
+**Key Migration Examples:**
+
+- `add_game_to_players_with_dedup.sql` - Adds `game` column with composite unique key, handles existing duplicates
+- `add_player_history_tracking.sql` - Separates name/IP history into dedicated tables
+- `add_players_list.sql` - Adds JSON column for storing RCON player data
+
+## Environment & Configuration Validation
+
+**Startup Sequence (src/server.js):**
+
+1. Load `.env` via `dotenv.config()`
+2. Validate required environment variables via `validateEnvironment()` (fails fast on missing vars)
+3. Initialize database with retry logic
+4. Initialize Redis (optional, logs warning if fails)
+5. Create HTTP server for Socket.IO
+6. Initialize WebSocket server
+7. Start HTTP listener
+8. Launch background jobs (updater, Steam avatars)
+
+**Graceful Shutdown:**
+
+- Handles SIGTERM/SIGINT signals
+- 30-second timeout before forced exit
+- Shutdown order: Redis → Database → HTTP server
+- Logs each step for debugging
+
+**Error Handling Philosophy:**
+
+- `uncaughtException` and `unhandledRejection` log but don't exit (stateless API, process manager restarts)
+- Known safe exceptions: RCON packet decoder errors, network timeouts, third-party library issues
+- Comment in code explains when to enable shutdown on exceptions (cascading failures, memory leaks)
