@@ -212,6 +212,84 @@ describe("Players Endpoints", () => {
         .expect(400);
 
       expect(response.body).toHaveProperty("error");
+      expect(response.body.error).toBe("Invalid SteamID format");
+    });
+
+    it("should accept SteamID2 format and convert to SteamID64", async () => {
+      // STEAM_0:1:12345 converts to 76561197960290419
+      pool.query
+        .mockResolvedValueOnce([
+          [
+            {
+              id: 1,
+              steamid: "76561197960290419",
+              latest_name: "TestPlayer",
+              game: "csgo",
+              playtime: 1000,
+              server_ip: "1.2.3.4",
+              server_port: 27015,
+              last_seen: "2025-10-26T12:00:00Z",
+              created_at: "2025-10-20T10:00:00Z",
+            },
+          ],
+        ])
+        .mockResolvedValueOnce([
+          [{ game: "csgo", total_playtime: 1000, last_seen: "2025-10-26T12:00:00Z" }],
+        ]);
+
+      const response = await request(app)
+        .get("/players/STEAM_0:1:12345")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      expect(response.body.steamid).toBe("76561197960290419");
+      expect(pool.query).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.arrayContaining(["76561197960290419"])
+      );
+    });
+
+    it("should accept SteamID3 format and convert to SteamID64", async () => {
+      // [U:1:24691] converts to 76561197960290419
+      pool.query
+        .mockResolvedValueOnce([
+          [
+            {
+              id: 1,
+              steamid: "76561197960290419",
+              latest_name: "TestPlayer2",
+              game: "counterstrike2",
+              playtime: 2000,
+              server_ip: "1.2.3.4",
+              server_port: 27016,
+              last_seen: "2025-10-26T14:00:00Z",
+              created_at: "2025-10-21T10:00:00Z",
+            },
+          ],
+        ])
+        .mockResolvedValueOnce([
+          [{ game: "counterstrike2", total_playtime: 2000, last_seen: "2025-10-26T14:00:00Z" }],
+        ]);
+
+      const response = await request(app)
+        .get("/players/[U:1:24691]")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      expect(response.body.steamid).toBe("76561197960290419");
+      expect(pool.query).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.arrayContaining(["76561197960290419"])
+      );
+    });
+
+    it("should return 400 for invalid SteamID", async () => {
+      const response = await request(app)
+        .get("/players/invalid-steamid")
+        .expect("Content-Type", /json/)
+        .expect(400);
+
+      expect(response.body).toHaveProperty("error");
     });
 
     it("should return 404 for non-existent player", async () => {
@@ -225,6 +303,222 @@ describe("Players Endpoints", () => {
 
       const response = await request(app)
         .get("/players/76561198000000001")
+        .expect("Content-Type", /json/)
+        .expect(500);
+
+      expect(response.body).toHaveProperty("error");
+    });
+  });
+
+  describe("GET /players/online", () => {
+    it("should return all currently online players", async () => {
+      pool.query.mockResolvedValueOnce([
+        [
+          {
+            ip: "185.107.96.59",
+            port: 27015,
+            game: "csgo",
+            hostname: "FemboyKZ | EU",
+            map: "kz_synergy_x",
+            players_list: JSON.stringify([
+              {
+                userid: 1,
+                name: "Player1",
+                steamid: "76561198000000001",
+                time: "12:34",
+                ping: 45,
+                loss: 0,
+                state: "active",
+                bot: false,
+              },
+              {
+                userid: 2,
+                name: "Player2",
+                steamid: "76561198000000002",
+                time: "05:12",
+                ping: 30,
+                loss: 0,
+                state: "active",
+                bot: false,
+              },
+            ]),
+          },
+          {
+            ip: "37.27.107.76",
+            port: 27016,
+            game: "counterstrike2",
+            hostname: "FemboyKZ | US",
+            map: "kz_grotto",
+            players_list: JSON.stringify([
+              {
+                userid: 3,
+                name: "Player3",
+                steamid: "76561198000000003",
+                time: "01:23",
+                ping: 80,
+                loss: 0,
+                state: "active",
+                bot: false,
+              },
+            ]),
+          },
+        ],
+      ]);
+
+      const response = await request(app)
+        .get("/players/online")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      expect(response.body).toHaveProperty("total", 3);
+      expect(response.body).toHaveProperty("servers", 2);
+      expect(response.body).toHaveProperty("players");
+      expect(response.body.players).toHaveLength(3);
+      expect(response.body.players[0]).toHaveProperty("name");
+      expect(response.body.players[0]).toHaveProperty("steamid");
+      expect(response.body.players[0]).toHaveProperty("server");
+      expect(response.body.players[0]).toHaveProperty("server_name");
+      expect(response.body.players[0]).toHaveProperty("game");
+      expect(response.body.players[0]).toHaveProperty("map");
+    });
+
+    it("should filter online players by game", async () => {
+      pool.query.mockResolvedValueOnce([
+        [
+          {
+            ip: "185.107.96.59",
+            port: 27015,
+            game: "csgo",
+            hostname: "FemboyKZ | EU",
+            map: "kz_synergy_x",
+            players_list: JSON.stringify([
+              {
+                userid: 1,
+                name: "CSGOPlayer",
+                steamid: "76561198000000001",
+                time: "12:34",
+                ping: 45,
+                state: "active",
+                bot: false,
+              },
+            ]),
+          },
+        ],
+      ]);
+
+      const response = await request(app)
+        .get("/players/online?game=csgo")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      expect(response.body).toHaveProperty("total", 1);
+      expect(response.body.players[0].game).toBe("csgo");
+    });
+
+    it("should filter online players by server", async () => {
+      pool.query.mockResolvedValueOnce([
+        [
+          {
+            ip: "185.107.96.59",
+            port: 27015,
+            game: "csgo",
+            hostname: "FemboyKZ | EU",
+            map: "kz_synergy_x",
+            players_list: JSON.stringify([
+              {
+                userid: 1,
+                name: "Player1",
+                steamid: "76561198000000001",
+                time: "12:34",
+                ping: 45,
+                state: "active",
+                bot: false,
+              },
+            ]),
+          },
+        ],
+      ]);
+
+      const response = await request(app)
+        .get("/players/online?server=185.107.96.59:27015")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      expect(response.body).toHaveProperty("total", 1);
+      expect(response.body.players[0].server).toBe("185.107.96.59:27015");
+    });
+
+    it("should exclude bots without steamid", async () => {
+      pool.query.mockResolvedValueOnce([
+        [
+          {
+            ip: "185.107.96.59",
+            port: 27015,
+            game: "csgo",
+            hostname: "Test Server",
+            map: "de_dust2",
+            players_list: JSON.stringify([
+              {
+                userid: 1,
+                name: "RealPlayer",
+                steamid: "76561198000000001",
+                time: "12:34",
+                ping: 45,
+                state: "active",
+                bot: false,
+              },
+              {
+                userid: 2,
+                name: "Bot",
+                steamid: null,
+                time: "00:00",
+                ping: 0,
+                state: "active",
+                bot: true,
+              },
+            ]),
+          },
+        ],
+      ]);
+
+      const response = await request(app)
+        .get("/players/online")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      expect(response.body.total).toBe(1);
+      expect(response.body.players[0].name).toBe("RealPlayer");
+    });
+
+    it("should handle empty servers", async () => {
+      pool.query.mockResolvedValueOnce([
+        [
+          {
+            ip: "185.107.96.59",
+            port: 27015,
+            game: "csgo",
+            hostname: "Empty Server",
+            map: "de_dust2",
+            players_list: JSON.stringify([]),
+          },
+        ],
+      ]);
+
+      const response = await request(app)
+        .get("/players/online")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      expect(response.body.total).toBe(0);
+      expect(response.body.servers).toBe(0);
+      expect(response.body.players).toHaveLength(0);
+    });
+
+    it("should handle database errors", async () => {
+      pool.query.mockRejectedValueOnce(new Error("Database error"));
+
+      const response = await request(app)
+        .get("/players/online")
         .expect("Content-Type", /json/)
         .expect(500);
 

@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require("../db");
 const {
   isValidSteamID,
+  convertToSteamID64,
   validatePagination,
   sanitizeString,
 } = require("../utils/validators");
@@ -311,6 +312,200 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
+ * /players/online:
+ *   get:
+ *     summary: Get all currently online players
+ *     description: Returns a list of all players currently connected to any server
+ *     tags: [Players]
+ *     parameters:
+ *       - in: query
+ *         name: game
+ *         schema:
+ *           type: string
+ *         description: Filter by game type (csgo, counterstrike2)
+ *         example: counterstrike2
+ *       - in: query
+ *         name: server
+ *         schema:
+ *           type: string
+ *         description: Filter by server (format ip:port)
+ *         example: "185.107.96.59:27015"
+ *     responses:
+ *       200:
+ *         description: List of currently online players
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of online players
+ *                   example: 24
+ *                 servers:
+ *                   type: integer
+ *                   description: Number of servers with players
+ *                   example: 3
+ *                 players:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       userid:
+ *                         type: integer
+ *                         description: User ID on the server
+ *                         example: 12
+ *                       name:
+ *                         type: string
+ *                         description: Player name
+ *                         example: "PlayerName"
+ *                       steamid:
+ *                         type: string
+ *                         description: Player Steam ID
+ *                         example: "76561198000000000"
+ *                       time:
+ *                         type: string
+ *                         description: Time connected to server
+ *                         example: "12:34"
+ *                       ping:
+ *                         type: integer
+ *                         description: Player ping
+ *                         example: 45
+ *                       loss:
+ *                         type: integer
+ *                         description: Packet loss
+ *                         example: 0
+ *                       state:
+ *                         type: string
+ *                         description: Player state
+ *                         example: "active"
+ *                       bot:
+ *                         type: boolean
+ *                         description: Whether player is a bot
+ *                         example: false
+ *                       server:
+ *                         type: string
+ *                         description: Server the player is on
+ *                         example: "185.107.96.59:27015"
+ *                       server_name:
+ *                         type: string
+ *                         description: Server hostname
+ *                         example: "FemboyKZ | EU"
+ *                       game:
+ *                         type: string
+ *                         description: Game type
+ *                         example: "counterstrike2"
+ *                       map:
+ *                         type: string
+ *                         description: Current map on the server
+ *                         example: "kz_synergy_x"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Failed to fetch online players"
+ */
+// Cache for 10 seconds (shorter since it's real-time data)
+router.get("/online", cacheMiddleware(10, playersKeyGenerator), async (req, res) => {
+  try {
+    const { game, server } = req.query;
+    
+    // Build query to get online servers with players
+    let query = "SELECT ip, port, game, hostname, map, players_list FROM servers WHERE status = 1";
+    const params = [];
+
+    if (game) {
+      query += " AND game = ?";
+      params.push(sanitizeString(game, 50));
+    }
+
+    if (server) {
+      // Parse server format "ip:port"
+      const [ip, port] = server.split(':');
+      if (ip && port) {
+        query += " AND ip = ? AND port = ?";
+        params.push(ip);
+        params.push(parseInt(port, 10));
+      }
+    }
+
+    const [servers] = await pool.query(query, params);
+
+    // Collect all online players from all servers
+    const onlinePlayers = [];
+    let serversWithPlayers = 0;
+
+    for (const server of servers) {
+      let playersList = [];
+      
+      // Parse players_list JSON column
+      if (server.players_list) {
+        try {
+          playersList = typeof server.players_list === "string"
+            ? JSON.parse(server.players_list)
+            : server.players_list;
+        } catch (e) {
+          logger.error(
+            `Failed to parse players_list for ${server.ip}:${server.port}`,
+            { error: e.message }
+          );
+          continue;
+        }
+      }
+
+      // Add server info to each player
+      if (playersList.length > 0) {
+        serversWithPlayers++;
+        
+        for (const player of playersList) {
+          // Skip bots if they don't have steamid
+          if (!player.steamid && player.bot) {
+            continue;
+          }
+
+          onlinePlayers.push({
+            userid: player.userid,
+            name: player.name,
+            steamid: player.steamid,
+            time: player.time,
+            ping: player.ping,
+            loss: player.loss || 0,
+            state: player.state,
+            bot: player.bot || false,
+            server: `${server.ip}:${server.port}`,
+            server_name: server.hostname,
+            game: server.game,
+            map: server.map,
+          });
+        }
+      }
+    }
+
+    // Sort by name for consistent output
+    onlinePlayers.sort((a, b) => {
+      if (!a.name) return 1;
+      if (!b.name) return -1;
+      return a.name.localeCompare(b.name);
+    });
+
+    res.json({
+      total: onlinePlayers.length,
+      servers: serversWithPlayers,
+      players: onlinePlayers,
+    });
+  } catch (e) {
+    logger.error(`Failed to fetch online players: ${e.message}`);
+    res.status(500).json({ error: "Failed to fetch online players" });
+  }
+});
+
+/**
+ * @swagger
  * /players/{steamid}:
  *   get:
  *     summary: Get player by Steam ID
@@ -369,8 +564,14 @@ router.get("/:steamid", async (req, res) => {
       return res.status(400).json({ error: "Invalid SteamID format" });
     }
 
+    // Convert any SteamID format to SteamID64 for database lookup
+    const steamid64 = convertToSteamID64(steamid);
+    if (!steamid64) {
+      return res.status(400).json({ error: "Failed to convert SteamID" });
+    }
+
     let query = "SELECT * FROM players WHERE steamid = ?";
-    const params = [steamid];
+    const params = [steamid64];
 
     if (game) {
       query += " AND game = ?";
@@ -385,7 +586,7 @@ router.get("/:steamid", async (req, res) => {
     }
 
     let statsQuery = "SELECT game, SUM(playtime) as total_playtime, MAX(last_seen) as last_seen FROM players WHERE steamid = ?";
-    const statsParams = [steamid];
+    const statsParams = [steamid64];
 
     if (game) {
       statsQuery += " AND game = ?";
@@ -398,7 +599,7 @@ router.get("/:steamid", async (req, res) => {
 
     // Structure response by game type
     const response = {
-      steamid,
+      steamid: steamid64,  // Always return SteamID64 format
       avatar_small: null,
       avatar_medium: null,
       avatar_full: null,

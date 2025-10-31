@@ -2,6 +2,7 @@ const {
   isValidIP,
   isValidPort,
   isValidSteamID,
+  convertToSteamID64,
   sanitizeString,
   validatePagination,
   sanitizePlayerName,
@@ -48,20 +49,79 @@ describe("Validators", () => {
   describe("isValidSteamID", () => {
     it("should validate SteamID64", () => {
       expect(isValidSteamID("76561198000000000")).toBe(true);
+      // Test with 18-digit SteamID64 (large account ID)
+      expect(isValidSteamID("76561198445248030")).toBe(true);
     });
 
     it("should validate SteamID3", () => {
       expect(isValidSteamID("[U:1:12345]")).toBe(true);
+      // Test with large account ID
+      expect(isValidSteamID("[U:1:484982302]")).toBe(true);
     });
 
     it("should validate SteamID2", () => {
       expect(isValidSteamID("STEAM_0:1:12345")).toBe(true);
       expect(isValidSteamID("STEAM_1:0:67890")).toBe(true);
+      // Test with large account ID
+      expect(isValidSteamID("STEAM_1:0:242491151")).toBe(true);
     });
 
     it("should reject invalid SteamIDs", () => {
       expect(isValidSteamID("invalid")).toBe(false);
       expect(isValidSteamID("")).toBe(false);
+    });
+  });
+
+  describe("convertToSteamID64", () => {
+    it("should return SteamID64 as-is", () => {
+      expect(convertToSteamID64("76561197960265729")).toBe("76561197960265729");
+      expect(convertToSteamID64("76561198000000000")).toBe("76561198000000000");
+      // Test with 18-digit SteamID64
+      expect(convertToSteamID64("76561198445248030")).toBe("76561198445248030");
+    });
+
+    it("should convert SteamID2 to SteamID64", () => {
+      // STEAM_0:1:0 -> AccountID = (0 * 2) + 1 = 1 -> 76561197960265729
+      expect(convertToSteamID64("STEAM_0:1:0")).toBe("76561197960265729");
+      expect(convertToSteamID64("STEAM_1:1:0")).toBe("76561197960265729");
+      
+      // STEAM_0:0:1 -> AccountID = (1 * 2) + 0 = 2 -> 76561197960265730
+      expect(convertToSteamID64("STEAM_0:0:1")).toBe("76561197960265730");
+      
+      // STEAM_0:1:12345 -> AccountID = (12345 * 2) + 1 = 24691 -> 76561197960290419
+      expect(convertToSteamID64("STEAM_0:1:12345")).toBe("76561197960290419");
+      
+      // STEAM_0:0:12345 -> AccountID = (12345 * 2) + 0 = 24690 -> 76561197960290418
+      expect(convertToSteamID64("STEAM_0:0:12345")).toBe("76561197960290418");
+
+      // Large account ID: STEAM_1:0:242491151 -> AccountID = (242491151 * 2) + 0 = 484982302
+      expect(convertToSteamID64("STEAM_1:0:242491151")).toBe("76561198445248030");
+    });
+
+    it("should convert SteamID3 to SteamID64", () => {
+      // [U:1:1] -> 76561197960265729
+      expect(convertToSteamID64("[U:1:1]")).toBe("76561197960265729");
+      
+      // [U:1:24691] -> 76561197960265728 + 24691 = 76561197960290419
+      expect(convertToSteamID64("[U:1:24691]")).toBe("76561197960290419");
+      
+      // [U:1:12345] -> 76561197960265728 + 12345 = 76561197960278073
+      expect(convertToSteamID64("[U:1:12345]")).toBe("76561197960278073");
+    });
+
+    it("should return null for invalid input", () => {
+      expect(convertToSteamID64("invalid")).toBe(null);
+      expect(convertToSteamID64("")).toBe(null);
+      expect(convertToSteamID64(null)).toBe(null);
+      expect(convertToSteamID64(undefined)).toBe(null);
+    });
+
+    it("should handle real-world SteamID conversions correctly", () => {
+      // Real example: STEAM_0:1:12345 should equal [U:1:24691]
+      const steamid2 = convertToSteamID64("STEAM_0:1:12345");
+      const steamid3 = convertToSteamID64("[U:1:24691]");
+      expect(steamid2).toBe(steamid3);
+      expect(steamid2).toBe("76561197960290419");
     });
   });
 

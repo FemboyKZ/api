@@ -17,8 +17,8 @@ function isValidPort(port) {
 }
 
 function isValidSteamID(steamid) {
-  // SteamID64 format (17 digits starting with 7)
-  const steamid64Regex = /^7656119[0-9]{10}$/;
+  // SteamID64 format (17-18 digits starting with 765611)
+  const steamid64Regex = /^765611[0-9]{11,12}$/;
   // SteamID3 format [U:1:XXXXXXXXX]
   const steamid3Regex = /^\[U:1:[0-9]+\]$/;
   // SteamID2 format STEAM_X:Y:Z
@@ -29,6 +29,50 @@ function isValidSteamID(steamid) {
     steamid3Regex.test(steamid) ||
     steamid2Regex.test(steamid)
   );
+}
+
+/**
+ * Convert any SteamID format to SteamID64
+ * 
+ * Supports:
+ * - SteamID64: "76561198000000000" (returns as-is)
+ * - SteamID2: "STEAM_0:1:12345" or "STEAM_1:0:12345"
+ * - SteamID3: "[U:1:24691]"
+ * 
+ * Algorithm:
+ * SteamID64 = 76561197960265728 + (Z * 2) + Y
+ * Where STEAM_X:Y:Z -> Y and Z are extracted
+ * 
+ * @param {string} steamid - Any valid SteamID format
+ * @returns {string|null} SteamID64 format or null if invalid
+ */
+function convertToSteamID64(steamid) {
+  if (!steamid || typeof steamid !== 'string') return null;
+  
+  // Already SteamID64 format (17-18 digits starting with 765611)
+  if (/^765611[0-9]{11,12}$/.test(steamid)) {
+    return steamid;
+  }
+  
+  // SteamID2 format: STEAM_X:Y:Z
+  const steamid2Match = steamid.match(/^STEAM_[0-5]:([01]):([0-9]+)$/);
+  if (steamid2Match) {
+    const Y = parseInt(steamid2Match[1], 10);
+    const Z = parseInt(steamid2Match[2], 10);
+    const accountID = (Z * 2) + Y;
+    const steamID64 = BigInt('76561197960265728') + BigInt(accountID);
+    return steamID64.toString();
+  }
+  
+  // SteamID3 format: [U:1:XXXXXXXXX]
+  const steamid3Match = steamid.match(/^\[U:1:([0-9]+)\]$/);
+  if (steamid3Match) {
+    const accountID = parseInt(steamid3Match[1], 10);
+    const steamID64 = BigInt('76561197960265728') + BigInt(accountID);
+    return steamID64.toString();
+  }
+  
+  return null;
 }
 
 function sanitizeString(str, maxLength = 255) {
@@ -139,6 +183,7 @@ module.exports = {
   isValidIP,
   isValidPort,
   isValidSteamID,
+  convertToSteamID64,
   sanitizeString,
   validatePagination,
   sanitizePlayerName,
