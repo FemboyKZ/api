@@ -6,7 +6,6 @@ const { validateEnvironment } = require("./utils/envValidator");
 const { initDatabase, closeDatabase } = require("./db");
 const { startUpdateLoop } = require("./services/updater");
 const { startAvatarUpdateJob } = require("./services/steamAvatars");
-const { startGlobalInfoUpdateJob } = require("./services/mapsQuery");
 const { initWebSocket } = require("./services/websocket");
 const { initRedis, closeRedis } = require("./db/redis");
 
@@ -49,9 +48,6 @@ async function startServer() {
       
       // Step 8: Start avatar update job (runs every hour)
       startAvatarUpdateJob(60 * 60 * 1000);
-      
-      // Step 9: Start GOKZ map info update job (runs every 6 hours)
-      startGlobalInfoUpdateJob(6 * 60 * 60 * 1000);
     });
 
     return httpServer;
@@ -105,13 +101,45 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 // Handle uncaught exceptions
 process.on("uncaughtException", (error) => {
-  logger.error(`Uncaught Exception: ${error.message}`);
-  logger.error(error.stack);
-  gracefulShutdown("uncaughtException");
+  logger.error("Uncaught Exception detected", {
+    message: error.message,
+    stack: error.stack,
+    code: error.code,
+  });
+
+  // For stateless API servers with process managers (PM2/systemd/Docker),
+  // logging and continuing is often acceptable. The process manager will
+  // restart if the process becomes unresponsive or exits.
+  //
+  // Known safe exceptions to ignore:
+  // - Third-party library issues (rcon-srcds packet decoder RangeErrors)
+  // - Transient network errors
+  // - Individual request handler failures
+  //
+  // Consider uncommenting gracefulShutdown() below if you experience:
+  // - Cascading failures after exceptions
+  // - Memory leaks or zombie connections
+  // - Database corruption or inconsistent state
+  //
+  // gracefulShutdown("uncaughtException");
 });
 
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (reason, promise) => {
-  logger.error(`Unhandled Rejection at: ${promise}, reason: ${reason}`);
-  gracefulShutdown("unhandledRejection");
+  logger.error("Unhandled Promise Rejection detected", {
+    reason: reason,
+    promise: promise,
+    stack: reason?.stack,
+  });
+
+  // Log only - same rationale as uncaughtException above.
+  // Unhandled rejections are typically from:
+  // - Forgot to await async database calls
+  // - Third-party library promise chains
+  // - Network timeouts in background jobs
+  //
+  // These rarely corrupt process state in stateless APIs.
+  //
+  // Uncomment to trigger shutdown on unhandled rejections:
+  // gracefulShutdown("unhandledRejection");
 });
