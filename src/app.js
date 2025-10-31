@@ -50,8 +50,6 @@ const limiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   // Skip rate limiting in test environment
   skip: () => process.env.NODE_ENV === 'test',
-  // Tell rate limiter that trust proxy is intentionally enabled
-  trustProxy: isUsingProxy,
 });
 
 app.use("/", limiter);
