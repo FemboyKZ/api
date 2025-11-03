@@ -17,10 +17,11 @@ const logger = require("./utils/logger");
 
 // Trust proxy - only when binding to localhost (behind reverse proxy like Apache, Nginx, etc.)
 // This allows Express to read the real client IP from X-Forwarded-For header
-const isUsingProxy = process.env.HOST === '127.0.0.1' || process.env.HOST === 'localhost';
+const isUsingProxy =
+  process.env.HOST === "127.0.0.1" || process.env.HOST === "localhost";
 if (isUsingProxy) {
-  app.set('trust proxy', true);
-  logger.info('Trust proxy enabled - running behind reverse proxy');
+  app.set("trust proxy", true);
+  logger.info("Trust proxy enabled - running behind reverse proxy");
 }
 
 // CORS configuration
@@ -49,7 +50,7 @@ const limiter = rateLimit({
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   // Skip rate limiting in test environment
-  skip: () => process.env.NODE_ENV === 'test',
+  skip: () => process.env.NODE_ENV === "test",
 });
 
 app.use("/", limiter);
@@ -57,10 +58,14 @@ app.use("/", limiter);
 app.use(express.json());
 
 // API Documentation
-app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: "Server API Documentation",
-}));
+app.use(
+  "/docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    customCss: ".swagger-ui .topbar { display: none }",
+    customSiteTitle: "Server API Documentation",
+  }),
+);
 
 app.use("/servers", serversRouter);
 // app.use("/servers-steam", serversSteamRouter);

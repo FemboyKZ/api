@@ -56,20 +56,24 @@ describe("Players Endpoints", () => {
       expect(response.body).toHaveProperty("pagination");
       expect(Array.isArray(response.body.data)).toBe(true);
       expect(response.body.data.length).toBe(2); // 2 unique players
-      
+
       // Check structure has game-specific data
       expect(response.body.data[0]).toHaveProperty("steamid");
       expect(response.body.data[0]).toHaveProperty("name");
       expect(response.body.data[0]).toHaveProperty("csgo");
       expect(response.body.data[0]).toHaveProperty("counterstrike2");
-      
+
       // Player 1 should have both games
-      const player1 = response.body.data.find(p => p.steamid === "76561198000000001");
+      const player1 = response.body.data.find(
+        (p) => p.steamid === "76561198000000001",
+      );
       expect(player1.csgo).toHaveProperty("total_playtime");
       expect(player1.counterstrike2).toHaveProperty("total_playtime");
-      
+
       // Player 2 should have only CS:GO
-      const player2 = response.body.data.find(p => p.steamid === "76561198000000002");
+      const player2 = response.body.data.find(
+        (p) => p.steamid === "76561198000000002",
+      );
       expect(player2.csgo).toHaveProperty("total_playtime");
       expect(player2.counterstrike2).toEqual({});
     });
@@ -94,7 +98,7 @@ describe("Players Endpoints", () => {
 
       expect(response.body).toHaveProperty("data");
       expect(Array.isArray(response.body.data)).toBe(true);
-      
+
       // When filtering by game, only that game's stats should be populated
       const player = response.body.data[0];
       expect(player.csgo).toHaveProperty("total_playtime");
@@ -179,8 +183,16 @@ describe("Players Endpoints", () => {
         ])
         .mockResolvedValueOnce([
           [
-            { game: "csgo", total_playtime: 12345, last_seen: "2025-10-26T12:00:00Z" },
-            { game: "counterstrike2", total_playtime: 5000, last_seen: "2025-10-26T14:00:00Z" },
+            {
+              game: "csgo",
+              total_playtime: 12345,
+              last_seen: "2025-10-26T12:00:00Z",
+            },
+            {
+              game: "counterstrike2",
+              total_playtime: 5000,
+              last_seen: "2025-10-26T14:00:00Z",
+            },
           ],
         ]);
 
@@ -192,13 +204,13 @@ describe("Players Endpoints", () => {
       expect(response.body).toHaveProperty("steamid");
       expect(response.body).toHaveProperty("csgo");
       expect(response.body).toHaveProperty("counterstrike2");
-      
+
       // Check CS:GO stats
       expect(response.body.csgo).toHaveProperty("total_playtime");
       expect(response.body.csgo).toHaveProperty("last_seen");
       expect(response.body.csgo).toHaveProperty("sessions");
       expect(Array.isArray(response.body.csgo.sessions)).toBe(true);
-      
+
       // Check CS2 stats
       expect(response.body.counterstrike2).toHaveProperty("total_playtime");
       expect(response.body.counterstrike2).toHaveProperty("last_seen");
@@ -234,7 +246,13 @@ describe("Players Endpoints", () => {
           ],
         ])
         .mockResolvedValueOnce([
-          [{ game: "csgo", total_playtime: 1000, last_seen: "2025-10-26T12:00:00Z" }],
+          [
+            {
+              game: "csgo",
+              total_playtime: 1000,
+              last_seen: "2025-10-26T12:00:00Z",
+            },
+          ],
         ]);
 
       const response = await request(app)
@@ -245,7 +263,7 @@ describe("Players Endpoints", () => {
       expect(response.body.steamid).toBe("76561197960290419");
       expect(pool.query).toHaveBeenCalledWith(
         expect.any(String),
-        expect.arrayContaining(["76561197960290419"])
+        expect.arrayContaining(["76561197960290419"]),
       );
     });
 
@@ -268,7 +286,13 @@ describe("Players Endpoints", () => {
           ],
         ])
         .mockResolvedValueOnce([
-          [{ game: "counterstrike2", total_playtime: 2000, last_seen: "2025-10-26T14:00:00Z" }],
+          [
+            {
+              game: "counterstrike2",
+              total_playtime: 2000,
+              last_seen: "2025-10-26T14:00:00Z",
+            },
+          ],
         ]);
 
       const response = await request(app)
@@ -279,7 +303,7 @@ describe("Players Endpoints", () => {
       expect(response.body.steamid).toBe("76561197960290419");
       expect(pool.query).toHaveBeenCalledWith(
         expect.any(String),
-        expect.arrayContaining(["76561197960290419"])
+        expect.arrayContaining(["76561197960290419"]),
       );
     });
 

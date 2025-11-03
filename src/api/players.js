@@ -218,7 +218,7 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
 
     // Group by steamid and structure data by game
     const playerMap = new Map();
-    
+
     for (const row of rawPlayers) {
       if (!playerMap.has(row.steamid)) {
         playerMap.set(row.steamid, {
@@ -233,34 +233,37 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
           _totalPlaytime: 0, // For sorting
         });
       }
-      
+
       const player = playerMap.get(row.steamid);
-      
+
       // Update name to most recent across all games
-      if (!player._lastSeen || new Date(row.last_seen) > new Date(player._lastSeen)) {
+      if (
+        !player._lastSeen ||
+        new Date(row.last_seen) > new Date(player._lastSeen)
+      ) {
         player.name = row.name;
         player._lastSeen = row.last_seen;
       }
-      
+
       // Add game-specific stats
-      if (row.game === 'csgo') {
+      if (row.game === "csgo") {
         player.csgo = {
           total_playtime: parseInt(row.total_playtime, 10) || 0,
           last_seen: row.last_seen,
         };
-      } else if (row.game === 'counterstrike2') {
+      } else if (row.game === "counterstrike2") {
         player.counterstrike2 = {
           total_playtime: parseInt(row.total_playtime, 10) || 0,
           last_seen: row.last_seen,
         };
       }
-      
+
       // Track combined playtime for sorting
       player._totalPlaytime += parseInt(row.total_playtime, 10) || 0;
     }
 
     // Convert map to array and remove internal sorting fields
-    let players = Array.from(playerMap.values()).map(p => {
+    let players = Array.from(playerMap.values()).map((p) => {
       const { _lastSeen, _totalPlaytime, ...playerData } = p;
       return playerData;
     });
@@ -268,23 +271,33 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
     // Sort based on requested field
     players.sort((a, b) => {
       let aVal, bVal;
-      
-      if (sortField === 'total_playtime') {
+
+      if (sortField === "total_playtime") {
         // Sum playtime across both games for sorting
-        aVal = (a.csgo.total_playtime || 0) + (a.counterstrike2.total_playtime || 0);
-        bVal = (b.csgo.total_playtime || 0) + (b.counterstrike2.total_playtime || 0);
-      } else if (sortField === 'last_seen') {
+        aVal =
+          (a.csgo.total_playtime || 0) + (a.counterstrike2.total_playtime || 0);
+        bVal =
+          (b.csgo.total_playtime || 0) + (b.counterstrike2.total_playtime || 0);
+      } else if (sortField === "last_seen") {
         // Get most recent last_seen across both games
-        const aDate = [a.csgo.last_seen, a.counterstrike2.last_seen].filter(d => d).sort().reverse()[0] || '';
-        const bDate = [b.csgo.last_seen, b.counterstrike2.last_seen].filter(d => d).sort().reverse()[0] || '';
+        const aDate =
+          [a.csgo.last_seen, a.counterstrike2.last_seen]
+            .filter((d) => d)
+            .sort()
+            .reverse()[0] || "";
+        const bDate =
+          [b.csgo.last_seen, b.counterstrike2.last_seen]
+            .filter((d) => d)
+            .sort()
+            .reverse()[0] || "";
         aVal = aDate;
         bVal = bDate;
       } else {
         aVal = a[sortField];
         bVal = b[sortField];
       }
-      
-      if (sortOrder === 'DESC') {
+
+      if (sortOrder === "DESC") {
         return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
       } else {
         return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
@@ -411,98 +424,104 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
  *                   example: "Failed to fetch online players"
  */
 // Cache for 10 seconds (shorter since it's real-time data)
-router.get("/online", cacheMiddleware(10, playersKeyGenerator), async (req, res) => {
-  try {
-    const { game, server } = req.query;
-    
-    // Build query to get online servers with players
-    let query = "SELECT ip, port, game, hostname, map, players_list FROM servers WHERE status = 1";
-    const params = [];
+router.get(
+  "/online",
+  cacheMiddleware(10, playersKeyGenerator),
+  async (req, res) => {
+    try {
+      const { game, server } = req.query;
 
-    if (game) {
-      query += " AND game = ?";
-      params.push(sanitizeString(game, 50));
-    }
+      // Build query to get online servers with players
+      let query =
+        "SELECT ip, port, game, hostname, map, players_list FROM servers WHERE status = 1";
+      const params = [];
 
-    if (server) {
-      // Parse server format "ip:port"
-      const [ip, port] = server.split(':');
-      if (ip && port) {
-        query += " AND ip = ? AND port = ?";
-        params.push(ip);
-        params.push(parseInt(port, 10));
+      if (game) {
+        query += " AND game = ?";
+        params.push(sanitizeString(game, 50));
       }
-    }
 
-    const [servers] = await pool.query(query, params);
-
-    // Collect all online players from all servers
-    const onlinePlayers = [];
-    let serversWithPlayers = 0;
-
-    for (const server of servers) {
-      let playersList = [];
-      
-      // Parse players_list JSON column
-      if (server.players_list) {
-        try {
-          playersList = typeof server.players_list === "string"
-            ? JSON.parse(server.players_list)
-            : server.players_list;
-        } catch (e) {
-          logger.error(
-            `Failed to parse players_list for ${server.ip}:${server.port}`,
-            { error: e.message }
-          );
-          continue;
+      if (server) {
+        // Parse server format "ip:port"
+        const [ip, port] = server.split(":");
+        if (ip && port) {
+          query += " AND ip = ? AND port = ?";
+          params.push(ip);
+          params.push(parseInt(port, 10));
         }
       }
 
-      // Add server info to each player
-      if (playersList.length > 0) {
-        serversWithPlayers++;
-        
-        for (const player of playersList) {
-          // Skip bots if they don't have steamid
-          if (!player.steamid && player.bot) {
+      const [servers] = await pool.query(query, params);
+
+      // Collect all online players from all servers
+      const onlinePlayers = [];
+      let serversWithPlayers = 0;
+
+      for (const server of servers) {
+        let playersList = [];
+
+        // Parse players_list JSON column
+        if (server.players_list) {
+          try {
+            playersList =
+              typeof server.players_list === "string"
+                ? JSON.parse(server.players_list)
+                : server.players_list;
+          } catch (e) {
+            logger.error(
+              `Failed to parse players_list for ${server.ip}:${server.port}`,
+              { error: e.message },
+            );
             continue;
           }
+        }
 
-          onlinePlayers.push({
-            userid: player.userid,
-            name: player.name,
-            steamid: player.steamid,
-            time: player.time,
-            ping: player.ping,
-            loss: player.loss || 0,
-            state: player.state,
-            bot: player.bot || false,
-            server: `${server.ip}:${server.port}`,
-            server_name: server.hostname,
-            game: server.game,
-            map: server.map,
-          });
+        // Add server info to each player
+        if (playersList.length > 0) {
+          serversWithPlayers++;
+
+          for (const player of playersList) {
+            // Skip bots if they don't have steamid
+            if (!player.steamid && player.bot) {
+              continue;
+            }
+
+            onlinePlayers.push({
+              userid: player.userid,
+              name: player.name,
+              steamid: player.steamid,
+              time: player.time,
+              ping: player.ping,
+              loss: player.loss || 0,
+              state: player.state,
+              bot: player.bot || false,
+              server: `${server.ip}:${server.port}`,
+              server_name: server.hostname,
+              game: server.game,
+              map: server.map,
+            });
+          }
         }
       }
+
+      // Sort by name for consistent output
+      onlinePlayers.sort((a, b) => {
+        if (!a.name) return 1;
+        if (!b.name) return -1;
+        return a.name.localeCompare(b.name);
+      });
+
+      res.json({
+        total: onlinePlayers.length,
+        servers: serversWithPlayers,
+        players: onlinePlayers,
+      });
+    } catch (e) {
+      logger.error(`Failed to fetch online players: ${e.message}`);
+      res.status(500).json({ error: "Failed to fetch online players" });
     }
-
-    // Sort by name for consistent output
-    onlinePlayers.sort((a, b) => {
-      if (!a.name) return 1;
-      if (!b.name) return -1;
-      return a.name.localeCompare(b.name);
-    });
-
-    res.json({
-      total: onlinePlayers.length,
-      servers: serversWithPlayers,
-      players: onlinePlayers,
-    });
-  } catch (e) {
-    logger.error(`Failed to fetch online players: ${e.message}`);
-    res.status(500).json({ error: "Failed to fetch online players" });
-  }
-});
+  },
+);
 
 /**
  * @swagger
@@ -585,7 +604,8 @@ router.get("/:steamid", async (req, res) => {
       return res.status(404).json({ error: "Player not found" });
     }
 
-    let statsQuery = "SELECT game, SUM(playtime) as total_playtime, MAX(last_seen) as last_seen FROM players WHERE steamid = ?";
+    let statsQuery =
+      "SELECT game, SUM(playtime) as total_playtime, MAX(last_seen) as last_seen FROM players WHERE steamid = ?";
     const statsParams = [steamid64];
 
     if (game) {
@@ -599,7 +619,7 @@ router.get("/:steamid", async (req, res) => {
 
     // Structure response by game type
     const response = {
-      steamid: steamid64,  // Always return SteamID64 format
+      steamid: steamid64, // Always return SteamID64 format
       avatar_small: null,
       avatar_medium: null,
       avatar_full: null,
@@ -617,12 +637,12 @@ router.get("/:steamid", async (req, res) => {
     // Populate game-specific stats and sessions
     for (const stat of stats) {
       const gameKey = stat.game;
-      
-      if (gameKey === 'csgo' || gameKey === 'counterstrike2') {
+
+      if (gameKey === "csgo" || gameKey === "counterstrike2") {
         // Get sessions for this game
         const gameSessions = rows
-          .filter(row => row.game === gameKey)
-          .map(session => {
+          .filter((row) => row.game === gameKey)
+          .map((session) => {
             const { latest_ip, name, ...sessionWithoutIp } = session;
             return sessionWithoutIp;
           });

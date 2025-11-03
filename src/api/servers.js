@@ -186,7 +186,7 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
 
     const response = {
       playersTotal: rows.reduce((a, s) => a + s.player_count, 0),
-      serversOnline: rows.filter(s => s.status === 1).length,
+      serversOnline: rows.filter((s) => s.status === 1).length,
     };
     rows.forEach((server) => {
       // Parse players_list - MariaDB JSON columns return as strings even with jsonStrings: false
@@ -197,9 +197,9 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
             typeof server.players_list === "string"
               ? JSON.parse(server.players_list)
               : server.players_list;
-          
+
           // Remove IP addresses from player data for privacy
-          playersList = playersList.map(player => {
+          playersList = playersList.map((player) => {
             const { ip, ...playerWithoutIp } = player;
             return playerWithoutIp;
           });

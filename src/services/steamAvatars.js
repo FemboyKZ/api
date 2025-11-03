@@ -4,19 +4,20 @@ const logger = require("../utils/logger");
 
 /**
  * Steam Avatar Service
- * 
+ *
  * Fetches player avatar URLs from Steam Web API and caches them in the database.
- * 
+ *
  * Steam Web API Reference:
  * https://developer.valvesoftware.com/wiki/Steam_Web_API#GetPlayerSummaries_.28v0002.29
- * 
+ *
  * Avatars returned:
  * - avatar (32x32)
  * - avatarmedium (64x64)
  * - avatarfull (184x184)
  */
 
-const STEAM_API_URL = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/";
+const STEAM_API_URL =
+  "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/";
 const CACHE_DURATION_HOURS = 24; // How long to cache avatar URLs before refreshing
 
 /**
@@ -55,7 +56,11 @@ async function fetchAvatarsFromSteam(steamIds) {
         timeout: 10000,
       });
 
-      if (response.data && response.data.response && response.data.response.players) {
+      if (
+        response.data &&
+        response.data.response &&
+        response.data.response.players
+      ) {
         for (const player of response.data.response.players) {
           results[player.steamid] = {
             avatar_small: player.avatar || null,
@@ -92,7 +97,12 @@ async function updateAvatarsInDatabase(steamIds) {
              avatar_full = ?, 
              avatar_updated_at = NOW()
          WHERE steamid = ?`,
-        [avatars.avatar_small, avatars.avatar_medium, avatars.avatar_full, steamid]
+        [
+          avatars.avatar_small,
+          avatars.avatar_medium,
+          avatars.avatar_full,
+          steamid,
+        ],
       );
     } catch (error) {
       logger.error(`Failed to update avatar for ${steamid}: ${error.message}`);
@@ -115,10 +125,10 @@ async function getSteamIdsNeedingAvatars(limit = 100) {
        WHERE avatar_updated_at IS NULL 
           OR avatar_updated_at < DATE_SUB(NOW(), INTERVAL ? HOUR)
        LIMIT ?`,
-      [CACHE_DURATION_HOURS, limit]
+      [CACHE_DURATION_HOURS, limit],
     );
 
-    return rows.map(row => row.steamid);
+    return rows.map((row) => row.steamid);
   } catch (error) {
     logger.error(`Failed to get Steam IDs needing avatars: ${error.message}`);
     return [];
@@ -132,7 +142,7 @@ async function getSteamIdsNeedingAvatars(limit = 100) {
 async function updateMissingAvatars() {
   try {
     const steamIds = await getSteamIdsNeedingAvatars(100);
-    
+
     if (steamIds.length > 0) {
       logger.info(`Updating avatars for ${steamIds.length} players...`);
       await updateAvatarsInDatabase(steamIds);
@@ -157,10 +167,10 @@ async function refreshAvatars(steamIds) {
  */
 function startAvatarUpdateJob(intervalMs = 60 * 60 * 1000) {
   logger.info(`Starting avatar update job (interval: ${intervalMs / 1000}s)`);
-  
+
   // Run immediately on startup
   updateMissingAvatars();
-  
+
   // Then run periodically
   setInterval(updateMissingAvatars, intervalMs);
 }

@@ -13,9 +13,9 @@ const { deleteCache } = require("../db/redis");
 
 /**
  * Server Update Service
- * 
+ *
  * Polls all configured game servers in parallel at regular intervals (default: 30 seconds).
- * 
+ *
  * For each server:
  * 1. Queries via GameDig for basic status (map, player count, online/offline)
  * 2. Queries via RCON (if configured) for Steam IDs and extended data
@@ -26,12 +26,12 @@ const { deleteCache } = require("../db/redis");
  * 7. Updates player statistics (separated by game type)
  * 8. Updates map statistics (separated by game type)
  * 9. Emits WebSocket events for real-time updates
- * 
+ *
  * Data Separation:
  * - Players and maps use composite unique keys (steamid+game, name+game)
  * - Same player on CS:GO and CS2 has separate playtime tracking
  * - Same map on CS:GO and CS2 has separate playtime tracking
- * 
+ *
  * Performance:
  * - All servers queried in parallel using Promise.all()
  * - Update time = slowest server response, not sum of all servers
@@ -211,7 +211,7 @@ async function trackMapChange(server, newMap, playerCount) {
 
 async function updateLoop() {
   loadConfig();
-  
+
   // Query all servers in parallel
   const updatePromises = serversConfig.map(async (server) => {
     try {
@@ -236,7 +236,7 @@ async function updateLoop() {
           result.players && result.players.length > 0 ? result.players : [];
 
         // Sanitize map name to remove workshop paths and URL encoding
-        const sanitizedMap = result.map ? sanitizeMapName(result.map) : '';
+        const sanitizedMap = result.map ? sanitizeMapName(result.map) : "";
 
         // Insert/update server status and map
         await pool.query(
@@ -317,7 +317,7 @@ async function updateLoop() {
             if (player.steamid) {
               // Sanitize player name to remove control characters and color codes
               const playerName = sanitizePlayerName(player.name);
-              
+
               // Insert or update player record (separated by game)
               await pool.query(
                 `INSERT INTO players (steamid, latest_name, latest_ip, game, playtime, server_ip, server_port, last_seen)
@@ -361,7 +361,14 @@ async function updateLoop() {
                server_ip=VALUES(server_ip), 
                server_port=VALUES(server_port), 
                last_played=NOW()`,
-            [sanitizedMap, server.game, UPDATE_INTERVAL_SECONDS, server.ip, server.port, UPDATE_INTERVAL_SECONDS],
+            [
+              sanitizedMap,
+              server.game,
+              UPDATE_INTERVAL_SECONDS,
+              server.ip,
+              server.port,
+              UPDATE_INTERVAL_SECONDS,
+            ],
           );
         }
       } else {
@@ -370,7 +377,16 @@ async function updateLoop() {
           `INSERT INTO servers (ip, port, game, status, region, domain, api_id, kzt_id, tickrate, last_update)
            VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, NOW())
            ON DUPLICATE KEY UPDATE status=0, region=VALUES(region), domain=VALUES(domain), api_id=VALUES(api_id), kzt_id=VALUES(kzt_id), tickrate=VALUES(tickrate), last_update=NOW()`,
-          [server.ip, server.port, server.game, server.region || null, server.domain || null, server.apiId || null, server.kztId || null, server.tickrate || null],
+          [
+            server.ip,
+            server.port,
+            server.game,
+            server.region || null,
+            server.domain || null,
+            server.apiId || null,
+            server.kztId || null,
+            server.tickrate || null,
+          ],
         );
 
         // Emit status change if server went offline
@@ -390,10 +406,10 @@ async function updateLoop() {
       );
     }
   });
-  
+
   // Wait for all server updates to complete
   await Promise.all(updatePromises);
-  
+
   // Invalidate caches once after all updates (moved from inside loop)
   await deleteCache("cache:servers:*");
   await deleteCache("cache:players:*");
@@ -404,8 +420,10 @@ async function updateLoop() {
 function startUpdateLoop(intervalMs) {
   // Store the interval in seconds for playtime calculations
   UPDATE_INTERVAL_SECONDS = Math.floor(intervalMs / 1000);
-  logger.info(`Starting update loop with ${UPDATE_INTERVAL_SECONDS} second interval`);
-  
+  logger.info(
+    `Starting update loop with ${UPDATE_INTERVAL_SECONDS} second interval`,
+  );
+
   updateLoop();
   setInterval(updateLoop, intervalMs);
 }

@@ -84,27 +84,29 @@ describe("Validators", () => {
       // STEAM_0:1:0 -> AccountID = (0 * 2) + 1 = 1 -> 76561197960265729
       expect(convertToSteamID64("STEAM_0:1:0")).toBe("76561197960265729");
       expect(convertToSteamID64("STEAM_1:1:0")).toBe("76561197960265729");
-      
+
       // STEAM_0:0:1 -> AccountID = (1 * 2) + 0 = 2 -> 76561197960265730
       expect(convertToSteamID64("STEAM_0:0:1")).toBe("76561197960265730");
-      
+
       // STEAM_0:1:12345 -> AccountID = (12345 * 2) + 1 = 24691 -> 76561197960290419
       expect(convertToSteamID64("STEAM_0:1:12345")).toBe("76561197960290419");
-      
+
       // STEAM_0:0:12345 -> AccountID = (12345 * 2) + 0 = 24690 -> 76561197960290418
       expect(convertToSteamID64("STEAM_0:0:12345")).toBe("76561197960290418");
 
       // Large account ID: STEAM_1:0:242491151 -> AccountID = (242491151 * 2) + 0 = 484982302
-      expect(convertToSteamID64("STEAM_1:0:242491151")).toBe("76561198445248030");
+      expect(convertToSteamID64("STEAM_1:0:242491151")).toBe(
+        "76561198445248030",
+      );
     });
 
     it("should convert SteamID3 to SteamID64", () => {
       // [U:1:1] -> 76561197960265729
       expect(convertToSteamID64("[U:1:1]")).toBe("76561197960265729");
-      
+
       // [U:1:24691] -> 76561197960265728 + 24691 = 76561197960290419
       expect(convertToSteamID64("[U:1:24691]")).toBe("76561197960290419");
-      
+
       // [U:1:12345] -> 76561197960265728 + 12345 = 76561197960278073
       expect(convertToSteamID64("[U:1:12345]")).toBe("76561197960278073");
     });
@@ -173,12 +175,12 @@ describe("Validators", () => {
     it("should remove invisible Unicode formatting characters", () => {
       // U+2067 - RIGHT-TO-LEFT ISOLATE (the actual issue from user's report)
       expect(sanitizePlayerName("ily\u2067\u2067♥")).toBe("ily♥");
-      
+
       // Zero-width spaces and joiners
       expect(sanitizePlayerName("Player\u200BName")).toBe("PlayerName");
       expect(sanitizePlayerName("Test\uFEFFName")).toBe("TestName");
       expect(sanitizePlayerName("Name\u200C\u200DTest")).toBe("NameTest");
-      
+
       // Directional formatting marks
       expect(sanitizePlayerName("Test\u202AName\u202C")).toBe("TestName");
     });
@@ -189,7 +191,7 @@ describe("Validators", () => {
       expect(sanitizePlayerName("Player★Name")).toBe("Player★Name");
       expect(sanitizePlayerName("Test⚡Name")).toBe("Test⚡Name");
       expect(sanitizePlayerName("Cool😎Player")).toBe("Cool😎Player");
-      
+
       // Non-ASCII alphabets should be preserved
       expect(sanitizePlayerName("Игрок")).toBe("Игрок"); // Cyrillic
       expect(sanitizePlayerName("玩家")).toBe("玩家"); // Chinese
@@ -224,14 +226,16 @@ describe("Validators", () => {
 
     it("should handle complex real-world CS:GO/CS2 names", () => {
       // Name with color codes (\x07) - control chars removed but color values remain as text
-      expect(sanitizePlayerName("\x07FF0000Red\x07FFFFFF Name")).toBe("FF0000RedFFFFFF Name");
-      
+      expect(sanitizePlayerName("\x07FF0000Red\x07FFFFFF Name")).toBe(
+        "FF0000RedFFFFFF Name",
+      );
+
       // Name with various control characters mixed in
       expect(sanitizePlayerName("\x01\x02\x03Player\x04\x05")).toBe("Player");
-      
+
       // The actual user's case: invisible U+2067 removed, heart kept
       expect(sanitizePlayerName("ily\u2067\u2067♥")).toBe("ily♥");
-      
+
       // Name that becomes empty after sanitization
       expect(sanitizePlayerName("\x01\x02\x03\x04\x05")).toBe(null);
     });
@@ -239,15 +243,16 @@ describe("Validators", () => {
 
   describe("sanitizeMapName", () => {
     it("should handle URL-encoded workshop paths", () => {
-      expect(sanitizeMapName("workshop%2F793414645%2Fkz_2seasons_winter_final"))
-        .toBe("kz_2seasons_winter_final");
+      expect(
+        sanitizeMapName("workshop%2F793414645%2Fkz_2seasons_winter_final"),
+      ).toBe("kz_2seasons_winter_final");
     });
 
     it("should handle regular workshop paths", () => {
-      expect(sanitizeMapName("workshop/793414645/kz_synergy_x"))
-        .toBe("kz_synergy_x");
-      expect(sanitizeMapName("workshop\\793414645\\de_dust2"))
-        .toBe("de_dust2");
+      expect(sanitizeMapName("workshop/793414645/kz_synergy_x")).toBe(
+        "kz_synergy_x",
+      );
+      expect(sanitizeMapName("workshop\\793414645\\de_dust2")).toBe("de_dust2");
     });
 
     it("should handle maps folder paths", () => {
@@ -261,7 +266,9 @@ describe("Validators", () => {
     });
 
     it("should handle various map prefixes", () => {
-      expect(sanitizeMapName("workshop/123/kzpro_aircontrol")).toBe("kzpro_aircontrol");
+      expect(sanitizeMapName("workshop/123/kzpro_aircontrol")).toBe(
+        "kzpro_aircontrol",
+      );
       expect(sanitizeMapName("workshop/123/surf_mesa")).toBe("surf_mesa");
       expect(sanitizeMapName("workshop/123/bhop_arcane")).toBe("bhop_arcane");
       expect(sanitizeMapName("workshop/123/aim_redline")).toBe("aim_redline");

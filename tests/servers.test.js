@@ -18,23 +18,25 @@ describe("Server Endpoints", () => {
   describe("GET /servers", () => {
     it("should return servers list with metadata", async () => {
       // Mock server data
-      pool.query.mockResolvedValueOnce([[
-        {
-          ip: "192.168.1.1",
-          port: 27015,
-          game: "csgo",
-          hostname: "Test Server",
-          version: "1.0",
-          os: "Linux",
-          secure: 1,
-          status: 1,
-          map: "de_dust2",
-          player_count: 10,
-          maxplayers: 32,
-          bot_count: 0,
-          players_list: JSON.stringify([])
-        }
-      ]]);
+      pool.query.mockResolvedValueOnce([
+        [
+          {
+            ip: "192.168.1.1",
+            port: 27015,
+            game: "csgo",
+            hostname: "Test Server",
+            version: "1.0",
+            os: "Linux",
+            secure: 1,
+            status: 1,
+            map: "de_dust2",
+            player_count: 10,
+            maxplayers: 32,
+            bot_count: 0,
+            players_list: JSON.stringify([]),
+          },
+        ],
+      ]);
 
       const response = await request(app)
         .get("/servers")
@@ -48,23 +50,25 @@ describe("Server Endpoints", () => {
     });
 
     it("should filter by game type", async () => {
-      pool.query.mockResolvedValueOnce([[
-        {
-          ip: "192.168.1.1",
-          port: 27015,
-          game: "csgo",
-          hostname: "Test Server",
-          version: "1.0",
-          os: "Linux",
-          secure: 1,
-          status: 1,
-          map: "de_dust2",
-          player_count: 10,
-          maxplayers: 32,
-          bot_count: 0,
-          players_list: JSON.stringify([])
-        }
-      ]]);
+      pool.query.mockResolvedValueOnce([
+        [
+          {
+            ip: "192.168.1.1",
+            port: 27015,
+            game: "csgo",
+            hostname: "Test Server",
+            version: "1.0",
+            os: "Linux",
+            secure: 1,
+            status: 1,
+            map: "de_dust2",
+            player_count: 10,
+            maxplayers: 32,
+            bot_count: 0,
+            players_list: JSON.stringify([]),
+          },
+        ],
+      ]);
 
       const response = await request(app)
         .get("/servers?game=csgo")
@@ -76,23 +80,25 @@ describe("Server Endpoints", () => {
     });
 
     it("should filter by status", async () => {
-      pool.query.mockResolvedValueOnce([[
-        {
-          ip: "192.168.1.1",
-          port: 27015,
-          game: "csgo",
-          hostname: "Test Server",
-          version: "1.0",
-          os: "Linux",
-          secure: 1,
-          status: 1,
-          map: "de_dust2",
-          player_count: 10,
-          maxplayers: 32,
-          bot_count: 0,
-          players_list: JSON.stringify([])
-        }
-      ]]);
+      pool.query.mockResolvedValueOnce([
+        [
+          {
+            ip: "192.168.1.1",
+            port: 27015,
+            game: "csgo",
+            hostname: "Test Server",
+            version: "1.0",
+            os: "Linux",
+            secure: 1,
+            status: 1,
+            map: "de_dust2",
+            player_count: 10,
+            maxplayers: 32,
+            bot_count: 0,
+            players_list: JSON.stringify([]),
+          },
+        ],
+      ]);
 
       const response = await request(app)
         .get("/servers?status=1")

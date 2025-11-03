@@ -100,7 +100,8 @@ logger.logRequest = (req, res, duration) => {
     url: req.url,
     status: res.statusCode,
     duration: `${duration}ms`,
-    ip: req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+    ip:
+      req.ip || req.headers["x-forwarded-for"] || req.connection.remoteAddress,
     userAgent: req.get("user-agent"),
   };
 

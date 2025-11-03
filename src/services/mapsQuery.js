@@ -4,17 +4,18 @@ const logger = require("../utils/logger");
 
 /**
  * GOKZ/CS2KZ API Service
- * 
+ *
  * Fetches map data from GlobalKZ API for CS:GO maps and CS2KZ API for CS2 maps.
- * 
+ *
  * GOKZ API Reference (CS:GO):
  * https://kztimerglobal.com/api/v2/maps/name/{mapname}
- * 
+ *
  * CS2KZ API Reference (CS2):
  * https://api.cs2kz.org/maps/{mapname}
  */
 
-const GOKZ_API_URL = process.env.GOKZ_API_URL || "https://kztimerglobal.com/api/v2";
+const GOKZ_API_URL =
+  process.env.GOKZ_API_URL || "https://kztimerglobal.com/api/v2";
 const CS2KZ_API_URL = process.env.CS2KZ_API_URL || "https://api.cs2kz.org";
 const CACHE_DURATION_HOURS = 168; // 7 days - map info doesn't change often
 
@@ -53,7 +54,9 @@ async function fetchMapFromGOKZ(mapName) {
 
     return null;
   } catch (error) {
-    logger.error(`Failed to fetch map ${mapName} from GOKZ API: ${error.message}`);
+    logger.error(
+      `Failed to fetch map ${mapName} from GOKZ API: ${error.message}`,
+    );
     return null;
   }
 }
@@ -81,7 +84,7 @@ async function fetchMapFromCS2KZ(mapName) {
     if (response.data) {
       // Keep mappers as array of objects with full details
       const mappers = response.data.mappers || [];
-      
+
       // Keep courses with their full details
       const courses = response.data.courses || [];
 
@@ -100,7 +103,9 @@ async function fetchMapFromCS2KZ(mapName) {
 
     return null;
   } catch (error) {
-    logger.error(`Failed to fetch map ${mapName} from CS2KZ API: ${error.message}`);
+    logger.error(
+      `Failed to fetch map ${mapName} from CS2KZ API: ${error.message}`,
+    );
     return null;
   }
 }
@@ -110,7 +115,7 @@ async function fetchMapFromCS2KZ(mapName) {
  * @param {string} mapName - Name of the map
  * @param {Object} globalInfo - Global info data from GOKZ
  */
-async function updateMapGlobalInfo(mapName, globalInfo, game = 'csgo') {
+async function updateMapGlobalInfo(mapName, globalInfo, game = "csgo") {
   if (!globalInfo) {
     return;
   }
@@ -121,12 +126,14 @@ async function updateMapGlobalInfo(mapName, globalInfo, game = 'csgo') {
        SET globalInfo = ?, 
            globalInfo_updated_at = NOW()
        WHERE name = ? AND game = ?`,
-      [JSON.stringify(globalInfo), mapName, game]
+      [JSON.stringify(globalInfo), mapName, game],
     );
 
     logger.info(`Updated globalInfo for ${game} map: ${mapName}`);
   } catch (error) {
-    logger.error(`Failed to update globalInfo for ${mapName}: ${error.message}`);
+    logger.error(
+      `Failed to update globalInfo for ${mapName}: ${error.message}`,
+    );
   }
 }
 
@@ -143,10 +150,10 @@ async function getMapsNeedingGlobalInfo(game) {
        WHERE game = ?
          AND (globalInfo_updated_at IS NULL 
               OR globalInfo_updated_at < DATE_SUB(NOW(), INTERVAL ? HOUR))`,
-      [game, CACHE_DURATION_HOURS]
+      [game, CACHE_DURATION_HOURS],
     );
 
-    return rows.map(row => row.name);
+    return rows.map((row) => row.name);
   } catch (error) {
     logger.error(`Failed to get maps needing globalInfo: ${error.message}`);
     return [];
@@ -159,62 +166,66 @@ async function getMapsNeedingGlobalInfo(game) {
  * Processes ALL maps that need updates (no limit)
  */
 async function updateMissingGlobalInfo() {
-  logger.info('Starting map globalInfo update cycle...');
-  
+  logger.info("Starting map globalInfo update cycle...");
+
   try {
     // Update CS:GO maps from GOKZ
-    const csgoMaps = await getMapsNeedingGlobalInfo('csgo');
-    
+    const csgoMaps = await getMapsNeedingGlobalInfo("csgo");
+
     if (csgoMaps.length > 0) {
       logger.info(`Updating globalInfo for ${csgoMaps.length} CS:GO maps...`);
-      
+
       let successCount = 0;
       let failCount = 0;
-      
+
       for (const mapName of csgoMaps) {
         const globalInfo = await fetchMapFromGOKZ(mapName);
         if (globalInfo) {
-          await updateMapGlobalInfo(mapName, globalInfo, 'csgo');
+          await updateMapGlobalInfo(mapName, globalInfo, "csgo");
           successCount++;
         } else {
           failCount++;
         }
         // Small delay to avoid hammering the API
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
-      
-      logger.info(`Completed CS:GO globalInfo update: ${successCount} successful, ${failCount} not found`);
+
+      logger.info(
+        `Completed CS:GO globalInfo update: ${successCount} successful, ${failCount} not found`,
+      );
     } else {
-      logger.info('No CS:GO maps need globalInfo updates');
+      logger.info("No CS:GO maps need globalInfo updates");
     }
 
     // Update CS2 maps from CS2KZ
-    const cs2Maps = await getMapsNeedingGlobalInfo('counterstrike2');
-    
+    const cs2Maps = await getMapsNeedingGlobalInfo("counterstrike2");
+
     if (cs2Maps.length > 0) {
       logger.info(`Updating globalInfo for ${cs2Maps.length} CS2 maps...`);
-      
+
       let successCount = 0;
       let failCount = 0;
-      
+
       for (const mapName of cs2Maps) {
         const globalInfo = await fetchMapFromCS2KZ(mapName);
         if (globalInfo) {
-          await updateMapGlobalInfo(mapName, globalInfo, 'counterstrike2');
+          await updateMapGlobalInfo(mapName, globalInfo, "counterstrike2");
           successCount++;
         } else {
           failCount++;
         }
         // Small delay to avoid hammering the API
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
-      
-      logger.info(`Completed CS2 globalInfo update: ${successCount} successful, ${failCount} not found`);
+
+      logger.info(
+        `Completed CS2 globalInfo update: ${successCount} successful, ${failCount} not found`,
+      );
     } else {
-      logger.info('No CS2 maps need globalInfo updates');
+      logger.info("No CS2 maps need globalInfo updates");
     }
-    
-    logger.info('Map globalInfo update cycle complete');
+
+    logger.info("Map globalInfo update cycle complete");
   } catch (error) {
     logger.error(`Failed to update missing globalInfo: ${error.message}`);
   }
@@ -225,15 +236,15 @@ async function updateMissingGlobalInfo() {
  * @param {string} mapName - Map name to refresh
  * @param {string} game - Game type ('csgo' or 'counterstrike2')
  */
-async function refreshMapGlobalInfo(mapName, game = 'csgo') {
+async function refreshMapGlobalInfo(mapName, game = "csgo") {
   let globalInfo;
-  
-  if (game === 'csgo') {
+
+  if (game === "csgo") {
     globalInfo = await fetchMapFromGOKZ(mapName);
-  } else if (game === 'counterstrike2') {
+  } else if (game === "counterstrike2") {
     globalInfo = await fetchMapFromCS2KZ(mapName);
   }
-  
+
   if (globalInfo) {
     await updateMapGlobalInfo(mapName, globalInfo, game);
   }
@@ -244,14 +255,18 @@ async function refreshMapGlobalInfo(mapName, game = 'csgo') {
  * @param {number} intervalMs - Interval in milliseconds (default: 6 hours)
  */
 function startGlobalInfoUpdateJob(intervalMs = 6 * 60 * 60 * 1000) {
-  logger.info(`Starting map globalInfo update job (interval: ${intervalMs / 1000}s = ${intervalMs / 1000 / 60 / 60}hrs)`);
+  logger.info(
+    `Starting map globalInfo update job (interval: ${intervalMs / 1000}s = ${intervalMs / 1000 / 60 / 60}hrs)`,
+  );
   logger.info(`GOKZ API URL: ${GOKZ_API_URL}`);
   logger.info(`CS2KZ API URL: ${CS2KZ_API_URL}`);
-  logger.info(`Cache duration: ${CACHE_DURATION_HOURS} hours (${CACHE_DURATION_HOURS / 24} days)`);
-  
+  logger.info(
+    `Cache duration: ${CACHE_DURATION_HOURS} hours (${CACHE_DURATION_HOURS / 24} days)`,
+  );
+
   // Run immediately on startup
   updateMissingGlobalInfo();
-  
+
   // Then run periodically
   setInterval(updateMissingGlobalInfo, intervalMs);
 }

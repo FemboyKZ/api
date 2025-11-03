@@ -55,20 +55,18 @@ function validateEnvironment() {
   // Warn if optional API keys are missing
   if (!process.env.STEAM_API_KEY) {
     logger.warn(
-      "STEAM_API_KEY not set - Steam avatar fetching and Steam Master Server queries will not work"
+      "STEAM_API_KEY not set - Steam avatar fetching and Steam Master Server queries will not work",
     );
   }
 
   if (!process.env.GOKZ_API_URL) {
     logger.warn(
-      "GOKZ_API_URL not set - CS:GO map metadata will not be fetched"
+      "GOKZ_API_URL not set - CS:GO map metadata will not be fetched",
     );
   }
 
   if (!process.env.CS2KZ_API_URL) {
-    logger.warn(
-      "CS2KZ_API_URL not set - CS2 map metadata will not be fetched"
-    );
+    logger.warn("CS2KZ_API_URL not set - CS2 map metadata will not be fetched");
   }
 
   logger.info("Environment validation passed");

@@ -71,7 +71,7 @@ This is a game server tracking API built with Express that polls game servers vi
 
 - Redis caching is optional (enabled via `REDIS_ENABLED=true`)
 - Cache middleware uses key generators for consistent cache keys
-- Cache invalidation after data updates: `invalidateCache('cache:servers:*')` 
+- Cache invalidation after data updates: `invalidateCache('cache:servers:*')`
 - TTL varies by endpoint: 30s (servers/players/maps), 60s (history), 300s (trends)
 - Cache keys include query params: `cache:{endpoint}:{param1}:{param2}:...`
 
@@ -208,12 +208,10 @@ mysql -u root -p csmonitor < db/seed.sql
   - Endpoint: `GetPlayerSummaries/v2` (avatars)
   - Rate limited to 100 players per hour to stay within limits
   - 24-hour cache to minimize API calls
-  
 - **GlobalKZ API (CS:GO)**: Fetches CS:GO map metadata
   - Endpoint: `/maps/name/{mapname}`
   - Data: workshop_url, difficulty, filesize, validated, created_on, updated_on, download_url, id
   - 7-day cache, processes ALL maps needing updates (no limit)
-  
 - **CS2KZ API (CS2)**: Fetches CS2 map metadata
   - Endpoint: `/maps/{mapname}`
   - Data: workshop_id, mappers (array), description, checksum, approved_at, courses (array), created_at, updated_at, id

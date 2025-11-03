@@ -149,7 +149,8 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
 
     const [maps] = await pool.query(query, params);
 
-    let countQuery = "SELECT COUNT(DISTINCT CONCAT(name, '-', game)) as total FROM maps WHERE 1=1";
+    let countQuery =
+      "SELECT COUNT(DISTINCT CONCAT(name, '-', game)) as total FROM maps WHERE 1=1";
     const countParams = [];
     if (game) {
       countQuery += " AND game = ?";
@@ -269,7 +270,8 @@ router.get("/:mapname", async (req, res) => {
       return res.status(404).json({ error: "Map not found" });
     }
 
-    let statsQuery = "SELECT game, SUM(playtime) as total_playtime, MAX(last_played) as last_played FROM maps WHERE name = ?";
+    let statsQuery =
+      "SELECT game, SUM(playtime) as total_playtime, MAX(last_played) as last_played FROM maps WHERE name = ?";
     const statsParams = [sanitizedMapName];
 
     if (game) {

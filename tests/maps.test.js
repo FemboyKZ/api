@@ -99,7 +99,9 @@ describe("Maps Endpoints", () => {
     });
 
     it("should handle pagination parameters", async () => {
-      pool.query.mockResolvedValueOnce([[]]).mockResolvedValueOnce([[{ total: 0 }]]);
+      pool.query
+        .mockResolvedValueOnce([[]])
+        .mockResolvedValueOnce([[{ total: 0 }]]);
 
       const response = await request(app)
         .get("/maps?page=2&limit=10")

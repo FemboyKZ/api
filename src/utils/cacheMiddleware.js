@@ -80,12 +80,12 @@ function generateCacheKey(prefix, params = {}, query = {}) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([k, v]) => `${k}:${v}`)
     .join(":");
-  
+
   const queryStr = Object.entries(query)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([k, v]) => `${k}:${v}`)
     .join(":");
-  
+
   return `cache:${prefix}${paramStr ? `:${paramStr}` : ""}${queryStr ? `:${queryStr}` : ""}`;
 }
 

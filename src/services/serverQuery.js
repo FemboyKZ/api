@@ -4,19 +4,19 @@ const { queryRcon, convertToSteamID64 } = require("./rconQuery");
 
 /**
  * Query a game server using GameDig and optionally RCON for extended data
- * 
+ *
  * GameDig provides:
  * - Basic status (online/offline), map name, player count
  * - Limited player info (names only, no Steam IDs)
- * 
+ *
  * RCON provides (when configured):
  * - Steam IDs for all players (SteamID64 format)
  * - Accurate player data: connection time, ping, loss, IP address
  * - Server metadata: hostname, OS, secure status, bot count
- * 
+ *
  * When RCON is available and returns player data, it replaces GameDig player data
  * entirely for accuracy and completeness (Steam IDs, connection times, etc).
- * 
+ *
  * @param {string} ip - Server IP address
  * @param {number} port - Game server query port
  * @param {string} game - Game type ('csgo', 'counterstrike2', etc.)
@@ -35,7 +35,9 @@ async function queryServer(ip, port, game, rconPort, rconPassword) {
       socketTimeout: 3000,
     });
 
-    logger.info(`GameDig query successful: ${ip}:${port} - ${state.players.length} players`);
+    logger.info(
+      `GameDig query successful: ${ip}:${port} - ${state.players.length} players`,
+    );
 
     // Query RCON for detailed player data and server metadata
     let rconData = null;
@@ -49,7 +51,7 @@ async function queryServer(ip, port, game, rconPort, rconPassword) {
       // RCON: Full player data with Steam IDs converted to SteamID64
       players = rconData.players.map((p) => {
         const cleanName = p.name?.trim() || null;
-        
+
         return {
           name: cleanName,
           steamid: p.steamid ? convertToSteamID64(p.steamid) : null,
@@ -66,7 +68,7 @@ async function queryServer(ip, port, game, rconPort, rconPassword) {
       // GameDig fallback: Basic player data (no Steam IDs)
       players = state.players.map((p) => {
         const cleanName = p.name?.trim() || null;
-        
+
         return {
           name: cleanName,
           score: p.raw?.score || 0,

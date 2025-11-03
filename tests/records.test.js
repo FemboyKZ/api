@@ -1,7 +1,9 @@
 const request = require("supertest");
 const app = require("../src/app");
 const pool = require("../src/db");
-const { fetchRecentRecordsForServers } = require("../src/services/cs2kzRecords");
+const {
+  fetchRecentRecordsForServers,
+} = require("../src/services/cs2kzRecords");
 
 // Mock the CS2KZ records service
 jest.mock("../src/services/cs2kzRecords");
@@ -174,9 +176,7 @@ describe("Records API", () => {
     it("should return 404 when server not found", async () => {
       pool.query = jest.fn().mockResolvedValue([[]]);
 
-      const response = await request(app).get(
-        "/records/server/1.2.3.4/27015",
-      );
+      const response = await request(app).get("/records/server/1.2.3.4/27015");
 
       expect(response.status).toBe(404);
       expect(response.body).toHaveProperty("error");

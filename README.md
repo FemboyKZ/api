@@ -510,6 +510,7 @@ Without RCON, only basic GameDig data is available (server status, map, player c
 **CS2 vs CS:GO Detection:**
 
 The system automatically detects CS2 vs CS:GO based on the server version:
+
 - CS:GO: version 1.38.x.x
 - CS2: version 1.40.x.x or higher
 
@@ -603,16 +604,19 @@ See `db/migrations/README.md` for detailed migration information.
 The application uses Winston for logging with environment-based configuration:
 
 **Production** (`NODE_ENV=production`):
+
 - Console: info, warn, error only
 - Files: All levels logged to `logs/combined.log`, `logs/error.log`, `logs/access.log`
 - Log rotation: 10MB max, 5 files kept
 
 **Development** (`NODE_ENV=development`):
+
 - Console: All levels including debug, with colors
 - Files: Same as production
 - Verbose output for debugging
 
 **Client IP Logging:**
+
 - Properly configured for reverse proxy environments
 - Trusts `X-Forwarded-For` header when behind Apache/Nginx
 - Logs real client IPs instead of proxy IP
@@ -644,6 +648,7 @@ To add documentation for new endpoints, use JSDoc comments:
 ### Privacy & Security
 
 **Player IP Addresses:**
+
 - Collected from RCON for administrative/moderation purposes
 - Stored in `player_ips` table with complete history
 - **Never exposed** through public API endpoints
@@ -651,10 +656,12 @@ To add documentation for new endpoints, use JSDoc comments:
 - Only accessible via direct database access
 
 **Rate Limiting:**
+
 - 100 requests per 15 minutes per IP (configurable via `RATE_LIMIT_MAX`)
 - Applies to all endpoints
 
 **Input Validation:**
+
 - All inputs sanitized and validated
 - SQL injection protection via parameterized queries
 - Steam ID format validation (supports SteamID64, SteamID3, SteamID2)
