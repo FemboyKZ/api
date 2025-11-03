@@ -6,8 +6,8 @@ FKZ API for tracking game servers - A robust server tracking API that polls game
 
 Interactive API documentation is available at `/docs` when the server is running:
 
-- **Local**: http://localhost:3000/docs
-- **Production**: https://api.femboy.kz/docs
+- **Local**: [localhost:3000/docs](http://localhost:3000/docs)
+- **Production**: [api.femboy.kz/docs](https://api.femboy.kz/docs)
 
 The documentation is automatically generated from JSDoc comments in the code using Swagger/OpenAPI 3.0.
 
@@ -48,39 +48,39 @@ The documentation is automatically generated from JSDoc comments in the code usi
 
 1. Clone the repository:
 
-```bash
-git clone <repository-url>
-cd server-api
-```
+   ```bash
+   git clone <repository-url>
+   cd server-api
+   ```
 
 2. Install dependencies:
 
-```bash
-npm install
-```
+   ```bash
+   npm install
+   ```
 
 3. Create your environment configuration:
 
-```bash
-cp .env.example .env
-```
+   ```bash
+   cp .env.example .env
+   ```
 
 4. Configure your `.env` file:
 
-```env
-DB_HOST=localhost
-DB_USER=your_db_user
-DB_PASSWORD=your_db_password
-DB_NAME=your_db_name
-PORT=3000
-```
+   ```env
+   DB_HOST=localhost
+   DB_USER=your_db_user
+   DB_PASSWORD=your_db_password
+   DB_NAME=your_db_name
+   PORT=3000
+   ```
 
 5. Set up the database:
 
-```bash
-# Run the schema SQL file in your MySQL database
-mysql -u your_user -p your_database < db/schema.sql
-```
+   ```bash
+   # Run the schema SQL file in your MySQL database
+   mysql -u your_user -p your_database < db/schema.sql
+   ```
 
 6. Configure servers to monitor:
 
@@ -152,309 +152,6 @@ For production deployment behind Apache/Nginx:
 3. Configure reverse proxy with `X-Forwarded-For` header
 4. The app automatically trusts proxy headers for correct client IP logging
 
-## API Documentation
-
-### Base URL
-
-```txt
-http://localhost:3000/api
-```
-
----
-
-### Servers
-
-### List All Servers
-
-```http
-GET /servers
-```
-
-**Query Parameters:**
-
-- `game` (optional) - Filter by game type (e.g., `csgo`, `counterstrike2`)
-- `status` (optional) - Filter by status (0 = offline, 1 = online)
-
-**Example Request:**
-
-```bash
-curl http://localhost:3000/servers?game=counterstrike2
-```
-
-**Example Response:**
-
-```json
-{
-  "playersTotal": 45,
-  "serversOnline": 3,
-  "1.2.3.4:27015": {
-    "ip": "1.2.3.4",
-    "port": 27015,
-    "game": "csgo",
-    "hostname": "My CS:GO Server",
-    "version": "1.38.8.1",
-    "os": "Linux",
-    "secure": 1,
-    "status": 1,
-    "map": "kz_synergy_x",
-    "players": 15,
-    "maxplayers": 32,
-    "bots": 0,
-    "playersList": [
-      {
-        "userid": 12,
-        "name": "PlayerName",
-        "steamid": "85568392932669237",
-        "time": "12:34",
-        "ping": 45,
-        "loss": 0,
-        "state": "active",
-        "bot": false
-      }
-    ]
-  }
-}
-```
-
-**Note:** Player IPs are collected internally but not exposed via the API for privacy.
-
-#### Get Servers by IP
-
-```http
-GET /servers/:ip
-```
-
-**Parameters:**
-
-- `ip` (required) - Server IP address
-
-**Example Request:**
-
-```bash
-curl http://localhost:3000/servers/1.2.3.4
-```
-
-**Example Response:**
-
-```json
-[
-  {
-    "id": 1,
-    "ip": "1.2.3.4",
-    "port": 27015,
-    "game": "counterstrike2",
-    "status": 1,
-    "map": "de_dust2",
-    "player_count": 15,
-    "version": "1.0.0",
-    "last_update": "2025-10-25T10:30:00.000Z"
-  }
-]
-```
-
----
-
-### Players
-
-#### List All Players
-
-```http
-GET /players
-```
-
-**Query Parameters:**
-
-- `page` (optional, default: 1) - Page number
-- `limit` (optional, default: 50, max: 100) - Results per page
-- `sort` (optional, default: `total_playtime`) - Sort field (`total_playtime`, `steamid`)
-- `order` (optional, default: `desc`) - Sort order (`asc`, `desc`)
-- `game` (optional) - Filter by game type (`csgo`, `counterstrike2`)
-- `name` (optional) - Filter by player name (partial match)
-
-**Note:** Player statistics are separated by game type. A player's CS:GO and CS2 playtime are tracked independently.
-
-**Example Request:**
-
-```bash
-curl "http://localhost:3000/players?page=1&limit=20&sort=total_playtime&order=desc"
-```
-
-**Example Response:**
-
-```json
-{
-  "data": [
-    {
-      "steamid": "76561198012345678",
-      "name": "PlayerName",
-      "game": "csgo",
-      "total_playtime": 36000
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 50,
-    "total": 150,
-    "totalPages": 3
-  }
-}
-```
-
-#### Get Player Details
-
-```http
-GET /players/:steamid
-```
-
-**Parameters:**
-
-- `steamid` (required) - Player's SteamID (SteamID64, SteamID3, or SteamID2 format)
-
-**Example Request:**
-
-```bash
-curl http://localhost:3000/players/76561198012345678
-```
-
-**Example Response:**
-
-```json
-{
-  "steamid": "76561198012345678",
-  "total_playtime": 36000,
-  "last_seen": "2025-10-25T10:30:00.000Z",
-  "sessions": [
-    {
-      "id": 1,
-      "steamid": "76561198012345678",
-      "name": "PlayerName",
-      "playtime": 3600,
-      "server_ip": "37.27.107.76",
-      "server_port": 27015,
-      "last_seen": "2025-10-25T10:30:00.000Z"
-    }
-  ]
-}
-```
-
----
-
-### Maps
-
-### List All Maps
-
-```http
-GET /maps
-```
-
-**Query Parameters:**
-
-- `page` (optional, default: 1) - Page number
-- `limit` (optional, default: 10, max: 100) - Results per page
-- `sort` (optional, default: `total_playtime`) - Sort field (`total_playtime`, `name`)
-- `order` (optional, default: `desc`) - Sort order (`asc`, `desc`)
-- `server` (optional) - Filter by server (format: `ip:port`)
-- `name` (optional) - Filter by map name (partial match)
-- `game` (optional) - Filter by game type (`csgo`, `counterstrike2`)
-
-**Note:** Map statistics are separated by game type. The same map played on CS:GO and CS2 servers has separate playtime tracking.
-
-**Example Request:**
-
-```bash
-curl "http://localhost:3000/maps?page=1&limit=10&sort=total_playtime"
-```
-
-**Example Response:**
-
-```json
-{
-  "data": [
-    {
-      "name": "de_dust2",
-      "total_playtime": 120000
-    },
-    {
-      "name": "de_mirage",
-      "total_playtime": 95000
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 10,
-    "total": 45,
-    "totalPages": 5
-  }
-}
-```
-
----
-
-### Health & Stats
-
-#### Health Check
-
-```http
-GET /health
-```
-
-**Example Response:**
-
-```json
-{
-  "status": "ok",
-  "timestamp": "2025-10-25T10:30:00.000Z",
-  "database": "connected"
-}
-```
-
-#### API Statistics
-
-```http
-GET /stats
-```
-
-**Example Response:**
-
-```json
-{
-  "servers": {
-    "total": 20,
-    "online": 15,
-    "offline": 5
-  },
-  "players": {
-    "total": 1250,
-    "active_24h": 320
-  },
-  "maps": {
-    "total": 45
-  },
-  "uptime": 86400
-}
-```
-
----
-
-## Error Responses
-
-All endpoints return errors in the following format:
-
-```json
-{
-  "error": "Error message description"
-}
-```
-
-**Common HTTP Status Codes:**
-
-- `200` - Success
-- `400` - Bad Request (invalid input)
-- `404` - Not Found
-- `500` - Internal Server Error
-
----
-
 ## Configuration
 
 ### Server Configuration
@@ -514,7 +211,7 @@ The system automatically detects CS2 vs CS:GO based on the server version:
 - CS:GO: version 1.38.x.x
 - CS2: version 1.40.x.x or higher
 
-For CS2 servers, the `status_json` RCON command is used to retrieve Steam IDs.
+For CS2 servers, the custom plugin `css_status` RCON command is used to retrieve Steam IDs.
 
 ### Update Interval
 
@@ -541,7 +238,7 @@ With parallel queries, update time is determined by the slowest server response,
 
 ```txt
 server-api/
-├── config/           # Server configuration files
+├── config/          # Server configuration files
 ├── db/              # Database schemas and migrations
 ├── src/
 │   ├── api/         # API route handlers
@@ -551,98 +248,6 @@ server-api/
 │   ├── app.js       # Express app configuration
 │   └── server.js    # Server entry point
 └── package.json
-```
-
-### Logging
-
-Logs are written to:
-
-- Console (all levels)
-- `app.log` file (info and error levels)
-
-### Database Schema
-
-See `db/schema.sql` for the complete database structure. Main tables:
-
-- `servers` - Server status and information (includes RCON data: hostname, os, secure, bot_count)
-- `players` - Player activity and playtime (separated by game with unique constraint on steamid+game)
-- `player_names` - Complete history of all player names with use counts
-- `player_ips` - Complete history of all player IPs with use counts (PRIVATE - not exposed via API)
-- `maps` - Map playtime statistics (separated by game with unique constraint on name+game)
-- `server_history` - Historical snapshots of server status
-- `player_sessions` - Player join/leave tracking with Steam IDs
-- `map_history` - Map rotation tracking with player count metrics
-
-**Key Features:**
-
-- Players and maps use composite unique keys (steamid+game, name+game) for per-game statistics
-- Player history tracking with `latest_name` and `latest_ip` in players table
-- Separate history tables track all names/IPs ever used (IPs kept private)
-- JSON storage for players_list with automatic parsing and IP stripping before API response
-- Session tracking requires RCON for Steam IDs
-
-### Database Migrations
-
-Migrations are located in `db/migrations/`. To apply a migration:
-
-```bash
-mysql -u your_user -p your_database < db/migrations/migration_file.sql
-```
-
-**Available Migrations:**
-
-1. `add_server_details.sql` - Adds RCON-sourced server details
-2. `add_game_to_players_with_dedup.sql` - Adds game column and deduplicates players
-3. `add_game_to_maps_with_dedup.sql` - Adds game column and deduplicates maps
-4. `add_player_history_tracking.sql` - Adds player name and IP history tracking
-5. `remove_server_steamid.sql` - Removes unused server owner Steam ID column
-
-See `db/migrations/README.md` for detailed migration information.
-
-### Logging
-
-The application uses Winston for logging with environment-based configuration:
-
-**Production** (`NODE_ENV=production`):
-
-- Console: info, warn, error only
-- Files: All levels logged to `logs/combined.log`, `logs/error.log`, `logs/access.log`
-- Log rotation: 10MB max, 5 files kept
-
-**Development** (`NODE_ENV=development`):
-
-- Console: All levels including debug, with colors
-- Files: Same as production
-- Verbose output for debugging
-
-**Client IP Logging:**
-
-- Properly configured for reverse proxy environments
-- Trusts `X-Forwarded-For` header when behind Apache/Nginx
-- Logs real client IPs instead of proxy IP
-
-### API Documentation
-
-The API provides interactive Swagger documentation accessible at `/docs`:
-
-- Built with Swagger UI and OpenAPI 3.0 specification
-- Auto-generated from JSDoc comments in route files
-- Provides request/response examples, schema validation, and API testing interface
-- Available at http://localhost:3000/docs (or your production URL)
-
-To add documentation for new endpoints, use JSDoc comments:
-
-```javascript
-/**
- * @swagger
- * /endpoint:
- *   get:
- *     summary: Endpoint description
- *     tags: [Category]
- *     responses:
- *       200:
- *         description: Success
- */
 ```
 
 ### Privacy & Security
