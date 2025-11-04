@@ -28,18 +28,10 @@ const {
  *           type: string
  *           description: Player name (latest seen across all games)
  *           example: "PlayerName"
- *         avatar_small:
+ *         avatar:
  *           type: string
- *           description: Small avatar URL (32x32)
- *           example: "https://avatars.steamstatic.com/abc123_small.jpg"
- *         avatar_medium:
- *           type: string
- *           description: Medium avatar URL (64x64)
- *           example: "https://avatars.steamstatic.com/abc123_medium.jpg"
- *         avatar_full:
- *           type: string
- *           description: Full avatar URL (184x184)
- *           example: "https://avatars.steamstatic.com/abc123_full.jpg"
+ *           description: Avatar URL (32x32, append _medium.jpg or _full.jpg for larger sizes)
+ *           example: "https://avatars.steamstatic.com/abc123.jpg"
  *         csgo:
  *           type: object
  *           description: CS:GO statistics (empty object if player hasn't played CS:GO)
@@ -69,15 +61,9 @@ const {
  *       properties:
  *         steamid:
  *           type: string
- *         avatar_small:
+ *         avatar:
  *           type: string
- *           description: Small avatar URL (32x32)
- *         avatar_medium:
- *           type: string
- *           description: Medium avatar URL (64x64)
- *         avatar_full:
- *           type: string
- *           description: Full avatar URL (184x184)
+ *           description: Avatar URL (32x32, append _medium.jpg or _full.jpg for larger sizes)
  *         csgo:
  *           type: object
  *           properties:
@@ -194,9 +180,7 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
         game, 
         SUM(playtime) as total_playtime,
         MAX(last_seen) as last_seen,
-        MAX(avatar_small) as avatar_small,
-        MAX(avatar_medium) as avatar_medium,
-        MAX(avatar_full) as avatar_full
+        MAX(avatar) as avatar
       FROM players 
       WHERE 1=1
     `;
@@ -224,9 +208,7 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
         playerMap.set(row.steamid, {
           steamid: row.steamid,
           name: row.name, // Will be updated to most recent
-          avatar_small: row.avatar_small,
-          avatar_medium: row.avatar_medium,
-          avatar_full: row.avatar_full,
+          avatar: row.avatar,
           csgo: {},
           counterstrike2: {},
           _lastSeen: null, // For sorting
@@ -620,18 +602,14 @@ router.get("/:steamid", async (req, res) => {
     // Structure response by game type
     const response = {
       steamid: steamid64, // Always return SteamID64 format
-      avatar_small: null,
-      avatar_medium: null,
-      avatar_full: null,
+      avatar: null,
       csgo: {},
       counterstrike2: {},
     };
 
     // Get avatar from any row (they should all be the same for a steamid)
     if (rows.length > 0) {
-      response.avatar_small = rows[0].avatar_small;
-      response.avatar_medium = rows[0].avatar_medium;
-      response.avatar_full = rows[0].avatar_full;
+      response.avatar = rows[0].avatar;
     }
 
     // Populate game-specific stats and sessions

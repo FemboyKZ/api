@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS players (
     server_ip VARCHAR(45),
     server_port INT,
     latest_ip VARCHAR(45) DEFAULT NULL COMMENT 'Most recent IP address seen (private)',
+    avatar VARCHAR(255) DEFAULT NULL COMMENT 'Steam avatar URL (32x32, append _medium.jpg or _full.jpg for larger sizes)',
+    avatar_updated_at TIMESTAMP NULL DEFAULT NULL COMMENT 'When avatar was last fetched from Steam API',
     last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY unique_player_game (steamid, game),

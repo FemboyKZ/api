@@ -10,10 +10,9 @@ const logger = require("../utils/logger");
  * Steam Web API Reference:
  * https://developer.valvesoftware.com/wiki/Steam_Web_API#GetPlayerSummaries_.28v0002.29
  *
- * Avatars returned:
- * - avatar (32x32)
- * - avatarmedium (64x64)
- * - avatarfull (184x184)
+ * Note: Steam provides three avatar sizes (32x32, 64x64, 184x184), but they're all
+ * the same image with different size suffixes (_medium.jpg, _full.jpg).
+ * We only store the base URL to save space.
  */
 
 const STEAM_API_URL =
@@ -23,7 +22,7 @@ const CACHE_DURATION_HOURS = 24; // How long to cache avatar URLs before refresh
 /**
  * Fetch avatars for multiple Steam IDs from Steam API
  * @param {string[]} steamIds - Array of Steam IDs (max 100 per request)
- * @returns {Promise<Object>} Map of steamid -> avatar data
+ * @returns {Promise<Object>} Map of steamid -> avatar URL (32x32, base size)
  */
 async function fetchAvatarsFromSteam(steamIds) {
   const STEAM_API_KEY = process.env.STEAM_API_KEY;
@@ -62,11 +61,9 @@ async function fetchAvatarsFromSteam(steamIds) {
         response.data.response.players
       ) {
         for (const player of response.data.response.players) {
-          results[player.steamid] = {
-            avatar_small: player.avatar || null,
-            avatar_medium: player.avatarmedium || null,
-            avatar_full: player.avatarfull || null,
-          };
+          // Only store the base avatar URL (32x32)
+          // Can construct larger sizes by appending _medium.jpg or _full.jpg
+          results[player.steamid] = player.avatar || null;
         }
       }
     } catch (error) {
@@ -88,21 +85,14 @@ async function updateAvatarsInDatabase(steamIds) {
 
   const avatarData = await fetchAvatarsFromSteam(steamIds);
 
-  for (const [steamid, avatars] of Object.entries(avatarData)) {
+  for (const [steamid, avatar] of Object.entries(avatarData)) {
     try {
       await pool.query(
         `UPDATE players 
-         SET avatar_small = ?, 
-             avatar_medium = ?, 
-             avatar_full = ?, 
+         SET avatar = ?, 
              avatar_updated_at = NOW()
          WHERE steamid = ?`,
-        [
-          avatars.avatar_small,
-          avatars.avatar_medium,
-          avatars.avatar_full,
-          steamid,
-        ],
+        [avatar, steamid],
       );
     } catch (error) {
       logger.error(`Failed to update avatar for ${steamid}: ${error.message}`);

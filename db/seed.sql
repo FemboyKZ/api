@@ -19,47 +19,35 @@ INSERT INTO servers (ip, port, game, status, map, player_count, maxplayers, bot_
 
 -- Insert sample players with game separation, avatars, and realistic playtimes
 -- Player 1 plays both CS:GO and CS2
-INSERT INTO players (steamid, latest_name, game, playtime, server_ip, server_port, avatar_small, avatar_medium, avatar_full, avatar_updated_at) VALUES
+INSERT INTO players (steamid, latest_name, game, playtime, server_ip, server_port, avatar, avatar_updated_at) VALUES
 ('76561198000000001', 'remulian', 'csgo', 18900, '37.27.107.76', 27025, 
  'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb.jpg',
- 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_medium.jpg',
- 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
  NOW()),
 ('76561198000000001', 'remulian', 'counterstrike2', 25200, '37.27.107.76', 27015,
  'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb.jpg',
- 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_medium.jpg',
- 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
  NOW()),
 
 -- Player 2 only plays CS2
 ('76561198000000002', 'kz_pro_player', 'counterstrike2', 43200, '54.39.52.5', 27015,
  'https://avatars.steamstatic.com/b5bd56c1aa4644a474a2e4972be27ef9e82e517e.jpg',
- 'https://avatars.steamstatic.com/b5bd56c1aa4644a474a2e4972be27ef9e82e517e_medium.jpg',
- 'https://avatars.steamstatic.com/b5bd56c1aa4644a474a2e4972be27ef9e82e517e_full.jpg',
  NOW()),
 
 -- Player 3 plays both games
 ('76561198000000003', 'casual_gamer', 'csgo', 12600, '37.27.107.76', 27025,
  'https://avatars.steamstatic.com/c5d56249ee5d28a07db4ac9f7f60af961fab5426.jpg',
- 'https://avatars.steamstatic.com/c5d56249ee5d28a07db4ac9f7f60af961fab5426_medium.jpg',
- 'https://avatars.steamstatic.com/c5d56249ee5d28a07db4ac9f7f60af961fab5426_full.jpg',
  NOW()),
 ('76561198000000003', 'casual_gamer', 'counterstrike2', 16200, '37.27.107.76', 27016,
  'https://avatars.steamstatic.com/c5d56249ee5d28a07db4ac9f7f60af961fab5426.jpg',
- 'https://avatars.steamstatic.com/c5d56249ee5d28a07db4ac9f7f60af961fab5426_medium.jpg',
- 'https://avatars.steamstatic.com/c5d56249ee5d28a07db4ac9f7f60af961fab5426_full.jpg',
  NOW()),
 
 -- Player 4 only plays CS:GO
 ('76561198000000004', 'old_school_player', 'csgo', 36000, '54.39.52.5', 27025,
  'https://avatars.steamstatic.com/fe3bb3eef3bb8fe4f3f3bb3eef3bb8fe4f3f3bb3.jpg',
- 'https://avatars.steamstatic.com/fe3bb3eef3bb8fe4f3f3bb3eef3bb8fe4f3f3bb3_medium.jpg',
- 'https://avatars.steamstatic.com/fe3bb3eef3bb8fe4f3f3bb3eef3bb8fe4f3f3bb3_full.jpg',
  NOW()),
 
 -- Player 5 CS2 beginner
 ('76561198000000005', 'newbie_kz', 'counterstrike2', 5400, '149.40.54.210', 26532,
- NULL, NULL, NULL, NULL);
+ NULL, NULL);
 
 -- Insert sample map data with game separation
 INSERT INTO maps (name, game, playtime, server_ip, server_port) VALUES
