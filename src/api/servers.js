@@ -363,4 +363,140 @@ router.get("/:ip", async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /servers/{ip}/{port}:
+ *   get:
+ *     summary: Get server by IP and port
+ *     description: Returns detailed information for a specific server by IP address and port
+ *     tags: [Servers]
+ *     parameters:
+ *       - in: path
+ *         name: ip
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Server IP address
+ *         example: "185.107.96.59"
+ *       - in: path
+ *         name: port
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Server port
+ *         example: 27015
+ *     responses:
+ *       200:
+ *         description: Successful response with server details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Server'
+ *       400:
+ *         description: Invalid IP address or port format
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Invalid IP address format"
+ *       404:
+ *         description: Server not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Server not found"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Server fetch error"
+ */
+router.get("/:ip/:port", async (req, res) => {
+  try {
+    const { ip, port } = req.params;
+
+    if (!isValidIP(ip)) {
+      return res.status(400).json({ error: "Invalid IP address format" });
+    }
+
+    const portNum = parseInt(port, 10);
+    if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+      return res.status(400).json({ error: "Invalid port number" });
+    }
+
+    const [rows] = await pool.query(
+      "SELECT * FROM servers WHERE ip = ? AND port = ?",
+      [ip, portNum]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Server not found" });
+    }
+
+    const server = rows[0];
+    let playersList = [];
+    
+    if (server.players_list) {
+      try {
+        playersList =
+          typeof server.players_list === "string"
+            ? JSON.parse(server.players_list)
+            : server.players_list;
+
+        // Remove IP addresses from player data for privacy
+        playersList = playersList.map((player) => {
+          const { ip, ...playerWithoutIp } = player;
+          return playerWithoutIp;
+        });
+      } catch (e) {
+        logger.error(
+          `Failed to parse players_list for ${server.ip}:${server.port}`,
+          { error: e.message },
+        );
+        playersList = [];
+      }
+    }
+
+    const response = {
+      ip: server.ip,
+      port: server.port,
+      game: server.game,
+      hostname: server.hostname,
+      version: server.version,
+      os: server.os,
+      secure: server.secure,
+      status: server.status,
+      map: server.map,
+      player_count: server.player_count,
+      maxplayers: server.maxplayers,
+      bot_count: server.bot_count,
+      players_list: playersList,
+      region: server.region,
+      domain: server.domain,
+      api_id: server.api_id,
+      kzt_id: server.kzt_id,
+      tickrate: server.tickrate,
+      last_update: server.last_update,
+      created_at: server.created_at,
+    };
+
+    res.json(response);
+  } catch (e) {
+    logger.error(`Server fetch error for ${req.params.ip}:${req.params.port}: ${e.message}`);
+    res.status(500).json({ error: "Server fetch error" });
+  }
+});
+
 module.exports = router;
