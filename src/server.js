@@ -5,7 +5,7 @@ const logger = require("./utils/logger");
 const { validateEnvironment } = require("./utils/envValidator");
 const { initDatabase, closeDatabase } = require("./db");
 const { startUpdateLoop } = require("./services/updater");
-const { startAvatarUpdateJob } = require("./services/steamAvatars");
+const { startAvatarUpdateJob } = require("./services/steamQuery");
 const { initWebSocket } = require("./services/websocket");
 const { initRedis, closeRedis } = require("./db/redis");
 
