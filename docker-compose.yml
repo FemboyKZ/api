@@ -1,31 +1,60 @@
-version: "3.8"
-
 services:
-  # MySQL Database
-  mysql:
-    image: mysql:8.0
-    container_name: server-api-mysql
+  # MariaDB Database - Server API
+  mariadb:
+    image: mariadb:latest
+    container_name: server-api-mariadb
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
-      MYSQL_DATABASE: ${DB_NAME:-server_api}
-      MYSQL_USER: ${DB_USER:-apiuser}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-apipassword}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MARIADB_DATABASE: ${DB_NAME:-server_api}
+      MARIADB_USER: ${DB_USER:-apiuser}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-apipassword}
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - mariadb_data:/var/lib/mysql
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
       timeout: 5s
       retries: 5
+    user: mysql
+    tty: true
+    stdin_open: true
 
+  # MariaDB Database - KZ Records (25M+ records)
+  mariadb-kz:
+    image: mariadb:latest
+    container_name: kz-records-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${KZ_DB_ROOT_PASSWORD:-kz_rootpassword}
+      MARIADB_DATABASE: ${KZ_DB_NAME:-kz_records}
+      MARIADB_USER: ${KZ_DB_USER:-kz_user}
+      MARIADB_PASSWORD: ${KZ_DB_PASSWORD:-kz_password}
+    ports:
+      - "3308:3306"
+    volumes:
+      - mariadb_kz_data:/var/lib/mysql
+      - ./db/kz-records-schema.sql:/docker-entrypoint-initdb.d/01-kz-schema.sql:ro
+    command: >
+      --innodb_buffer_pool_size=2G
+      --innodb_log_file_size=512M
+      --max_allowed_packet=256M
+      --innodb_flush_log_at_trx_commit=2
+      --innodb_flush_method=O_DIRECT
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    user: mysql
+    tty: true
+    stdin_open: true
   # Redis Cache (Optional)
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     container_name: server-api-redis
     restart: unless-stopped
     ports:
@@ -37,6 +66,8 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    tty: true
+    stdin_open: true
 
   # API Server
   api:
@@ -50,17 +81,18 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DB_HOST: mysql
+      DB_HOST: mariadb
+      DB_PORT: 3306
       DB_USER: ${DB_USER:-apiuser}
       DB_PASSWORD: ${DB_PASSWORD:-apipassword}
       DB_NAME: ${DB_NAME:-server_api}
       REDIS_ENABLED: ${REDIS_ENABLED:-true}
       REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_PORT: ${REDIS_PORT:-6379}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
     depends_on:
-      mysql:
+      mariadb:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -79,7 +111,10 @@ services:
       timeout: 3s
       retries: 3
       start_period: 40s
+    tty: true
+    stdin_open: true
 
 volumes:
-  mysql_data:
+  mariadb_data:
+  mariadb_kz_data:
   redis_data:
