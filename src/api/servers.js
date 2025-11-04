@@ -307,7 +307,56 @@ router.get("/:ip", async (req, res) => {
     if (rows.length === 0) {
       return res.status(404).json({ error: "Server not found" });
     }
-    res.json(rows);
+
+    // Process each server to remove player IPs from players_list
+    const servers = rows.map((server) => {
+      let playersList = [];
+      if (server.players_list) {
+        try {
+          playersList =
+            typeof server.players_list === "string"
+              ? JSON.parse(server.players_list)
+              : server.players_list;
+
+          // Remove IP addresses from player data for privacy
+          playersList = playersList.map((player) => {
+            const { ip, ...playerWithoutIp } = player;
+            return playerWithoutIp;
+          });
+        } catch (e) {
+          logger.error(
+            `Failed to parse players_list for ${server.ip}:${server.port}`,
+            { error: e.message },
+          );
+          playersList = [];
+        }
+      }
+
+      return {
+        ip: server.ip,
+        port: server.port,
+        game: server.game,
+        hostname: server.hostname,
+        version: server.version,
+        os: server.os,
+        secure: server.secure,
+        status: server.status,
+        map: server.map,
+        player_count: server.player_count,
+        maxplayers: server.maxplayers,
+        bot_count: server.bot_count,
+        players_list: playersList,
+        region: server.region,
+        domain: server.domain,
+        api_id: server.api_id,
+        kzt_id: server.kzt_id,
+        tickrate: server.tickrate,
+        last_update: server.last_update,
+        created_at: server.created_at,
+      };
+    });
+
+    res.json(servers);
   } catch (e) {
     logger.error(`Server fetch error for IP ${req.params.ip}: ${e.message}`);
     res.status(500).json({ error: "Server fetch error" });
