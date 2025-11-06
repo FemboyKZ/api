@@ -2,6 +2,24 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
+const { getStats: getScraperStats } = require("../services/kzRecordsScraper");
+
+/**
+ * GET /admin/scraper-status
+ * Get current KZ Records scraper statistics
+ */
+router.get("/scraper-status", async (req, res) => {
+  try {
+    const stats = getScraperStats();
+    res.json({
+      success: true,
+      scraper: stats,
+    });
+  } catch (error) {
+    logger.error("Failed to get scraper status", { error: error.message });
+    res.status(500).json({ error: "Failed to get scraper status" });
+  }
+});
 
 /**
  * POST /admin/aggregate-daily

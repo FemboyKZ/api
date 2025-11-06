@@ -4,8 +4,10 @@ const app = require("./app");
 const logger = require("./utils/logger");
 const { validateEnvironment } = require("./utils/envValidator");
 const { initDatabase, closeDatabase } = require("./db");
+const { initKzDatabase, closeKzDatabase } = require("./db/kzRecords");
 const { startUpdateLoop } = require("./services/updater");
 const { startAvatarUpdateJob } = require("./services/steamQuery");
+const { startScraperJob } = require("./services/kzRecordsScraper");
 const { initWebSocket } = require("./services/websocket");
 const { initRedis, closeRedis } = require("./db/redis");
 
@@ -24,6 +26,12 @@ async function startServer() {
     // Step 2: Initialize database with retry logic
     logger.info("Initializing database connection...");
     await initDatabase();
+
+    // Step 2b: Initialize KZ Records database (if scraper enabled)
+    if (process.env.KZ_SCRAPER_ENABLED !== "false") {
+      logger.info("Initializing KZ Records database connection...");
+      await initKzDatabase();
+    }
 
     // Step 3: Initialize Redis (optional)
     logger.info("Initializing Redis...");
@@ -48,6 +56,16 @@ async function startServer() {
 
       // Step 8: Start avatar update job (runs every hour)
       startAvatarUpdateJob(60 * 60 * 1000);
+
+      // Step 9: Start KZ records scraper (runs every 5 seconds)
+      if (process.env.KZ_SCRAPER_ENABLED !== "false") {
+        const scraperInterval =
+          parseInt(process.env.KZ_SCRAPER_INTERVAL) || 5000;
+        startScraperJob(scraperInterval);
+        logger.info(
+          `KZ Records scraper enabled (interval: ${scraperInterval}ms)`,
+        );
+      }
     });
 
     return httpServer;
@@ -77,9 +95,14 @@ async function gracefulShutdown(signal) {
     logger.info("Closing Redis connection...");
     await closeRedis();
 
-    // Step 2: Close database connection pool
+    // Step 2: Close database connection pools
     logger.info("Closing database connections...");
     await closeDatabase();
+
+    // Step 2b: Close KZ database connection pool
+    if (process.env.KZ_SCRAPER_ENABLED !== "false") {
+      await closeKzDatabase();
+    }
 
     // Step 3: Close HTTP server
     logger.info("Closing HTTP server...");
