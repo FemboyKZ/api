@@ -60,7 +60,7 @@ async function updatePlayerStatistics(connection) {
             COUNT(*) as total_records,
             COUNT(DISTINCT r.map_id) as total_maps,
             SUM(r.time) as total_playtime,
-            AVG(r.teleports) as avg_teleports
+            LEAST(ROUND(AVG(r.teleports), 2), 9999.99) as avg_teleports
         FROM kz_records r
         GROUP BY r.player_id
     `);
