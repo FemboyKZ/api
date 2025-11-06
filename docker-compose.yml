@@ -14,6 +14,11 @@ services:
     volumes:
       - mariadb_data:/var/lib/mysql
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    command: >
+      --innodb_buffer_pool_size=2G
+      --innodb_log_file_size=512M
+      --max_allowed_packet=256M
+      --innodb_flush_log_at_trx_commit=2
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -23,7 +28,7 @@ services:
     tty: true
     stdin_open: true
 
-  # MariaDB Database - KZ Records (25M+ records)
+  # MariaDB Database - KZ Records
   mariadb-kz:
     image: mariadb:latest
     container_name: kz-records-mariadb
@@ -43,7 +48,6 @@ services:
       --innodb_log_file_size=512M
       --max_allowed_packet=256M
       --innodb_flush_log_at_trx_commit=2
-      --innodb_flush_method=O_DIRECT
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -76,23 +80,28 @@ services:
       dockerfile: Dockerfile
     container_name: server-api
     restart: unless-stopped
-    ports:
-      - "${PORT:-3000}:3000"
+    network_mode: host
     environment:
       NODE_ENV: production
       PORT: 3000
-      DB_HOST: mariadb
-      DB_PORT: 3306
+      HOST: ${HOST:-127.0.0.1}
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3307
       DB_USER: ${DB_USER:-apiuser}
       DB_PASSWORD: ${DB_PASSWORD:-apipassword}
       DB_NAME: ${DB_NAME:-server_api}
       REDIS_ENABLED: ${REDIS_ENABLED:-true}
-      REDIS_HOST: redis
+      REDIS_HOST: 127.0.0.1
       REDIS_PORT: ${REDIS_PORT:-6379}
+      STEAM_API_KEY: ${STEAM_API_KEY}
+      CS2KZ_API_URL: ${CS2KZ_API_URL:-https://api.cs2kz.org}
+      GOKZ_API_URL: ${GOKZ_API_URL:-https://kztimerglobal.com/api/v2}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
     depends_on:
       mariadb:
+        condition: service_healthy
+      mariadb-kz:
         condition: service_healthy
       redis:
         condition: service_healthy
