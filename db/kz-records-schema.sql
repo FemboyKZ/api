@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS kz_servers (
 -- Note: Foreign keys not supported with partitioning, enforced at application level
 CREATE TABLE IF NOT EXISTS kz_records (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    original_id BIGINT UNSIGNED NULL, -- Original ID from source API data
     
     -- Foreign keys (referenced but not enforced by DB due to partitioning)
     player_id INT UNSIGNED NOT NULL,
@@ -65,6 +66,7 @@ CREATE TABLE IF NOT EXISTS kz_records (
     inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     -- Indexes for common queries
+    INDEX idx_original_id (original_id),
     INDEX idx_player_id (player_id),
     INDEX idx_map_id (map_id),
     INDEX idx_server_id (server_id),
