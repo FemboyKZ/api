@@ -171,6 +171,7 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
     const [countResult] = await pool.query(countQuery, countParams);
 
     res.json({
+      total: maps.length,
       data: maps,
       pagination: {
         page: parseInt(page, 10) || 1,
@@ -214,26 +215,35 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
  *             schema:
  *               type: object
  *               properties:
- *                 name:
- *                   type: string
- *                   description: Map name
- *                 stats:
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of game versions found (1 for CS:GO only, 2 for both CS:GO and CS2)
+ *                   example: 2
+ *                 data:
  *                   type: array
  *                   items:
  *                     type: object
  *                     properties:
- *                       game:
+ *                       name:
  *                         type: string
- *                       total_playtime:
- *                         type: integer
- *                       last_played:
- *                         type: string
- *                         format: date-time
- *                 sessions:
- *                   type: array
- *                   description: Individual play sessions for this map
- *                   items:
- *                     type: object
+ *                         description: Map name
+ *                       stats:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             game:
+ *                               type: string
+ *                             total_playtime:
+ *                               type: integer
+ *                             last_played:
+ *                               type: string
+ *                               format: date-time
+ *                       sessions:
+ *                         type: array
+ *                         description: Individual play sessions for this map
+ *                         items:
+ *                           type: object
  *       404:
  *         description: Map not found
  *         content:
@@ -284,9 +294,14 @@ router.get("/:mapname", async (req, res) => {
     const [stats] = await pool.query(statsQuery, statsParams);
 
     res.json({
-      name: sanitizedMapName,
-      stats: stats,
-      sessions: rows,
+      total: stats.length,
+      data: [
+        {
+          name: sanitizedMapName,
+          stats: stats,
+          sessions: rows,
+        },
+      ],
     });
   } catch (e) {
     logger.error(`Map fetch error for ${req.params.mapname}: ${e.message}`);

@@ -146,7 +146,24 @@ const {
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/ServersResponse'
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of servers
+ *                   example: 3
+ *                 playersTotal:
+ *                   type: integer
+ *                   description: Total players across all servers
+ *                   example: 45
+ *                 serversOnline:
+ *                   type: integer
+ *                   description: Number of online servers
+ *                   example: 3
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Server'
  *       500:
  *         description: Server error
  *         content:
@@ -184,11 +201,7 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
 
     logger.info(`Query returned ${rows.length} rows`);
 
-    const response = {
-      playersTotal: rows.reduce((a, s) => a + s.player_count, 0),
-      serversOnline: rows.filter((s) => s.status === 1).length,
-    };
-    rows.forEach((server) => {
+    const servers = rows.map((server) => {
       // Parse players_list - MariaDB JSON columns return as strings even with jsonStrings: false
       let playersList = [];
       if (server.players_list) {
@@ -212,7 +225,7 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
         }
       }
 
-      response[`${server.ip}:${server.port}`] = {
+      return {
         ip: server.ip,
         port: server.port,
         game: server.game,
@@ -233,7 +246,16 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
         tickrate: server.tickrate,
       };
     });
-    res.json(response);
+
+    const playersTotal = rows.reduce((acc, s) => acc + s.player_count, 0);
+    const serversOnline = rows.filter((s) => s.status === 1).length;
+
+    res.json({
+      total: servers.length,
+      playersTotal: playersTotal,
+      serversOnline: serversOnline,
+      data: servers,
+    });
   } catch (e) {
     logger.error(`Failed to fetch servers: ${e.message}`);
     res.status(500).json({ error: "Failed to fetch servers" });
@@ -261,9 +283,16 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Server'
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of servers found
+ *                   example: 2
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Server'
  *       400:
  *         description: Invalid IP address format
  *         content:
@@ -356,7 +385,10 @@ router.get("/:ip", async (req, res) => {
       };
     });
 
-    res.json(servers);
+    res.json({
+      total: servers.length,
+      data: servers,
+    });
   } catch (e) {
     logger.error(`Server fetch error for IP ${req.params.ip}: ${e.message}`);
     res.status(500).json({ error: "Server fetch error" });
@@ -391,7 +423,16 @@ router.get("/:ip", async (req, res) => {
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Server'
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of servers found (always 1)
+ *                   example: 1
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Server'
  *       400:
  *         description: Invalid IP address or port format
  *         content:
@@ -492,7 +533,10 @@ router.get("/:ip/:port", async (req, res) => {
       created_at: server.created_at,
     };
 
-    res.json(response);
+    res.json({
+      total: 1,
+      data: [response],
+    });
   } catch (e) {
     logger.error(
       `Server fetch error for ${req.params.ip}:${req.params.port}: ${e.message}`,

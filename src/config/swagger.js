@@ -35,6 +35,10 @@ const options = {
         name: "Maps",
         description: "Map statistics and playtime endpoints",
       },
+      {
+        name: "History",
+        description: "Historical data and trends endpoints",
+      },
     ],
   },
   // Path to the API routes with JSDoc comments

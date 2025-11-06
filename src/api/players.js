@@ -337,11 +337,7 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
  *                   type: integer
  *                   description: Total number of online players
  *                   example: 24
- *                 servers:
- *                   type: integer
- *                   description: Number of servers with players
- *                   example: 3
- *                 players:
+ *                 data:
  *                   type: array
  *                   items:
  *                     type: object
@@ -495,8 +491,7 @@ router.get(
 
       res.json({
         total: onlinePlayers.length,
-        servers: serversWithPlayers,
-        players: onlinePlayers,
+        data: onlinePlayers,
       });
     } catch (e) {
       logger.error(`Failed to fetch online players: ${e.message}`);
@@ -532,7 +527,16 @@ router.get(
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/PlayerDetails'
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of players found (always 1)
+ *                   example: 1
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/PlayerDetails'
  *       400:
  *         description: Invalid Steam ID format
  *         content:
@@ -633,7 +637,10 @@ router.get("/:steamid", async (req, res) => {
       }
     }
 
-    res.json(response);
+    res.json({
+      total: 1,
+      data: [response],
+    });
   } catch (e) {
     logger.error(`Player fetch error for ${req.params.steamid}: ${e.message}`);
     res.status(500).json({ error: "Player fetch error" });

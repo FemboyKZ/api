@@ -9,6 +9,73 @@ const {
 } = require("../utils/cacheMiddleware");
 
 /**
+ * @swagger
+ * /history/servers/{ip}/{port}:
+ *   get:
+ *     summary: Get historical data for a specific server
+ *     description: Returns historical player count and status data for a specific server
+ *     tags: [History]
+ *     parameters:
+ *       - in: path
+ *         name: ip
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Server IP address
+ *       - in: path
+ *         name: port
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Server port
+ *       - in: query
+ *         name: hours
+ *         schema:
+ *           type: integer
+ *           default: 24
+ *           maximum: 168
+ *         description: Number of hours of history to retrieve (max 1 week)
+ *       - in: query
+ *         name: interval
+ *         schema:
+ *           type: integer
+ *           default: 60
+ *           minimum: 30
+ *         description: Interval in seconds for downsampling data
+ *     responses:
+ *       200:
+ *         description: Successful response with server history
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of data points
+ *                 server:
+ *                   type: string
+ *                   description: Server identifier (ip:port)
+ *                   example: "185.107.96.59:27015"
+ *                 hours:
+ *                   type: integer
+ *                   description: Number of hours of history retrieved
+ *                   example: 24
+ *                 interval:
+ *                   type: integer
+ *                   description: Interval in seconds used for downsampling
+ *                   example: 60
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       400:
+ *         description: Invalid IP address
+ *       500:
+ *         description: Server error
+ */
+
+/**
  * GET /history/servers/:ip/:port
  * Get historical data for a specific server
  */
@@ -66,11 +133,11 @@ router.get(
       logger.logRequest(req, res, Date.now() - startTime);
 
       res.json({
+        total: downsampled.length,
         server: `${ip}:${port}`,
         hours: hoursInt,
         interval: intervalInt,
-        dataPoints: downsampled.length,
-        history: downsampled,
+        data: downsampled,
       });
     } catch (error) {
       logger.error("Failed to fetch server history", {
@@ -82,6 +149,64 @@ router.get(
     }
   },
 );
+
+/**
+ * @swagger
+ * /history/players/{steamid}:
+ *   get:
+ *     summary: Get player session history
+ *     description: Returns historical session data for a specific player
+ *     tags: [History]
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Player Steam ID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Items per page
+ *     responses:
+ *       200:
+ *         description: Successful response with player session history
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of sessions
+ *                 steamid:
+ *                   type: string
+ *                   description: Player Steam ID
+ *                   example: "76561198000000000"
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       500:
+ *         description: Server error
+ */
 
 /**
  * GET /history/players/:steamid
@@ -123,12 +248,14 @@ router.get(
       logger.logRequest(req, res, Date.now() - startTime);
 
       res.json({
-        steamid,
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-        sessions,
+        total: total,
+        steamid: steamid,
+        pagination: {
+          page: parseInt(page, 10),
+          limit: validLimit,
+          totalPages: Math.ceil(total / validLimit),
+        },
+        data: sessions,
       });
     } catch (error) {
       logger.error("Failed to fetch player history", {
@@ -139,6 +266,64 @@ router.get(
     }
   },
 );
+
+/**
+ * @swagger
+ * /history/maps:
+ *   get:
+ *     summary: Get map rotation history
+ *     description: Returns historical map rotation data across all servers
+ *     tags: [History]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Items per page
+ *       - in: query
+ *         name: server
+ *         schema:
+ *           type: string
+ *         description: Filter by server (format ip:port)
+ *       - in: query
+ *         name: map
+ *         schema:
+ *           type: string
+ *         description: Filter by map name (partial match)
+ *     responses:
+ *       200:
+ *         description: Successful response with map history
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of map records
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       500:
+ *         description: Server error
+ */
 
 /**
  * GET /history/maps
@@ -181,11 +366,13 @@ router.get(
       logger.logRequest(req, res, Date.now() - startTime);
 
       res.json({
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-        maps: rows,
+        total: total,
+        pagination: {
+          page: parseInt(page, 10),
+          limit: validLimit,
+          totalPages: Math.ceil(total / validLimit),
+        },
+        data: rows,
       });
     } catch (error) {
       logger.error("Failed to fetch map history", { error: error.message });
@@ -193,6 +380,49 @@ router.get(
     }
   },
 );
+
+/**
+ * @swagger
+ * /history/trends/daily:
+ *   get:
+ *     summary: Get daily aggregated statistics
+ *     description: Returns daily statistics aggregated by date
+ *     tags: [History]
+ *     parameters:
+ *       - in: query
+ *         name: days
+ *         schema:
+ *           type: integer
+ *           default: 7
+ *           maximum: 90
+ *         description: Number of days to retrieve (max 90 days)
+ *       - in: query
+ *         name: server
+ *         schema:
+ *           type: string
+ *         description: Filter by server (format ip:port)
+ *     responses:
+ *       200:
+ *         description: Successful response with daily trends
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of data points
+ *                 days:
+ *                   type: integer
+ *                   description: Number of days of data retrieved
+ *                   example: 7
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       500:
+ *         description: Server error
+ */
 
 /**
  * GET /history/trends/daily
@@ -240,9 +470,9 @@ router.get(
       logger.logRequest(req, res, Date.now() - startTime);
 
       res.json({
+        total: rows.length,
         days: daysInt,
-        dataPoints: rows.length,
-        stats: rows,
+        data: rows,
       });
     } catch (error) {
       logger.error("Failed to fetch daily trends", { error: error.message });
@@ -250,6 +480,49 @@ router.get(
     }
   },
 );
+
+/**
+ * @swagger
+ * /history/trends/hourly:
+ *   get:
+ *     summary: Get hourly player count trends
+ *     description: Returns hourly aggregated player statistics
+ *     tags: [History]
+ *     parameters:
+ *       - in: query
+ *         name: hours
+ *         schema:
+ *           type: integer
+ *           default: 24
+ *           maximum: 168
+ *         description: Number of hours to retrieve (max 1 week)
+ *       - in: query
+ *         name: server
+ *         schema:
+ *           type: string
+ *         description: Filter by server (format ip:port)
+ *     responses:
+ *       200:
+ *         description: Successful response with hourly trends
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of data points
+ *                 hours:
+ *                   type: integer
+ *                   description: Number of hours of data retrieved
+ *                   example: 24
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       500:
+ *         description: Server error
+ */
 
 /**
  * GET /history/trends/hourly
@@ -294,9 +567,9 @@ router.get(
       logger.logRequest(req, res, Date.now() - startTime);
 
       res.json({
+        total: rows.length,
         hours: hoursInt,
-        dataPoints: rows.length,
-        trends: rows,
+        data: rows,
       });
     } catch (error) {
       logger.error("Failed to fetch hourly trends", { error: error.message });
