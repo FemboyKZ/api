@@ -14,24 +14,24 @@
  *
  * Configuration (via .env):
  *   KZ_SCRAPER_ENABLED=true           # Enable/disable scraper
- *   KZ_SCRAPER_INTERVAL=10000         # How often to run (ms) - default 10s
- *   KZ_SCRAPER_CONCURRENCY=2          # Records per batch - default 2
- *   KZ_SCRAPER_REQUEST_DELAY=500      # Delay between requests (ms) - default 500ms
+ *   KZ_SCRAPER_INTERVAL=8000          # How often to run (ms) - default 8s
+ *   KZ_SCRAPER_CONCURRENCY=8          # Records per batch - default 8
+ *   KZ_SCRAPER_REQUEST_DELAY=150      # Delay between requests (ms) - default 150ms
  *
  * Rate Limiting:
- *   The GlobalKZ API has rate limits (e.g., "Too many requests from this IP in the last 5 minutes").
- *   To avoid hitting these limits:
- *   - Keep CONCURRENCY low (2-3)
- *   - Keep REQUEST_DELAY at 500ms or higher
- *   - Keep INTERVAL at 10s or higher
+ *   The GlobalKZ API has a rate limit of 500 requests per 5 minutes.
  *   
- *   Example safe configuration:
- *   - 2 records per batch with 500ms delay = 1.5 seconds per batch
- *   - Running every 10 seconds = ~6 batches per minute = 12 records/min = 720 records/hour
+ *   Optimized configuration to stay under rate limit:
+ *   - 8 records per batch with 150ms delay = ~2.5 seconds per batch
+ *   - Running every 8 seconds = 37.5 batches per 5 minutes = 300 requests per 5 min
+ *   - This is ~60% of the rate limit (leaves safety margin)
+ *   - Speed: ~6,000 records/hour = ~333 hours (~14 days) for 2M records
+ *   
+ *   If you still get rate limited (429 errors), increase INTERVAL or decrease CONCURRENCY.
  *
  * Usage:
  *   const scraper = require('./services/kzRecordsScraper');
- *   scraper.startScraperJob(10000); // Check every 10 seconds
+ *   scraper.startScraperJob(8000); // Check every 8 seconds
  */
 
 require("dotenv").config();
@@ -44,10 +44,10 @@ const { getKzPool } = require("../db/kzRecords");
 // Configuration
 const GOKZ_API_URL =
   process.env.GOKZ_API_URL || "https://kztimerglobal.com/api/v2";
-const CONCURRENCY = parseInt(process.env.KZ_SCRAPER_CONCURRENCY) || 2; // Number of parallel requests (reduced to avoid rate limits)
+const CONCURRENCY = parseInt(process.env.KZ_SCRAPER_CONCURRENCY) || 8; // Number of records per batch (optimized for 500/5min rate limit)
 const RETRY_ATTEMPTS = 3; // Number of retries on failure
 const RETRY_DELAY = 2000; // Initial retry delay in ms (exponential backoff)
-const REQUEST_DELAY = parseInt(process.env.KZ_SCRAPER_REQUEST_DELAY) || 500; // Delay between requests in ms
+const REQUEST_DELAY = parseInt(process.env.KZ_SCRAPER_REQUEST_DELAY) || 150; // Delay between requests in ms (optimized for rate limit)
 const STATE_FILE = path.join(__dirname, "../../logs/kz-scraper-state.json");
 const REQUEST_TIMEOUT = 10000; // 10 second timeout per request
 
@@ -95,6 +95,12 @@ function loadState() {
  */
 function saveState() {
   try {
+    // Ensure logs directory exists
+    const logsDir = path.dirname(STATE_FILE);
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+
     const state = {
       lastRecordId: stats.lastSuccessfulId || currentRecordId,
       lastUpdate: new Date().toISOString(),
@@ -104,9 +110,14 @@ function saveState() {
         recordsSkipped: stats.recordsSkipped,
       },
     };
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), {
+      mode: 0o666, // Make file readable/writable by all
+    });
   } catch (error) {
-    logger.error(`[KZ Scraper] Error saving state:`, error);
+    // Don't crash on save errors - state will be recovered from database on restart
+    logger.warn(
+      `[KZ Scraper] Failed to save state file (will use DB on restart): ${error.message}`,
+    );
   }
 }
 
@@ -538,7 +549,7 @@ async function scrapeBatch(startId, batchSize) {
  */
 async function runScraper() {
   if (isRunning) {
-    logger.warn(
+    logger.debug(
       "[KZ Scraper] Scraper already running, skipping this iteration",
     );
     return;
@@ -551,10 +562,16 @@ async function runScraper() {
 
     currentRecordId = batchResult.lastId;
 
-    // Log progress every 100 records
-    if (stats.recordsProcessed % 100 === 0 || batchResult.inserted > 0) {
+    // Save state after each batch to avoid losing progress
+    saveState();
+
+    // Log progress every 10 inserted records or every 100 processed
+    if (
+      (batchResult.inserted > 0 && stats.recordsInserted % 10 === 0) ||
+      stats.recordsProcessed % 100 === 0
+    ) {
       const elapsed = (Date.now() - stats.startTime) / 1000;
-      const rate = Math.round(stats.recordsProcessed / elapsed);
+      const rate = elapsed > 0 ? (stats.recordsProcessed / elapsed).toFixed(2) : 0;
 
       logger.info(
         `[KZ Scraper] Progress: Checked up to ID ${currentRecordId} | ` +
@@ -563,15 +580,10 @@ async function runScraper() {
       );
     }
 
-    // Save state periodically
-    if (stats.recordsProcessed % 1000 === 0) {
-      saveState();
-    }
-
     // If we hit too many not-founds in a row, slow down
     if (batchResult.notFound === CONCURRENCY) {
-      logger.info(
-        `[KZ Scraper] Reached end of available records, will check again in next cycle`,
+      logger.debug(
+        `[KZ Scraper] Reached end of available records (${batchResult.notFound}/${CONCURRENCY} not found), will check again in next cycle`,
       );
     }
   } catch (error) {
@@ -586,9 +598,12 @@ async function runScraper() {
 /**
  * Start the scraper job
  */
-async function startScraperJob(intervalMs = 10000) { // Increased default from 5s to 10s
+async function startScraperJob(intervalMs = 8000) { // 8 seconds to stay under 500 req/5min rate limit
   logger.info(
     `[KZ Scraper] Starting KZ Records scraper service (interval: ${intervalMs}ms, concurrency: ${CONCURRENCY}, request delay: ${REQUEST_DELAY}ms)`,
+  );
+  logger.info(
+    `[KZ Scraper] Estimated rate: ~${Math.floor((300 / (intervalMs / 1000)) * CONCURRENCY)} requests per 5 minutes (limit: 500)`,
   );
 
   // Test database connection first
