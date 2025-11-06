@@ -90,6 +90,11 @@ services:
       DB_USER: ${DB_USER:-apiuser}
       DB_PASSWORD: ${DB_PASSWORD:-apipassword}
       DB_NAME: ${DB_NAME:-server_api}
+      KZ_DB_HOST: 127.0.0.1
+      KZ_DB_PORT: 3308
+      KZ_DB_USER: ${KZ_DB_USER:-kz_user}
+      KZ_DB_PASSWORD: ${KZ_DB_PASSWORD:-kz_password}
+      KZ_DB_NAME: ${KZ_DB_NAME:-kz_records}
       REDIS_ENABLED: ${REDIS_ENABLED:-true}
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: ${REDIS_PORT:-6379}
