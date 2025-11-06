@@ -22,14 +22,16 @@ docker exec -i container_name mysql -u username -p database_name < db/migrations
 
 **Purpose**: Removes redundant avatar size columns from the `players` table.
 
-**Why**: Steam avatars are the same image with different size suffixes (_medium.jpg, _full.jpg). Storing all three URLs is redundant and wastes space.
+**Why**: Steam avatars are the same image with different size suffixes (\_medium.jpg, \_full.jpg). Storing all three URLs is redundant and wastes space.
 
 **Changes**:
+
 - Drops `avatar_medium` column
-- Drops `avatar_full` column  
+- Drops `avatar_full` column
 - Renames `avatar_small` to `avatar`
 
 **Important**: After running this migration, avatar URLs will be in the format:
+
 - Base (32x32): `https://avatars.steamstatic.com/hash.jpg`
 - Medium (64x64): Append `_medium` before `.jpg`
 - Full (184x184): Append `_full` before `.jpg`

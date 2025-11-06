@@ -438,7 +438,7 @@ router.get("/:ip/:port", async (req, res) => {
 
     const [rows] = await pool.query(
       "SELECT * FROM servers WHERE ip = ? AND port = ?",
-      [ip, portNum]
+      [ip, portNum],
     );
 
     if (rows.length === 0) {
@@ -447,7 +447,7 @@ router.get("/:ip/:port", async (req, res) => {
 
     const server = rows[0];
     let playersList = [];
-    
+
     if (server.players_list) {
       try {
         playersList =
@@ -494,7 +494,9 @@ router.get("/:ip/:port", async (req, res) => {
 
     res.json(response);
   } catch (e) {
-    logger.error(`Server fetch error for ${req.params.ip}:${req.params.port}: ${e.message}`);
+    logger.error(
+      `Server fetch error for ${req.params.ip}:${req.params.port}: ${e.message}`,
+    );
     res.status(500).json({ error: "Server fetch error" });
   }
 });
