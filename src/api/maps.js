@@ -123,7 +123,7 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
     const sortOrder = order === "asc" ? "ASC" : "DESC";
 
     let query =
-      "SELECT name, game, SUM(playtime) AS total_playtime FROM maps WHERE 1=1";
+      "SELECT name, game, COALESCE(SUM(playtime), 0) AS total_playtime FROM maps WHERE 1=1";
     const params = [];
 
     if (game) {
@@ -281,7 +281,7 @@ router.get("/:mapname", async (req, res) => {
     }
 
     let statsQuery =
-      "SELECT game, SUM(playtime) as total_playtime, MAX(last_played) as last_played FROM maps WHERE name = ?";
+      "SELECT game, COALESCE(SUM(playtime), 0) as total_playtime, MAX(last_played) as last_played FROM maps WHERE name = ?";
     const statsParams = [sanitizedMapName];
 
     if (game) {
