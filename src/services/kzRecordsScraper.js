@@ -5,16 +5,33 @@
  * Since the API doesn't support filtering by date/recency, we check each ID sequentially.
  *
  * Features:
- * - Parallel requests for speed (configurable concurrency)
+ * - Sequential requests with configurable delay to avoid rate limiting
  * - Automatic retry on errors with exponential backoff
+ * - Rate limit detection and handling (HTTP 429)
  * - Persistent state tracking (saves last checked ID)
  * - Handles missing data gracefully (same logic as import script)
- * - Rate limiting to avoid API throttling
- * - WebSocket notifications for new records
+ * - WebSocket notifications for new records (future feature)
+ *
+ * Configuration (via .env):
+ *   KZ_SCRAPER_ENABLED=true           # Enable/disable scraper
+ *   KZ_SCRAPER_INTERVAL=10000         # How often to run (ms) - default 10s
+ *   KZ_SCRAPER_CONCURRENCY=2          # Records per batch - default 2
+ *   KZ_SCRAPER_REQUEST_DELAY=500      # Delay between requests (ms) - default 500ms
+ *
+ * Rate Limiting:
+ *   The GlobalKZ API has rate limits (e.g., "Too many requests from this IP in the last 5 minutes").
+ *   To avoid hitting these limits:
+ *   - Keep CONCURRENCY low (2-3)
+ *   - Keep REQUEST_DELAY at 500ms or higher
+ *   - Keep INTERVAL at 10s or higher
+ *   
+ *   Example safe configuration:
+ *   - 2 records per batch with 500ms delay = 1.5 seconds per batch
+ *   - Running every 10 seconds = ~6 batches per minute = 12 records/min = 720 records/hour
  *
  * Usage:
  *   const scraper = require('./services/kzRecordsScraper');
- *   scraper.startScraperJob(5000); // Check every 5 seconds
+ *   scraper.startScraperJob(10000); // Check every 10 seconds
  */
 
 require("dotenv").config();
@@ -27,9 +44,10 @@ const { getKzPool } = require("../db/kzRecords");
 // Configuration
 const GOKZ_API_URL =
   process.env.GOKZ_API_URL || "https://kztimerglobal.com/api/v2";
-const CONCURRENCY = 10; // Number of parallel requests
+const CONCURRENCY = parseInt(process.env.KZ_SCRAPER_CONCURRENCY) || 2; // Number of parallel requests (reduced to avoid rate limits)
 const RETRY_ATTEMPTS = 3; // Number of retries on failure
-const RETRY_DELAY = 1000; // Initial retry delay in ms (exponential backoff)
+const RETRY_DELAY = 2000; // Initial retry delay in ms (exponential backoff)
+const REQUEST_DELAY = parseInt(process.env.KZ_SCRAPER_REQUEST_DELAY) || 500; // Delay between requests in ms
 const STATE_FILE = path.join(__dirname, "../../logs/kz-scraper-state.json");
 const REQUEST_TIMEOUT = 10000; // 10 second timeout per request
 
@@ -318,7 +336,7 @@ async function getOrCreateServer(connection, record) {
 }
 
 /**
- * Fetch record from API with retry logic
+ * Fetch record from API with retry logic and rate limit handling
  */
 async function fetchRecord(recordId, attempt = 1) {
   try {
@@ -331,6 +349,20 @@ async function fetchRecord(recordId, attempt = 1) {
     if (error.response?.status === 404) {
       // Record doesn't exist - this is expected
       return null;
+    }
+
+    if (error.response?.status === 429) {
+      // Rate limited - wait longer before retrying
+      const rateLimitDelay = 60000; // Wait 1 minute on rate limit
+      logger.warn(
+        `[KZ Scraper] Rate limited (429) on record ${recordId}, waiting ${rateLimitDelay / 1000}s before retry`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, rateLimitDelay));
+      
+      if (attempt < RETRY_ATTEMPTS) {
+        return fetchRecord(recordId, attempt + 1);
+      }
+      return null; // Skip this record if still rate limited after retries
     }
 
     if (attempt < RETRY_ATTEMPTS) {
@@ -427,16 +459,25 @@ async function scrapeBatch(startId, batchSize) {
   const pool = getKzPool();
   const connection = await pool.getConnection();
 
+  logger.debug(
+    `[KZ Scraper] Starting batch scrape from ID ${startId} to ${startId + batchSize - 1}`,
+  );
+
   try {
     await connection.beginTransaction();
 
-    const promises = [];
+    // Fetch records with delay between requests to avoid rate limiting
+    const results = [];
     for (let i = 0; i < batchSize; i++) {
       const recordId = startId + i;
-      promises.push(fetchRecord(recordId));
+      const recordData = await fetchRecord(recordId);
+      results.push(recordData);
+      
+      // Add delay between requests (except for the last one)
+      if (i < batchSize - 1 && REQUEST_DELAY > 0) {
+        await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY));
+      }
     }
-
-    const results = await Promise.all(promises);
 
     let inserted = 0;
     let skipped = 0;
@@ -465,9 +506,10 @@ async function scrapeBatch(startId, batchSize) {
         stats.recordsProcessed++;
       } catch (error) {
         logger.error(
-          `[KZ Scraper] Error processing record ${recordId}:`,
-          error.message,
+          `[KZ Scraper] Error processing record ${recordId}: ${error.message}`,
         );
+        logger.error(`[KZ Scraper] Stack trace: ${error.stack}`);
+        logger.error(`[KZ Scraper] Record data: ${JSON.stringify(recordData)}`);
         stats.errorCount++;
         skipped++;
       }
@@ -483,6 +525,8 @@ async function scrapeBatch(startId, batchSize) {
     };
   } catch (error) {
     await connection.rollback();
+    logger.error(`[KZ Scraper] Error in scrapeBatch: ${error.message}`);
+    logger.error(`[KZ Scraper] Stack trace: ${error.stack}`);
     throw error;
   } finally {
     connection.release();
@@ -531,7 +575,8 @@ async function runScraper() {
       );
     }
   } catch (error) {
-    logger.error("[KZ Scraper] Error in scraper loop:", error);
+    logger.error(`[KZ Scraper] Error in scraper loop: ${error.message}`);
+    logger.error(`[KZ Scraper] Stack trace: ${error.stack}`);
     stats.errorCount++;
   } finally {
     isRunning = false;
@@ -541,10 +586,25 @@ async function runScraper() {
 /**
  * Start the scraper job
  */
-function startScraperJob(intervalMs = 5000) {
+async function startScraperJob(intervalMs = 10000) { // Increased default from 5s to 10s
   logger.info(
-    `[KZ Scraper] Starting KZ Records scraper service (interval: ${intervalMs}ms)`,
+    `[KZ Scraper] Starting KZ Records scraper service (interval: ${intervalMs}ms, concurrency: ${CONCURRENCY}, request delay: ${REQUEST_DELAY}ms)`,
   );
+
+  // Test database connection first
+  try {
+    const pool = getKzPool();
+    const connection = await pool.getConnection();
+    await connection.ping();
+    connection.release();
+    logger.info("[KZ Scraper] Database connection verified successfully");
+  } catch (error) {
+    logger.error(
+      `[KZ Scraper] Failed to connect to KZ database: ${error.message}`,
+    );
+    logger.error("[KZ Scraper] Scraper will not start");
+    return;
+  }
 
   // Initialize state
   stats.startTime = Date.now();
@@ -552,9 +612,8 @@ function startScraperJob(intervalMs = 5000) {
 
   // Initialize record ID from database if not loaded from state
   if (currentRecordId === 0) {
-    initializeRecordId().then(() => {
-      logger.info(`[KZ Scraper] Initialization complete, starting scraper`);
-    });
+    await initializeRecordId();
+    logger.info(`[KZ Scraper] Initialization complete, starting scraper`);
   }
 
   // Run immediately, then on interval

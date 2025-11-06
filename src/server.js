@@ -57,10 +57,10 @@ async function startServer() {
       // Step 8: Start avatar update job (runs every hour)
       startAvatarUpdateJob(60 * 60 * 1000);
 
-      // Step 9: Start KZ records scraper (runs every 5 seconds)
+      // Step 9: Start KZ records scraper (runs every 10 seconds by default)
       if (process.env.KZ_SCRAPER_ENABLED !== "false") {
         const scraperInterval =
-          parseInt(process.env.KZ_SCRAPER_INTERVAL) || 5000;
+          parseInt(process.env.KZ_SCRAPER_INTERVAL) || 10000; // Increased from 5s to 10s
         startScraperJob(scraperInterval);
         logger.info(
           `KZ Records scraper enabled (interval: ${scraperInterval}ms)`,
