@@ -201,20 +201,22 @@ describe("Players Endpoints", () => {
         .expect("Content-Type", /json/)
         .expect(200);
 
-      expect(response.body).toHaveProperty("steamid");
-      expect(response.body).toHaveProperty("csgo");
-      expect(response.body).toHaveProperty("counterstrike2");
+      expect(response.body).toHaveProperty("data");
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0]).toHaveProperty("steamid");
+      expect(response.body.data[0]).toHaveProperty("csgo");
+      expect(response.body.data[0]).toHaveProperty("counterstrike2");
 
       // Check CS:GO stats
-      expect(response.body.csgo).toHaveProperty("total_playtime");
-      expect(response.body.csgo).toHaveProperty("last_seen");
-      expect(response.body.csgo).toHaveProperty("sessions");
-      expect(Array.isArray(response.body.csgo.sessions)).toBe(true);
+      expect(response.body.data[0].csgo).toHaveProperty("total_playtime");
+      expect(response.body.data[0].csgo).toHaveProperty("last_seen");
+      expect(response.body.data[0].csgo).toHaveProperty("sessions");
+      expect(Array.isArray(response.body.data[0].csgo.sessions)).toBe(true);
 
       // Check CS2 stats
-      expect(response.body.counterstrike2).toHaveProperty("total_playtime");
-      expect(response.body.counterstrike2).toHaveProperty("last_seen");
-      expect(response.body.counterstrike2).toHaveProperty("sessions");
+      expect(response.body.data[0].counterstrike2).toHaveProperty("total_playtime");
+      expect(response.body.data[0].counterstrike2).toHaveProperty("last_seen");
+      expect(response.body.data[0].counterstrike2).toHaveProperty("sessions");
     });
 
     it("should return 400 for invalid SteamID", async () => {
@@ -260,7 +262,7 @@ describe("Players Endpoints", () => {
         .expect("Content-Type", /json/)
         .expect(200);
 
-      expect(response.body.steamid).toBe("76561197960290419");
+      expect(response.body.data[0].steamid).toBe("76561197960290419");
       expect(pool.query).toHaveBeenCalledWith(
         expect.any(String),
         expect.arrayContaining(["76561197960290419"]),
@@ -300,7 +302,7 @@ describe("Players Endpoints", () => {
         .expect("Content-Type", /json/)
         .expect(200);
 
-      expect(response.body.steamid).toBe("76561197960290419");
+      expect(response.body.data[0].steamid).toBe("76561197960290419");
       expect(pool.query).toHaveBeenCalledWith(
         expect.any(String),
         expect.arrayContaining(["76561197960290419"]),
@@ -395,15 +397,14 @@ describe("Players Endpoints", () => {
         .expect(200);
 
       expect(response.body).toHaveProperty("total", 3);
-      expect(response.body).toHaveProperty("servers", 2);
-      expect(response.body).toHaveProperty("players");
-      expect(response.body.players).toHaveLength(3);
-      expect(response.body.players[0]).toHaveProperty("name");
-      expect(response.body.players[0]).toHaveProperty("steamid");
-      expect(response.body.players[0]).toHaveProperty("server");
-      expect(response.body.players[0]).toHaveProperty("server_name");
-      expect(response.body.players[0]).toHaveProperty("game");
-      expect(response.body.players[0]).toHaveProperty("map");
+      expect(response.body).toHaveProperty("data");
+      expect(response.body.data).toHaveLength(3);
+      expect(response.body.data[0]).toHaveProperty("name");
+      expect(response.body.data[0]).toHaveProperty("steamid");
+      expect(response.body.data[0]).toHaveProperty("server");
+      expect(response.body.data[0]).toHaveProperty("server_name");
+      expect(response.body.data[0]).toHaveProperty("game");
+      expect(response.body.data[0]).toHaveProperty("map");
     });
 
     it("should filter online players by game", async () => {
@@ -436,7 +437,7 @@ describe("Players Endpoints", () => {
         .expect(200);
 
       expect(response.body).toHaveProperty("total", 1);
-      expect(response.body.players[0].game).toBe("csgo");
+      expect(response.body.data[0].game).toBe("csgo");
     });
 
     it("should filter online players by server", async () => {
@@ -469,7 +470,7 @@ describe("Players Endpoints", () => {
         .expect(200);
 
       expect(response.body).toHaveProperty("total", 1);
-      expect(response.body.players[0].server).toBe("185.107.96.59:27015");
+      expect(response.body.data[0].server).toBe("185.107.96.59:27015");
     });
 
     it("should exclude bots without steamid", async () => {
@@ -511,7 +512,7 @@ describe("Players Endpoints", () => {
         .expect(200);
 
       expect(response.body.total).toBe(1);
-      expect(response.body.players[0].name).toBe("RealPlayer");
+      expect(response.body.data[0].name).toBe("RealPlayer");
     });
 
     it("should handle empty servers", async () => {
@@ -534,8 +535,7 @@ describe("Players Endpoints", () => {
         .expect(200);
 
       expect(response.body.total).toBe(0);
-      expect(response.body.servers).toBe(0);
-      expect(response.body.players).toHaveLength(0);
+      expect(response.body.data).toHaveLength(0);
     });
 
     it("should handle database errors", async () => {

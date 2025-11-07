@@ -49,7 +49,7 @@ describe("History Endpoints", () => {
         .expect(200);
 
       expect(response.body).toHaveProperty("server");
-      expect(response.body).toHaveProperty("history");
+      expect(response.body).toHaveProperty("data");
     });
 
     it("should handle time range filters", async () => {
@@ -108,7 +108,7 @@ describe("History Endpoints", () => {
         .expect(200);
 
       expect(response.body).toHaveProperty("steamid");
-      expect(response.body).toHaveProperty("sessions");
+      expect(response.body).toHaveProperty("data");
       expect(response.body).toHaveProperty("total");
     });
 
@@ -145,7 +145,7 @@ describe("History Endpoints", () => {
         .expect("Content-Type", /json/)
         .expect(200);
 
-      expect(response.body).toHaveProperty("maps");
+      expect(response.body).toHaveProperty("data");
       expect(response.body).toHaveProperty("total");
     });
 
@@ -158,7 +158,7 @@ describe("History Endpoints", () => {
         .expect("Content-Type", /json/)
         .expect(200);
 
-      expect(response.body).toHaveProperty("maps");
+      expect(response.body).toHaveProperty("data");
     });
 
     it("should handle database errors", async () => {
@@ -196,7 +196,7 @@ describe("History Endpoints", () => {
         .expect("Content-Type", /json/)
         .expect(200);
 
-      expect(response.body).toHaveProperty("stats");
+      expect(response.body).toHaveProperty("data");
       expect(response.body).toHaveProperty("days");
     });
 
@@ -243,7 +243,7 @@ describe("History Endpoints", () => {
         .expect("Content-Type", /json/)
         .expect(200);
 
-      expect(response.body).toHaveProperty("trends");
+      expect(response.body).toHaveProperty("data");
       expect(response.body).toHaveProperty("hours");
     });
 
