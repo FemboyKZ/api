@@ -4,7 +4,7 @@
 -- Players table - normalized player data
 CREATE TABLE IF NOT EXISTS kz_players (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    steamid64 BIGINT UNSIGNED NOT NULL UNIQUE,
+    steamid64 VARCHAR(20) NOT NULL UNIQUE,
     steam_id VARCHAR(32) NOT NULL,
     player_name VARCHAR(100) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

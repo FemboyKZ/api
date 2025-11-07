@@ -200,11 +200,12 @@ function convertTimestamp(isoString) {
  * Get or create player ID
  */
 async function getOrCreatePlayer(connection, record) {
-  let steamid64 = record.steamid64 ? parseInt(record.steamid64) : null;
+  // Keep steamid64 as string to preserve precision (no parseInt)
+  let steamid64 = record.steamid64 ? String(record.steamid64) : null;
 
-  if (!steamid64 || isNaN(steamid64)) {
+  if (!steamid64) {
     const recordId = record.id || Math.floor(Math.random() * 1000000);
-    steamid64 = 999900000000 + recordId;
+    steamid64 = String(999900000000 + recordId);
   }
 
   const cacheKey = steamid64;
