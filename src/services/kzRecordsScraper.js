@@ -19,12 +19,12 @@
  *
  * Rate Limiting:
  *   The GlobalKZ API has a rate limit of 500 requests per 5 minutes per IP.
- *   
+ *
  *   Default configuration (80% utilization):
  *   - 5 records per batch with 100ms delay = ~1.5 seconds per batch
  *   - Running every 3.75 seconds = 80 batches per 5 minutes = 400 requests per 5 min
  *   - Speed: ~4,800 records/hour
- *   
+ *
  *   This is more than sufficient for maintenance mode (catching new records as they appear).
  *   For bulk scraping, use scripts/standalone-scraper.js with proxy support.
  *
@@ -351,10 +351,9 @@ async function getOrCreateServer(connection, record) {
  */
 async function fetchRecord(recordId, attempt = 1) {
   try {
-    const response = await axios.get(
-      `${GOKZ_API_URL}/records/${recordId}`,
-      { timeout: REQUEST_TIMEOUT }
-    );
+    const response = await axios.get(`${GOKZ_API_URL}/records/${recordId}`, {
+      timeout: REQUEST_TIMEOUT,
+    });
 
     return response.data;
   } catch (error) {
@@ -370,7 +369,7 @@ async function fetchRecord(recordId, attempt = 1) {
         `[KZ Scraper] Rate limited (429) on record ${recordId}, waiting ${rateLimitDelay / 1000}s before retry`,
       );
       await new Promise((resolve) => setTimeout(resolve, rateLimitDelay));
-      
+
       if (attempt < RETRY_ATTEMPTS) {
         return fetchRecord(recordId, attempt + 1);
       }
@@ -484,7 +483,7 @@ async function scrapeBatch(startId, batchSize) {
       const recordId = startId + i;
       const recordData = await fetchRecord(recordId);
       results.push(recordData);
-      
+
       // Add delay between requests (except for the last one)
       if (i < batchSize - 1 && REQUEST_DELAY > 0) {
         await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY));
@@ -572,7 +571,8 @@ async function runScraper() {
       stats.recordsProcessed % 100 === 0
     ) {
       const elapsed = (Date.now() - stats.startTime) / 1000;
-      const rate = elapsed > 0 ? (stats.recordsProcessed / elapsed).toFixed(2) : 0;
+      const rate =
+        elapsed > 0 ? (stats.recordsProcessed / elapsed).toFixed(2) : 0;
 
       logger.info(
         `[KZ Scraper] Progress: Checked up to ID ${currentRecordId} | ` +
@@ -599,7 +599,8 @@ async function runScraper() {
 /**
  * Start the scraper job
  */
-async function startScraperJob(intervalMs = 3750) { // 3.75 seconds for 80% rate limit utilization
+async function startScraperJob(intervalMs = 3750) {
+  // 3.75 seconds for 80% rate limit utilization
   logger.info(
     `[KZ Scraper] Starting KZ Records scraper service (interval: ${intervalMs}ms, concurrency: ${CONCURRENCY}, request delay: ${REQUEST_DELAY}ms)`,
   );

@@ -214,7 +214,9 @@ describe("Players Endpoints", () => {
       expect(Array.isArray(response.body.data[0].csgo.sessions)).toBe(true);
 
       // Check CS2 stats
-      expect(response.body.data[0].counterstrike2).toHaveProperty("total_playtime");
+      expect(response.body.data[0].counterstrike2).toHaveProperty(
+        "total_playtime",
+      );
       expect(response.body.data[0].counterstrike2).toHaveProperty("last_seen");
       expect(response.body.data[0].counterstrike2).toHaveProperty("sessions");
     });
