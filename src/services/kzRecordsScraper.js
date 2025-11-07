@@ -1,60 +1,32 @@
 /**
- * KZ Records Scraper Service
+ * KZ Records Scraper Service (Maintenance Mode)
  *
- * Continuously scrapes the GlobalKZ API for new records by incrementing record_id.
- * Since the API doesn't support filtering by date/recency, we check each ID sequentially.
+ * Lightweight scraper for keeping records up-to-date after initial bulk import.
+ * This runs continuously as part of the API server to catch new records.
  *
  * Features:
- * - Sequential requests with configurable delay to avoid rate limiting
+ * - Sequential requests with delays to avoid rate limiting
  * - Automatic retry on errors with exponential backoff
  * - Rate limit detection and handling (HTTP 429)
  * - Persistent state tracking (saves last checked ID)
- * - Handles missing data gracefully (same logic as import script)
- * - WebSocket notifications for new records (future feature)
+ * - Handles missing data gracefully
  *
  * Configuration (via .env):
  *   KZ_SCRAPER_ENABLED=true           # Enable/disable scraper
  *   KZ_SCRAPER_INTERVAL=3750          # How often to run (ms) - default 3.75s
  *   KZ_SCRAPER_CONCURRENCY=5          # Records per batch - default 5
  *   KZ_SCRAPER_REQUEST_DELAY=100      # Delay between requests (ms) - default 100ms
- *   KZ_SCRAPER_PROXIES=proxy1,proxy2  # Comma-separated list of proxies (rotates automatically)
- *
- * Proxy Support (Automatic Rotation):
- *   List multiple proxies separated by commas - the scraper will rotate through them automatically.
- *   With 2+ proxies, requests are fetched in PARALLEL (each proxy has independent rate limit).
- *   With 1 or no proxy, requests are SEQUENTIAL with delays.
- *   
- *   Example with 3 proxies (3x speed = 14,400 records/hour = ~5.8 days for 2M):
- *     KZ_SCRAPER_PROXIES=http://proxy1:8080,http://proxy2:8080,http://proxy3:8080
- *     KZ_SCRAPER_CONCURRENCY=50          # Can be much higher with multiple proxies
- *     KZ_SCRAPER_INTERVAL=1000           # Can be much faster (1 second)
- *   
- *   With 10 proxies (optimal for 2M records in ~2 days):
- *     KZ_SCRAPER_PROXIES=proxy1,proxy2,proxy3,...proxy10
- *     KZ_SCRAPER_CONCURRENCY=100         # 100 records per batch
- *     KZ_SCRAPER_INTERVAL=1500           # 1.5 seconds = ~40 batches/min = 4000 req/min across 10 proxies
- *     KZ_SCRAPER_REQUEST_DELAY=0         # No delay needed with parallel fetching
- *   
- *   Or use SOCKS5:
- *     KZ_SCRAPER_PROXIES=socks5://proxy1:1080,socks5://proxy2:1080
- *   
- *   With authentication:
- *     KZ_SCRAPER_PROXIES=http://user:pass@proxy1:8080,http://user2:pass2@proxy2:8080
  *
  * Rate Limiting:
- *   The GlobalKZ API has a rate limit of 500 requests per 5 minutes PER IP.
+ *   The GlobalKZ API has a rate limit of 500 requests per 5 minutes per IP.
  *   
- *   Single IP Configuration (80% utilization):
+ *   Default configuration (80% utilization):
  *   - 5 records per batch with 100ms delay = ~1.5 seconds per batch
  *   - Running every 3.75 seconds = 80 batches per 5 minutes = 400 requests per 5 min
- *   - Speed: ~4,800 records/hour = ~17.4 days for 2M records
+ *   - Speed: ~4,800 records/hour
  *   
- *   Multi-Proxy Configuration (10 proxies):
- *   - 100 records per batch (parallel fetching)
- *   - Running every 1.5 seconds = 40 batches per minute = 4000 req/min across 10 IPs (400 req/min per IP)
- *   - Speed: ~240,000 records/hour = ~8.3 hours for 2M records
- *   
- *   If you get rate limited (429 errors), increase INTERVAL or decrease CONCURRENCY.
+ *   This is more than sufficient for maintenance mode (catching new records as they appear).
+ *   For bulk scraping, use scripts/standalone-scraper.js with proxy support.
  *
  * Usage:
  *   const scraper = require('./services/kzRecordsScraper');
@@ -63,8 +35,6 @@
 
 require("dotenv").config();
 const axios = require("axios");
-const { HttpsProxyAgent } = require("https-proxy-agent");
-const { HttpProxyAgent } = require("http-proxy-agent");
 const fs = require("fs");
 const path = require("path");
 const logger = require("../utils/logger");
@@ -73,39 +43,12 @@ const { getKzPool } = require("../db/kzRecords");
 // Configuration
 const GOKZ_API_URL =
   process.env.GOKZ_API_URL || "https://kztimerglobal.com/api/v2";
-const CONCURRENCY = parseInt(process.env.KZ_SCRAPER_CONCURRENCY) || 5; // Number of records per batch (80% rate limit utilization)
-const RETRY_ATTEMPTS = 3; // Number of retries on failure
+const CONCURRENCY = parseInt(process.env.KZ_SCRAPER_CONCURRENCY) || 5;
+const RETRY_ATTEMPTS = 3;
 const RETRY_DELAY = 2000; // Initial retry delay in ms (exponential backoff)
-const REQUEST_DELAY = parseInt(process.env.KZ_SCRAPER_REQUEST_DELAY) || 100; // Delay between requests in ms
-const PROXY_LIST = process.env.KZ_SCRAPER_PROXIES 
-  ? process.env.KZ_SCRAPER_PROXIES.split(',').map(p => p.trim()).filter(Boolean)
-  : []; // Comma-separated list of proxies (rotates automatically)
+const REQUEST_DELAY = parseInt(process.env.KZ_SCRAPER_REQUEST_DELAY) || 100;
 const STATE_FILE = path.join(__dirname, "../../logs/kz-scraper-state.json");
-const REQUEST_TIMEOUT = 10000; // 10 second timeout per request
-
-// Setup proxy agents for all proxies
-const proxyAgents = [];
-let currentProxyIndex = 0; // Track which proxy to use next
-
-if (PROXY_LIST.length > 0) {
-  logger.info(`[KZ Scraper] ${PROXY_LIST.length} proxies configured - will rotate automatically`);
-  PROXY_LIST.forEach((proxyUrl, index) => {
-    try {
-      const httpsAgent = new HttpsProxyAgent(proxyUrl);
-      const httpAgent = new HttpProxyAgent(proxyUrl);
-      proxyAgents.push({ proxyUrl, httpsAgent, httpAgent });
-      logger.info(`[KZ Scraper] Proxy ${index + 1}: ${proxyUrl}`);
-    } catch (error) {
-      logger.error(`[KZ Scraper] Failed to create agent for proxy ${proxyUrl}: ${error.message}`);
-    }
-  });
-  
-  if (proxyAgents.length === 0) {
-    logger.warn('[KZ Scraper] No valid proxies configured, will use direct connection');
-  }
-} else {
-  logger.info('[KZ Scraper] No proxies configured - using direct connection');
-}
+const REQUEST_TIMEOUT = 10000;
 
 // Caches for normalized data
 const playerCache = new Map();
@@ -407,26 +350,9 @@ async function getOrCreateServer(connection, record) {
  */
 async function fetchRecord(recordId, attempt = 1) {
   try {
-    const config = {
-      timeout: REQUEST_TIMEOUT,
-    };
-
-    // Rotate through proxy agents if configured
-    if (proxyAgents.length > 0) {
-      const agent = proxyAgents[currentProxyIndex];
-      if (GOKZ_API_URL.startsWith("https")) {
-        config.httpsAgent = agent.httpsAgent;
-      } else if (GOKZ_API_URL.startsWith("http:")) {
-        config.httpAgent = agent.httpAgent;
-      }
-      
-      // Move to next proxy for next request (round-robin)
-      currentProxyIndex = (currentProxyIndex + 1) % proxyAgents.length;
-    }
-
     const response = await axios.get(
       `${GOKZ_API_URL}/records/${recordId}`,
-      config,
+      { timeout: REQUEST_TIMEOUT }
     );
 
     return response.data;
@@ -538,7 +464,7 @@ async function processRecord(connection, record) {
 }
 
 /**
- * Scrape a batch of record IDs
+ * Scrape a batch of record IDs (sequential with delays)
  */
 async function scrapeBatch(startId, batchSize) {
   const pool = getKzPool();
@@ -551,33 +477,16 @@ async function scrapeBatch(startId, batchSize) {
   try {
     await connection.beginTransaction();
 
-    // With multiple proxies, we can fetch in parallel since each has its own rate limit
-    // With 1 proxy (or none), we still need delays to avoid rate limiting
-    const shouldFetchParallel = proxyAgents.length >= 2;
-    
-    let results;
-    if (shouldFetchParallel) {
-      // Parallel fetching - each proxy handles rate limit independently
-      logger.debug(`[KZ Scraper] Fetching ${batchSize} records in parallel using ${proxyAgents.length} proxies`);
-      const promises = [];
-      for (let i = 0; i < batchSize; i++) {
-        const recordId = startId + i;
-        promises.push(fetchRecord(recordId));
-      }
-      results = await Promise.all(promises);
-    } else {
-      // Sequential fetching with delays (single IP)
-      logger.debug(`[KZ Scraper] Fetching ${batchSize} records sequentially with ${REQUEST_DELAY}ms delays`);
-      results = [];
-      for (let i = 0; i < batchSize; i++) {
-        const recordId = startId + i;
-        const recordData = await fetchRecord(recordId);
-        results.push(recordData);
-        
-        // Add delay between requests (except for the last one)
-        if (i < batchSize - 1 && REQUEST_DELAY > 0) {
-          await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY));
-        }
+    // Sequential fetching with delays to avoid rate limiting
+    const results = [];
+    for (let i = 0; i < batchSize; i++) {
+      const recordId = startId + i;
+      const recordData = await fetchRecord(recordId);
+      results.push(recordData);
+      
+      // Add delay between requests (except for the last one)
+      if (i < batchSize - 1 && REQUEST_DELAY > 0) {
+        await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY));
       }
     }
 
