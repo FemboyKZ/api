@@ -22,7 +22,7 @@
  *   KZ_SCRAPER_PROXIES=proxy1,proxy2,proxy3
  *
  * Or via command line:
- *   node scripts/standalone-scraper.js --concurrency 50 --interval 2000
+ *   node scripts/standalone-scraper.js --concurrency 50 --interval 2000 --final-id 25000000
  */
 
 require("dotenv").config();
@@ -85,6 +85,8 @@ process.argv.slice(2).forEach((arg, i, args) => {
     CONFIG.requestDelay = parseInt(args[i + 1]);
   if (arg === "--start-id" && args[i + 1])
     CONFIG.startId = parseInt(args[i + 1]);
+  if (arg === "--final-id" && args[i + 1])
+    CONFIG.finalId = parseInt(args[i + 1]);
 });
 
 // ============================================================================
@@ -548,13 +550,30 @@ async function mainLoop() {
     "info",
     `Proxies: ${proxyAgents.length > 0 ? proxyAgents.length + " (parallel mode)" : "None (sequential mode)"}`,
   );
+  if (CONFIG.finalId) {
+    log("info", `Final ID: ${CONFIG.finalId} (will stop when reached)`);
+  }
   log("info", "=".repeat(70));
 
   while (!shouldStop) {
     isRunning = true;
 
+    // Check if we've reached the final ID
+    if (CONFIG.finalId && currentRecordId > CONFIG.finalId) {
+      log("info", `Reached final ID ${CONFIG.finalId}. Stopping scraper...`);
+      shouldStop = true;
+      break;
+    }
+
     try {
-      const result = await scrapeBatch(currentRecordId, CONFIG.concurrency);
+      // Adjust batch size if approaching final ID
+      let batchSize = CONFIG.concurrency;
+      if (CONFIG.finalId && currentRecordId + batchSize > CONFIG.finalId) {
+        batchSize = CONFIG.finalId - currentRecordId + 1;
+        log("info", `Adjusting final batch size to ${batchSize} records`);
+      }
+
+      const result = await scrapeBatch(currentRecordId, batchSize);
       currentRecordId = result.lastId + 1;
 
       logProgress();
@@ -564,8 +583,10 @@ async function mainLoop() {
         await saveState();
       }
 
-      // Wait before next batch
-      await new Promise((resolve) => setTimeout(resolve, CONFIG.interval));
+      // Wait before next batch (unless we're done)
+      if (!CONFIG.finalId || currentRecordId <= CONFIG.finalId) {
+        await new Promise((resolve) => setTimeout(resolve, CONFIG.interval));
+      }
     } catch (error) {
       log("error", `Error in main loop: ${error.message}`);
       stats.errorCount++;
