@@ -560,7 +560,27 @@ async function runScraper() {
   try {
     const batchResult = await scrapeBatch(currentRecordId + 1, CONCURRENCY);
 
-    currentRecordId = batchResult.lastId;
+    // If entire batch was 404s, reset to last successful ID and stay there
+    if (batchResult.notFound === CONCURRENCY && batchResult.inserted === 0) {
+      // All records in batch were not found - we're caught up
+      if (stats.lastSuccessfulId > 0) {
+        // Reset to last successful ID to keep checking from there
+        currentRecordId = stats.lastSuccessfulId;
+        logger.debug(
+          `[KZ Scraper] All records not found (${CONCURRENCY}/${CONCURRENCY}). ` +
+            `Resetting to last successful ID ${currentRecordId} to wait for new records.`,
+        );
+      } else {
+        // No successful records yet, still increment to avoid infinite loop at ID 0
+        currentRecordId = batchResult.lastId;
+        logger.debug(
+          `[KZ Scraper] No records found yet, continuing forward from ID ${currentRecordId}`,
+        );
+      }
+    } else {
+      // Normal operation - at least one record found, continue forward
+      currentRecordId = batchResult.lastId;
+    }
 
     // Save state after each batch to avoid losing progress
     saveState();
@@ -581,10 +601,10 @@ async function runScraper() {
       );
     }
 
-    // If we hit too many not-founds in a row, slow down
-    if (batchResult.notFound === CONCURRENCY) {
-      logger.debug(
-        `[KZ Scraper] Reached end of available records (${batchResult.notFound}/${CONCURRENCY} not found), will check again in next cycle`,
+    // If we found something after being caught up, log it
+    if (batchResult.inserted > 0 && batchResult.notFound > 0) {
+      logger.info(
+        `[KZ Scraper] Found ${batchResult.inserted} new record(s) (${batchResult.notFound} not found in batch)`,
       );
     }
   } catch (error) {
