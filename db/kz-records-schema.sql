@@ -21,19 +21,39 @@ CREATE TABLE IF NOT EXISTS kz_maps (
     map_name VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    filesize INT NULL COMMENT 'Map file size in bytes',
+    validated BOOLEAN NULL COMMENT 'Whether map is validated by KZ team',
+    difficulty TINYINT NULL COMMENT 'Map difficulty (1-7)',
+    approved_by_steamid64 VARCHAR(20) NULL COMMENT 'SteamID64 of approver',
+    workshop_url VARCHAR(500) NULL COMMENT 'Steam Workshop URL',
+    download_url VARCHAR(500) NULL COMMENT 'Direct download URL',
+    global_created_on DATETIME NULL COMMENT 'Creation timestamp from GlobalAPI',
+    global_updated_on DATETIME NULL COMMENT 'Last update timestamp from GlobalAPI',
     
     UNIQUE KEY unique_map_id_name (map_id, map_name),
     INDEX idx_map_name (map_name(50))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    INDEX idx_validated (validated),
+    INDEX idx_difficulty (difficulty);
+) COMMENT = 'Normalized map data with GlobalAPI metadata' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Servers table - normalized server data
 CREATE TABLE IF NOT EXISTS kz_servers (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     server_id INT NOT NULL UNIQUE,
+    api_key VARCHAR(50) NULL,
+    port INT NULL,
     server_name VARCHAR(255) NOT NULL,
+    ip VARCHAR(45) NULL,
+    owner_steamid64 VARCHAR(20) NULL,
+    created_on DATETIME NULL,
+    updated_on DATETIME NULL,
+    approval_status INT NULL,
+    approved_by_steamid64 VARCHAR(20) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    INDEX idx_server_name (server_name(50))
+
+    INDEX idx_server_name (server_name(50)),
+    INDEX idx_ip_port (ip, port),
+    INDEX idx_owner (owner_steamid64);
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Records table - main table for 25M+ records
@@ -43,7 +63,7 @@ CREATE TABLE IF NOT EXISTS kz_records (
     original_id BIGINT UNSIGNED NULL, -- Original ID from source API data
     
     -- Foreign keys (referenced but not enforced by DB due to partitioning)
-    player_id INT UNSIGNED NOT NULL,
+    player_id VARCHAR(20) NOT NULL,
     map_id INT UNSIGNED NOT NULL,
     server_id INT UNSIGNED NOT NULL,
     
