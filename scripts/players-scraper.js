@@ -40,6 +40,8 @@
 require("dotenv").config();
 const axios = require("axios");
 const mysql = require("mysql2/promise");
+const { HttpsProxyAgent } = require("https-proxy-agent");
+const { HttpProxyAgent } = require("http-proxy-agent");
 
 // ============================================================================
 // CONFIGURATION
@@ -69,6 +71,13 @@ const CONFIG = {
   dryRun: false,
   updateMissing: false, // Only update players with missing is_banned or total_records
   startOffset: 0, // Starting offset for pagination
+
+  // Proxy settings
+  proxies: process.env.KZ_SCRAPER_PROXIES
+    ? process.env.KZ_SCRAPER_PROXIES.split(",")
+        .map((p) => p.trim())
+        .filter(Boolean)
+    : [],
 };
 
 // Parse command line arguments
@@ -129,7 +138,9 @@ Examples:
 
 let connection = null;
 let shouldStop = false;
+let currentProxyIndex = 0;
 
+const proxyAgents = [];
 const stats = {
   startTime: Date.now(),
   playersProcessed: 0,
@@ -152,6 +163,51 @@ function log(level, message, data = null) {
   } else {
     console.log(`${prefix} ${message}`);
   }
+}
+
+// ============================================================================
+// PROXY SETUP
+// ============================================================================
+
+function setupProxies() {
+  if (CONFIG.proxies.length > 0) {
+    log("info", `Setting up ${CONFIG.proxies.length} proxies...`);
+
+    CONFIG.proxies.forEach((proxyUrl, index) => {
+      try {
+        const httpsAgent = new HttpsProxyAgent(proxyUrl);
+        const httpAgent = new HttpProxyAgent(proxyUrl);
+        proxyAgents.push({ proxyUrl, httpsAgent, httpAgent });
+        log("info", `Proxy ${index + 1}: ${proxyUrl}`);
+      } catch (error) {
+        log(
+          "error",
+          `Failed to create agent for proxy ${proxyUrl}: ${error.message}`,
+        );
+      }
+    });
+
+    if (proxyAgents.length === 0) {
+      log("warn", "No valid proxies configured, using direct connection");
+    } else {
+      log("info", `${proxyAgents.length} proxies ready for rotation`);
+    }
+  } else {
+    log("info", "No proxies configured - using direct connection");
+  }
+}
+
+/**
+ * Get next proxy agent in rotation
+ */
+function getNextProxy() {
+  if (proxyAgents.length === 0) {
+    return null;
+  }
+
+  const proxy = proxyAgents[currentProxyIndex];
+  currentProxyIndex = (currentProxyIndex + 1) % proxyAgents.length;
+  return proxy;
 }
 
 // ============================================================================
@@ -287,14 +343,25 @@ async function batchUpsertPlayers(players) {
 async function fetchPlayers(limit, offset, attempt = 1) {
   try {
     const url = `${CONFIG.apiUrl}/players?limit=${limit}&offset=${offset}`;
-    log("info", `Fetching: ${url}`);
-
-    const response = await axios.get(url, {
+    
+    // Get proxy if available
+    const proxy = getNextProxy();
+    const axiosConfig = {
       timeout: CONFIG.requestTimeout,
       headers: {
         "User-Agent": "KZ-Records-Scraper/1.0",
       },
-    });
+    };
+
+    if (proxy) {
+      axiosConfig.httpsAgent = proxy.httpsAgent;
+      axiosConfig.httpAgent = proxy.httpAgent;
+      log("info", `Fetching: ${url} (via proxy ${currentProxyIndex})`);
+    } else {
+      log("info", `Fetching: ${url}`);
+    }
+
+    const response = await axios.get(url, axiosConfig);
 
     return response.data;
   } catch (error) {
@@ -338,14 +405,28 @@ async function fetchPlayersBySteamIds(steamid64List, attempt = 1) {
     // API accepts array of integers in steamid64_list parameter
     const steamIdsParam = steamid64List.join(",");
     const url = `${CONFIG.apiUrl}/players?steamid64_list=${steamIdsParam}`;
-    log("info", `Fetching ${steamid64List.length} players by SteamID64 list`);
-
-    const response = await axios.get(url, {
+    
+    // Get proxy if available
+    const proxy = getNextProxy();
+    const axiosConfig = {
       timeout: CONFIG.requestTimeout,
       headers: {
         "User-Agent": "KZ-Records-Scraper/1.0",
       },
-    });
+    };
+
+    if (proxy) {
+      axiosConfig.httpsAgent = proxy.httpsAgent;
+      axiosConfig.httpAgent = proxy.httpAgent;
+      log(
+        "info",
+        `Fetching ${steamid64List.length} players by SteamID64 list (via proxy ${currentProxyIndex})`,
+      );
+    } else {
+      log("info", `Fetching ${steamid64List.length} players by SteamID64 list`);
+    }
+
+    const response = await axios.get(url, axiosConfig);
 
     return response.data;
   } catch (error) {
@@ -627,10 +708,14 @@ async function main() {
     log("info", `  Batch size: ${CONFIG.batchSize}`);
     log("info", `  Delay: ${CONFIG.delayBetweenBatches}ms`);
     log("info", `  Start offset: ${CONFIG.startOffset}`);
+    log("info", `  Proxies: ${CONFIG.proxies.length > 0 ? CONFIG.proxies.length : "None"}`);
     log("info", `  Force update: ${CONFIG.force}`);
     log("info", `  Update missing only: ${CONFIG.updateMissing}`);
     log("info", `  Mode: ${CONFIG.dryRun ? "DRY RUN" : "LIVE"}`);
     log("info", "=".repeat(70));
+
+    // Setup proxies
+    setupProxies();
 
     // Connect to database
     await connectDatabase();
