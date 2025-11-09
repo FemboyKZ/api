@@ -10,12 +10,14 @@
  * - Rate limit detection and handling (HTTP 429)
  * - Persistent state tracking (saves last checked ID)
  * - Handles missing data gracefully
+ * - Checks for new bans and updates player ban status
  *
  * Configuration (via .env):
  *   KZ_SCRAPER_ENABLED=true           # Enable/disable scraper
  *   KZ_SCRAPER_INTERVAL=3750          # How often to run (ms) - default 3.75s
  *   KZ_SCRAPER_CONCURRENCY=5          # Records per batch - default 5
  *   KZ_SCRAPER_REQUEST_DELAY=100      # Delay between requests (ms) - default 100ms
+ *   KZ_SCRAPER_BANS_INTERVAL=300000   # How often to check bans (ms) - default 5min
  *
  * Rate Limiting:
  *   The GlobalKZ API has a rate limit of 500 requests per 5 minutes per IP.
@@ -49,6 +51,7 @@ const RETRY_DELAY = 2000; // Initial retry delay in ms (exponential backoff)
 const REQUEST_DELAY = parseInt(process.env.KZ_SCRAPER_REQUEST_DELAY) || 100;
 const STATE_FILE = path.join(__dirname, "../../logs/kz-scraper-state.json");
 const REQUEST_TIMEOUT = 10000;
+const BANS_CHECK_INTERVAL = parseInt(process.env.KZ_SCRAPER_BANS_INTERVAL) || 300000; // 5 minutes
 
 // Caches for normalized data
 const playerCache = new Map();
@@ -57,7 +60,9 @@ const serverCache = new Map();
 
 // State tracking
 let isRunning = false;
+let isBansRunning = false;
 let currentRecordId = 0;
+let lastBanCheck = 0;
 const stats = {
   startTime: null,
   recordsProcessed: 0,
@@ -66,6 +71,10 @@ const stats = {
   notFoundCount: 0,
   errorCount: 0,
   lastSuccessfulId: 0,
+  bansChecked: 0,
+  bansInserted: 0,
+  bansUpdated: 0,
+  playersUpdated: 0,
 };
 
 /**
@@ -76,6 +85,7 @@ function loadState() {
     if (fs.existsSync(STATE_FILE)) {
       const state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
       currentRecordId = state.lastRecordId || 0;
+      lastBanCheck = state.lastBanCheck || 0;
       logger.info(
         `[KZ Scraper] Loaded state: Starting from record ID ${currentRecordId}`,
       );
@@ -102,11 +112,16 @@ function saveState() {
 
     const state = {
       lastRecordId: stats.lastSuccessfulId || currentRecordId,
+      lastBanCheck,
       lastUpdate: new Date().toISOString(),
       stats: {
         recordsProcessed: stats.recordsProcessed,
         recordsInserted: stats.recordsInserted,
         recordsSkipped: stats.recordsSkipped,
+        bansChecked: stats.bansChecked,
+        bansInserted: stats.bansInserted,
+        bansUpdated: stats.bansUpdated,
+        playersUpdated: stats.playersUpdated,
       },
     };
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), {
@@ -545,6 +560,220 @@ async function scrapeBatch(startId, batchSize) {
 }
 
 /**
+ * Format datetime for MySQL
+ */
+function formatDateTime(isoString) {
+  if (!isoString) return null;
+  try {
+    const date = new Date(isoString);
+    return date.toISOString().slice(0, 19).replace("T", " ");
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Fetch bans from API
+ */
+async function fetchBans(limit = 1000, offset = 0, attempt = 1) {
+  try {
+    const response = await axios.get(`${GOKZ_API_URL}/bans`, {
+      params: { limit, offset },
+      timeout: REQUEST_TIMEOUT,
+    });
+
+    return response.data || [];
+  } catch (error) {
+    if (error.response?.status === 429) {
+      const rateLimitDelay = 60000;
+      logger.warn(
+        `[KZ Scraper] Rate limited (429) on bans, waiting ${rateLimitDelay / 1000}s before retry`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, rateLimitDelay));
+
+      if (attempt < RETRY_ATTEMPTS) {
+        return fetchBans(limit, offset, attempt + 1);
+      }
+      return [];
+    }
+
+    if (attempt < RETRY_ATTEMPTS) {
+      const delay = RETRY_DELAY * Math.pow(2, attempt - 1);
+      logger.warn(
+        `[KZ Scraper] Retry ${attempt}/${RETRY_ATTEMPTS} for bans after ${delay}ms`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return fetchBans(limit, offset, attempt + 1);
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * Process bans and update player ban status
+ */
+async function processBans() {
+  if (isBansRunning) {
+    logger.debug(
+      "[KZ Scraper] Bans check already running, skipping this iteration",
+    );
+    return;
+  }
+
+  const now = Date.now();
+  if (now - lastBanCheck < BANS_CHECK_INTERVAL) {
+    return; // Not time yet
+  }
+
+  isBansRunning = true;
+  lastBanCheck = now;
+
+  try {
+    logger.info("[KZ Scraper] Checking for new bans...");
+
+    const pool = getKzPool();
+    const connection = await pool.getConnection();
+
+    try {
+      const limit = 1000;
+      let totalProcessed = 0;
+      let totalInserted = 0;
+      let totalUpdated = 0;
+      let playersUpdated = 0;
+
+      // Always fetch from offset 0 - API returns latest bans first
+      const bans = await fetchBans(limit, 0);
+
+      if (bans.length > 0) {
+        // Batch insert/update bans
+        if (bans.length > 0) {
+          const values = bans.map((ban) => [
+            ban.id,
+            ban.ban_type || null,
+            formatDateTime(ban.expires_on),
+            ban.ip || null,
+            ban.steamid64 ? String(ban.steamid64) : null,
+            ban.player_name || null,
+            ban.steam_id || null,
+            ban.notes || null,
+            ban.stats || null,
+            ban.server_id || null,
+            ban.updated_by_id ? String(ban.updated_by_id) : null,
+            formatDateTime(ban.created_on),
+            formatDateTime(ban.updated_on),
+          ]);
+
+          const [result] = await connection.query(
+            `INSERT INTO kz_bans (
+              id, ban_type, expires_on, ip, steamid64, player_name, steam_id,
+              notes, stats, server_id, updated_by_id, created_on, updated_on
+            ) VALUES ?
+            ON DUPLICATE KEY UPDATE
+              ban_type = VALUES(ban_type),
+              expires_on = VALUES(expires_on),
+              ip = VALUES(ip),
+              steamid64 = VALUES(steamid64),
+              player_name = VALUES(player_name),
+              steam_id = VALUES(steam_id),
+              notes = VALUES(notes),
+              stats = VALUES(stats),
+              server_id = VALUES(server_id),
+              updated_by_id = VALUES(updated_by_id),
+              updated_on = VALUES(updated_on),
+              updated_at = CURRENT_TIMESTAMP`,
+            [values],
+          );
+
+          // Calculate inserts vs updates
+          const totalBans = bans.length;
+          let inserted, updated;
+
+          if (result.affectedRows === totalBans) {
+            inserted = totalBans;
+            updated = 0;
+          } else if (result.affectedRows > totalBans) {
+            inserted = 2 * totalBans - result.affectedRows;
+            updated = totalBans - inserted;
+          } else {
+            inserted = 0;
+            updated = totalBans;
+          }
+
+          totalInserted += inserted;
+          totalUpdated += updated;
+          totalProcessed += bans.length;
+
+          // Update player ban status for all steamid64s in this batch
+          const steamIds = bans
+            .map((ban) => (ban.steamid64 ? String(ban.steamid64) : null))
+            .filter(Boolean);
+
+          if (steamIds.length > 0) {
+            // First, ensure all players exist (create if missing)
+            for (const ban of bans) {
+              if (ban.steamid64) {
+                const steamid64 = String(ban.steamid64);
+                const playerName = sanitizeString(
+                  ban.player_name,
+                  100,
+                  `Unknown Player (${steamid64})`,
+                );
+                const steamId = sanitizeString(
+                  ban.steam_id,
+                  32,
+                  `STEAM_ID_MISSING_${steamid64}`,
+                );
+
+                await connection.query(
+                  `INSERT IGNORE INTO kz_players (steamid64, steam_id, player_name, is_banned)
+                   VALUES (?, ?, ?, TRUE)`,
+                  [steamid64, steamId, playerName],
+                );
+              }
+            }
+
+            // Update is_banned flag for all players with bans
+            const placeholders = steamIds.map(() => "?").join(",");
+            const [updateResult] = await connection.query(
+              `UPDATE kz_players 
+               SET is_banned = TRUE, updated_at = CURRENT_TIMESTAMP
+               WHERE steamid64 IN (${placeholders})`,
+              steamIds,
+            );
+
+            playersUpdated += updateResult.affectedRows;
+          }
+
+          logger.debug(
+            `[KZ Scraper] Processed ${bans.length} bans (inserted: ${inserted}, updated: ${updated}, players updated: ${updateResult?.affectedRows || 0})`,
+          );
+        }
+      }
+
+      stats.bansChecked += totalProcessed;
+      stats.bansInserted += totalInserted;
+      stats.bansUpdated += totalUpdated;
+      stats.playersUpdated += playersUpdated;
+
+      logger.info(
+        `[KZ Scraper] Bans check complete: ${totalProcessed} checked, ${totalInserted} inserted, ${totalUpdated} updated, ${playersUpdated} players updated`,
+      );
+
+      saveState();
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    logger.error(`[KZ Scraper] Error processing bans: ${error.message}`);
+    logger.error(`[KZ Scraper] Stack trace: ${error.stack}`);
+    stats.errorCount++;
+  } finally {
+    isBansRunning = false;
+  }
+}
+
+/**
  * Main scraper loop
  */
 async function runScraper() {
@@ -558,6 +787,11 @@ async function runScraper() {
   isRunning = true;
 
   try {
+    // Check bans periodically (non-blocking)
+    processBans().catch((error) => {
+      logger.error(`[KZ Scraper] Bans check failed: ${error.message}`);
+    });
+
     const batchResult = await scrapeBatch(currentRecordId + 1, CONCURRENCY);
 
     // If entire batch was 404s, reset to last successful ID and stay there
@@ -627,6 +861,9 @@ async function startScraperJob(intervalMs = 3750) {
   logger.info(
     `[KZ Scraper] Estimated rate: ~${Math.floor((300 / (intervalMs / 1000)) * CONCURRENCY)} requests per 5 minutes (limit: 500)`,
   );
+  logger.info(
+    `[KZ Scraper] Bans check enabled (interval: ${BANS_CHECK_INTERVAL / 1000}s)`,
+  );
 
   // Test database connection first
   try {
@@ -666,9 +903,11 @@ async function startScraperJob(intervalMs = 3750) {
 function getStats() {
   const uptime = stats.startTime ? (Date.now() - stats.startTime) / 1000 : 0;
   const rate = uptime > 0 ? Math.round(stats.recordsProcessed / uptime) : 0;
+  const timeSinceLastBanCheck = lastBanCheck > 0 ? Date.now() - lastBanCheck : null;
 
   return {
     isRunning,
+    isBansRunning,
     currentRecordId,
     uptime: Math.round(uptime),
     recordsProcessed: stats.recordsProcessed,
@@ -678,6 +917,12 @@ function getStats() {
     errorCount: stats.errorCount,
     lastSuccessfulId: stats.lastSuccessfulId,
     averageRate: rate,
+    bansChecked: stats.bansChecked,
+    bansInserted: stats.bansInserted,
+    bansUpdated: stats.bansUpdated,
+    playersUpdated: stats.playersUpdated,
+    lastBanCheck: lastBanCheck > 0 ? new Date(lastBanCheck).toISOString() : null,
+    timeSinceLastBanCheck: timeSinceLastBanCheck ? Math.round(timeSinceLastBanCheck / 1000) : null,
     cacheSize: {
       players: playerCache.size,
       maps: mapCache.size,
