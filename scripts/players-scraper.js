@@ -321,10 +321,36 @@ async function batchUpsertPlayers(players) {
 
     const [result] = await connection.query(query, [values]);
 
-    // affectedRows = inserts + (updates * 2)
-    // If a row is updated, affectedRows counts it twice
-    const inserted = Math.floor(result.affectedRows / 2);
-    const updated = result.affectedRows - inserted;
+    // MySQL affectedRows behavior with ON DUPLICATE KEY UPDATE:
+    // - INSERT: affectedRows = 1
+    // - UPDATE (with changes): affectedRows = 2
+    // - UPDATE (no changes): affectedRows = 0
+    //
+    // For batch inserts, if all are new: affectedRows = players.length
+    // For batch with mix: affectedRows = inserts + (updates * 2)
+    //
+    // We can't perfectly distinguish inserts vs updates from affectedRows alone,
+    // but we can estimate: if affectedRows == players.length, likely all inserts
+    const totalPlayers = players.length;
+    let inserted, updated;
+
+    if (result.affectedRows === totalPlayers) {
+      // All rows were inserted (no duplicates)
+      inserted = totalPlayers;
+      updated = 0;
+    } else if (result.affectedRows > totalPlayers) {
+      // Some updates occurred (affectedRows = 2 per update)
+      // Formula: affectedRows = inserts + (updates * 2)
+      // And: inserts + updates = totalPlayers
+      // Solving: inserts = (2 * totalPlayers) - affectedRows
+      inserted = (2 * totalPlayers) - result.affectedRows;
+      updated = totalPlayers - inserted;
+    } else {
+      // affectedRows < totalPlayers means some updates had no changes
+      // This is ambiguous, so we'll report conservatively
+      inserted = 0;
+      updated = totalPlayers;
+    }
 
     return { inserted, updated };
   } catch (error) {

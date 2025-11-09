@@ -290,7 +290,7 @@ async function batchUpsertBans(bans) {
 
     const values = bans.map((ban) => [
       ban.id,
-      ban.ban_type || null,
+      ban.ban_type || "none",
       formatDateTime(ban.expires_on),
       ban.ip || null,
       ban.steamid64 ? String(ban.steamid64) : null, // Convert to string for precision
@@ -306,10 +306,36 @@ async function batchUpsertBans(bans) {
 
     const [result] = await connection.query(query, [values]);
 
-    // affectedRows = inserts + (updates * 2)
-    // If a row is updated, affectedRows counts it twice
-    const inserted = Math.floor(result.affectedRows / 2);
-    const updated = result.affectedRows - inserted;
+    // MySQL affectedRows behavior with ON DUPLICATE KEY UPDATE:
+    // - INSERT: affectedRows = 1
+    // - UPDATE (with changes): affectedRows = 2
+    // - UPDATE (no changes): affectedRows = 0
+    //
+    // For batch inserts, if all are new: affectedRows = bans.length
+    // For batch with mix: affectedRows = inserts + (updates * 2)
+    //
+    // We can't perfectly distinguish inserts vs updates from affectedRows alone,
+    // but we can estimate: if affectedRows == bans.length, likely all inserts
+    const totalBans = bans.length;
+    let inserted, updated;
+
+    if (result.affectedRows === totalBans) {
+      // All rows were inserted (no duplicates)
+      inserted = totalBans;
+      updated = 0;
+    } else if (result.affectedRows > totalBans) {
+      // Some updates occurred (affectedRows = 2 per update)
+      // Formula: affectedRows = inserts + (updates * 2)
+      // And: inserts + updates = totalBans
+      // Solving: inserts = (2 * totalBans) - affectedRows
+      inserted = (2 * totalBans) - result.affectedRows;
+      updated = totalBans - inserted;
+    } else {
+      // affectedRows < totalBans means some updates had no changes
+      // This is ambiguous, so we'll report conservatively
+      inserted = 0;
+      updated = totalBans;
+    }
 
     return { inserted, updated };
   } catch (error) {
