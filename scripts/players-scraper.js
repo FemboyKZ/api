@@ -68,6 +68,7 @@ const CONFIG = {
   force: false,
   dryRun: false,
   updateMissing: false, // Only update players with missing is_banned or total_records
+  startOffset: 0, // Starting offset for pagination
 };
 
 // Parse command line arguments
@@ -76,6 +77,8 @@ process.argv.slice(2).forEach((arg, i, args) => {
     CONFIG.batchSize = Math.min(parseInt(args[i + 1]), 500);
   if (arg === "--delay" && args[i + 1])
     CONFIG.delayBetweenBatches = parseInt(args[i + 1]);
+  if (arg === "--offset" && args[i + 1])
+    CONFIG.startOffset = parseInt(args[i + 1]);
   if (arg === "--force") CONFIG.force = true;
   if (arg === "--dry-run") CONFIG.dryRun = true;
   if (arg === "--update-missing") CONFIG.updateMissing = true;
@@ -91,6 +94,7 @@ Usage:
 Options:
   --batch-size N      Number of players per batch (default: 500, max: 500)
   --delay N           Delay between batches in milliseconds (default: 2000)
+  --offset N          Starting offset for pagination (default: 0)
   --force             Update all players even if they exist
   --update-missing    Only update players with missing is_banned or total_records
   --dry-run           Show what would be done without making changes
@@ -99,6 +103,9 @@ Options:
 Examples:
   # Fetch and update all players
   node scripts/players-scraper.js
+
+  # Start from offset 100
+  node scripts/players-scraper.js --offset 100
 
   # Only update players with missing metadata
   node scripts/players-scraper.js --update-missing
@@ -109,8 +116,8 @@ Examples:
   # Force update all players
   node scripts/players-scraper.js --force
 
-  # Custom batch size and delay
-  node scripts/players-scraper.js --batch-size 500 --delay 2000
+  # Custom batch size, delay, and offset
+  node scripts/players-scraper.js --batch-size 500 --delay 2000 --offset 1000
     `);
     process.exit(0);
   }
@@ -477,9 +484,13 @@ async function updatePlayersWithMissingData() {
  * Main scraper loop
  */
 async function scrapeAllPlayers() {
-  let offset = 0;
+  let offset = CONFIG.startOffset;
   let hasMore = true;
-  let batchNum = 1;
+  let batchNum = Math.floor(CONFIG.startOffset / CONFIG.batchSize) + 1;
+  
+  if (CONFIG.startOffset > 0) {
+    log("info", `Starting from offset ${CONFIG.startOffset} (batch ${batchNum})`);
+  }
 
   while (hasMore && !shouldStop) {
     try {
@@ -615,6 +626,7 @@ async function main() {
     log("info", `  API: ${CONFIG.apiUrl}`);
     log("info", `  Batch size: ${CONFIG.batchSize}`);
     log("info", `  Delay: ${CONFIG.delayBetweenBatches}ms`);
+    log("info", `  Start offset: ${CONFIG.startOffset}`);
     log("info", `  Force update: ${CONFIG.force}`);
     log("info", `  Update missing only: ${CONFIG.updateMissing}`);
     log("info", `  Mode: ${CONFIG.dryRun ? "DRY RUN" : "LIVE"}`);
