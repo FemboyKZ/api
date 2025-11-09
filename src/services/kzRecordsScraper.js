@@ -575,11 +575,11 @@ function formatDateTime(isoString) {
 /**
  * Fetch bans from API
  */
-async function fetchBans(limit = 1000, offset = 0, attempt = 1) {
+async function fetchBans(limit = 200, offset = 0, attempt = 1) {
   try {
     const response = await axios.get(`${GOKZ_API_URL}/bans`, {
       params: { limit, offset },
-      timeout: REQUEST_TIMEOUT,
+      timeout: 30000, // 30 seconds for bans endpoint (can be slow)
     });
 
     return response.data || [];
@@ -632,25 +632,23 @@ async function processBans() {
   try {
     logger.info("[KZ Scraper] Checking for new bans...");
 
-    const pool = getKzPool();
-    const connection = await pool.getConnection();
+      const pool = getKzPool();
+      const connection = await pool.getConnection();
 
-    try {
-      const limit = 1000;
-      let totalProcessed = 0;
-      let totalInserted = 0;
-      let totalUpdated = 0;
-      let playersUpdated = 0;
+      try {
+        const limit = 200; // Reduced from 1000 to avoid timeout
+        let totalProcessed = 0;
+        let totalInserted = 0;
+        let totalUpdated = 0;
+        let playersUpdated = 0;
 
-      // Always fetch from offset 0 - API returns latest bans first
-      const bans = await fetchBans(limit, 0);
-
-      if (bans.length > 0) {
+        // Always fetch from offset 0 - API returns latest bans first
+        const bans = await fetchBans(limit, 0);      if (bans.length > 0) {
         // Batch insert/update bans
         if (bans.length > 0) {
           const values = bans.map((ban) => [
             ban.id,
-            ban.ban_type || null,
+            ban.ban_type || "none",
             formatDateTime(ban.expires_on),
             ban.ip || null,
             ban.steamid64 ? String(ban.steamid64) : null,
