@@ -10,6 +10,7 @@ const { startAvatarUpdateJob } = require("./services/steamQuery");
 const { startScraperJob } = require("./services/kzRecordsScraper");
 const { initWebSocket } = require("./services/websocket");
 const { initRedis, closeRedis } = require("./db/redis");
+const { loadMessageIds } = require("./services/discordWebhook");
 
 const port = process.env.PORT || 3000;
 const host = process.env.HOST || "0.0.0.0"; // Use 127.0.0.1 in production with reverse proxy
@@ -45,19 +46,25 @@ async function startServer() {
     logger.info("Initializing WebSocket server...");
     initWebSocket(httpServer);
 
-    // Step 6: Start HTTP server
+    // Step 6: Load Discord message IDs from database (before starting server)
+    if (process.env.DISCORD_WEBHOOK_ENABLED === "true") {
+      logger.info("Loading Discord message IDs...");
+      await loadMessageIds();
+    }
+
+    // Step 7: Start HTTP server
     httpServer.listen(port, host, () => {
       logger.info(`Server listening on ${host}:${port}`);
       logger.info(`WebSocket available at ws://${host}:${port}`);
       logger.info("Server initialization complete");
 
-      // Step 7: Start background update loop
+      // Step 8: Start background update loop
       startUpdateLoop(30 * 1000);
 
-      // Step 8: Start avatar update job (runs every hour)
+      // Step 9: Start avatar update job (runs every hour)
       startAvatarUpdateJob(60 * 60 * 1000);
 
-      // Step 9: Start KZ records scraper (runs every 3.75s for 80% rate limit utilization)
+      // Step 10: Start KZ records scraper (runs every 3.75s for 80% rate limit utilization)
       if (process.env.KZ_SCRAPER_ENABLED !== "false") {
         const scraperInterval =
           parseInt(process.env.KZ_SCRAPER_INTERVAL) || 3750; // 3.75 seconds for 80% rate limit (400 req/5min)

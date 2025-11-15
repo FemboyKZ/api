@@ -109,6 +109,9 @@ services:
       GOKZ_API_URL: ${GOKZ_API_URL:-https://kztimerglobal.com/api/v2}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      DISCORD_WEBHOOK_ENABLED: ${DISCORD_WEBHOOK_ENABLED:-false}
+      DISCORD_WEBHOOK_CSGO: ${DISCORD_WEBHOOK_CSGO}
+      DISCORD_WEBHOOK_CS2: ${DISCORD_WEBHOOK_CS2}
     depends_on:
       mariadb:
         condition: service_healthy

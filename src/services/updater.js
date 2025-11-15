@@ -10,6 +10,7 @@ const {
   emitMapUpdate,
 } = require("./websocket");
 const { deleteCache } = require("../db/redis");
+const { updateDiscordWebhooks } = require("./discordWebhook");
 
 /**
  * Server Update Service
@@ -415,6 +416,11 @@ async function updateLoop() {
   await deleteCache("cache:players:*");
   await deleteCache("cache:maps:*");
   await deleteCache("cache:history:*");
+
+  // Update Discord webhooks after all server queries complete
+  updateDiscordWebhooks().catch((error) => {
+    logger.error("Failed to update Discord webhooks", { error: error.message });
+  });
 }
 
 function startUpdateLoop(intervalMs) {
