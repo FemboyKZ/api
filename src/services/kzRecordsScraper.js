@@ -803,10 +803,9 @@ async function runScraper() {
             `Resetting to last successful ID ${currentRecordId} to wait for new records.`,
         );
       } else {
-        // No successful records yet, still increment to avoid infinite loop at ID 0
-        currentRecordId = batchResult.lastId;
+        // No successful records yet - don't increment, stay at current position
         logger.debug(
-          `[KZ Scraper] No records found yet, continuing forward from ID ${currentRecordId}`,
+          `[KZ Scraper] No records found yet at ID ${currentRecordId}, will keep checking from here.`,
         );
       }
     } else {
