@@ -114,10 +114,10 @@ function sanitizePlayerName(playerName) {
   let cleaned = playerName.replace(/[\x00-\x1F\x7F]/g, "");
 
   // Step 2: Remove Unicode invisible/formatting characters but KEEP visible symbols
-  // Remove: Zero-width spaces, joiners, directional marks, etc.
+  // Remove: Zero-width spaces, joiners, directional marks, variation selectors, tags, etc.
   // Keep: Hearts (♥), stars (★), emojis, and other visible Unicode
   cleaned = cleaned.replace(
-    /[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g,
+    /[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFB\u{E0000}-\u{E007F}]/gu,
     "",
   );
 
