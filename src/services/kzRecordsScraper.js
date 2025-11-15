@@ -740,12 +740,17 @@ async function processBans() {
               steamIds,
             );
 
-            playersUpdated += updateResult.affectedRows;
-          }
+            const playersAffected = updateResult.affectedRows;
+            playersUpdated += playersAffected;
 
-          logger.debug(
-            `[KZ Scraper] Processed ${bans.length} bans (inserted: ${inserted}, updated: ${updated}, players updated: ${updateResult?.affectedRows || 0})`,
-          );
+            logger.debug(
+              `[KZ Scraper] Processed ${bans.length} bans (inserted: ${inserted}, updated: ${updated}, players updated: ${playersAffected})`,
+            );
+          } else {
+            logger.debug(
+              `[KZ Scraper] Processed ${bans.length} bans (inserted: ${inserted}, updated: ${updated}, no players to update)`,
+            );
+          }
         }
       }
 
