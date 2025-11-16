@@ -79,6 +79,12 @@ const {
  *           enum: [asc, desc]
  *           default: desc
  *         description: Sort order
+ *       - in: query
+ *         name: include_banned
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Include records from banned players
  *     responses:
  *       200:
  *         description: Successful response with records list
@@ -98,6 +104,7 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
       teleports,
       sort,
       order,
+      include_banned,
     } = req.query;
     const { limit: validLimit, offset } = validatePagination(page, limit, 100);
 
@@ -112,6 +119,7 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
         r.player_id,
         p.player_name,
         p.steamid64,
+        p.is_banned,
         r.map_id,
         m.map_name,
         r.server_id,
@@ -133,6 +141,11 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
       WHERE 1=1
     `;
     const params = [];
+
+    // Filter out banned players by default
+    if (include_banned !== "true" && include_banned !== true) {
+      query += " AND (p.is_banned IS NULL OR p.is_banned = FALSE)";
+    }
 
     // Apply filters
     if (map) {
@@ -332,6 +345,12 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
  *           default: 100
  *           maximum: 1000
  *         description: Number of top records to return
+ *       - in: query
+ *         name: include_banned
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Include records from banned players
  *     responses:
  *       200:
  *         description: Leaderboard with best times
@@ -346,7 +365,7 @@ router.get(
   async (req, res) => {
     try {
       const { mapname } = req.params;
-      const { mode = "kz_timer", stage = 0, teleports = "pro", limit = 100 } = req.query;
+      const { mode = "kz_timer", stage = 0, teleports = "pro", limit = 100, include_banned } = req.query;
 
       const validLimit = Math.min(parseInt(limit, 10) || 100, 1000);
       const stageNum = parseInt(stage, 10) || 0;
@@ -370,6 +389,7 @@ router.get(
           r.original_id,
           p.player_name,
           p.steamid64,
+          p.is_banned,
           r.time,
           r.teleports,
           r.points,
@@ -380,15 +400,21 @@ router.get(
           ROW_NUMBER() OVER (ORDER BY r.time ASC) as rank
         FROM kz_records r
         INNER JOIN (
-          SELECT player_id, MIN(time) as best_time
+          SELECT r2.player_id, MIN(r2.time) as best_time
           FROM kz_records r2
           INNER JOIN kz_maps m2 ON r2.map_id = m2.id
+          LEFT JOIN kz_players p2 ON r2.player_id = p2.steamid64
           WHERE m2.map_name = ?
             AND r2.mode = ?
             AND r2.stage = ?
       `;
 
       const params = [sanitizeString(mapname, 255), sanitizeString(mode, 32), stageNum];
+
+      // Filter banned players in subquery
+      if (include_banned !== "true" && include_banned !== true) {
+        query += " AND (p2.is_banned IS NULL OR p2.is_banned = FALSE)";
+      }
 
       if (teleports === "pro") {
         query += " AND r2.teleports = 0";
@@ -397,7 +423,7 @@ router.get(
       }
 
       query += `
-          GROUP BY player_id
+          GROUP BY r2.player_id
         ) best ON r.player_id = best.player_id AND r.time = best.best_time
         LEFT JOIN kz_players p ON r.player_id = p.steamid64
         LEFT JOIN kz_maps m ON r.map_id = m.id
@@ -408,6 +434,11 @@ router.get(
       `;
 
       params.push(sanitizeString(mapname, 255), sanitizeString(mode, 32), stageNum);
+
+      // Filter banned players in main query
+      if (include_banned !== "true" && include_banned !== true) {
+        query += " AND (p.is_banned IS NULL OR p.is_banned = FALSE)";
+      }
 
       if (teleports === "pro") {
         query += " AND r.teleports = 0";
@@ -466,6 +497,12 @@ router.get(
  *           type: string
  *           enum: [tp, pro]
  *         description: Filter by teleport usage
+ *       - in: query
+ *         name: include_banned
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Include records from banned players
  *     responses:
  *       200:
  *         description: List of recent records
@@ -477,7 +514,7 @@ router.get(
   cacheMiddleware(15, kzKeyGenerator),
   async (req, res) => {
     try {
-      const { limit = 50, mode, teleports } = req.query;
+      const { limit = 50, mode, teleports, include_banned } = req.query;
       const validLimit = Math.min(parseInt(limit, 10) || 50, 100);
 
       let query = `
@@ -486,6 +523,7 @@ router.get(
           r.original_id,
           p.player_name,
           p.steamid64,
+          p.is_banned,
           m.map_name,
           r.mode,
           r.stage,
@@ -501,6 +539,11 @@ router.get(
         WHERE 1=1
       `;
       const params = [];
+
+      // Filter out banned players by default
+      if (include_banned !== "true" && include_banned !== true) {
+        query += " AND (p.is_banned IS NULL OR p.is_banned = FALSE)";
+      }
 
       if (mode) {
         query += " AND r.mode = ?";
@@ -564,6 +607,12 @@ router.get(
  *           default: 100
  *           maximum: 1000
  *         description: Number of world records to return
+ *       - in: query
+ *         name: include_banned
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Include records from banned players
  *     responses:
  *       200:
  *         description: List of world records
@@ -575,7 +624,7 @@ router.get(
   cacheMiddleware(300, kzKeyGenerator),
   async (req, res) => {
     try {
-      const { mode = "kz_timer", stage = 0, teleports = "pro", limit = 100 } = req.query;
+      const { mode = "kz_timer", stage = 0, teleports = "pro", limit = 100, include_banned } = req.query;
 
       const validLimit = Math.min(parseInt(limit, 10) || 100, 1000);
       const stageNum = parseInt(stage, 10) || 0;
@@ -585,6 +634,7 @@ router.get(
           m.map_name,
           p.player_name,
           p.steamid64,
+          p.is_banned,
           r.time,
           r.teleports,
           r.points,
@@ -599,12 +649,18 @@ router.get(
         WHERE r.id IN (
           SELECT r2.id
           FROM kz_records r2
+          LEFT JOIN kz_players p2 ON r2.player_id = p2.steamid64
           WHERE r2.map_id = m.id
             AND r2.mode = ?
             AND r2.stage = ?
       `;
 
       const params = [sanitizeString(mode, 32), stageNum];
+
+      // Filter banned players in subquery
+      if (include_banned !== "true" && include_banned !== true) {
+        query += " AND (p2.is_banned IS NULL OR p2.is_banned = FALSE)";
+      }
 
       if (teleports === "pro") {
         query += " AND r2.teleports = 0";
@@ -616,6 +672,14 @@ router.get(
           ORDER BY r2.time ASC
           LIMIT 1
         )
+      `;
+
+      // Filter banned players in main query
+      if (include_banned !== "true" && include_banned !== true) {
+        query += " AND (p.is_banned IS NULL OR p.is_banned = FALSE)";
+      }
+
+      query += `
         ORDER BY r.time ASC
         LIMIT ?
       `;
