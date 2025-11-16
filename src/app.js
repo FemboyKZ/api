@@ -12,6 +12,11 @@ const mapsRouter = require("./api/maps");
 const healthRouter = require("./api/health");
 const historyRouter = require("./api/history");
 const adminRouter = require("./api/admin");
+const kzRecordsRouter = require("./api/kzRecords");
+const kzPlayersRouter = require("./api/kzPlayers");
+const kzMapsRouter = require("./api/kzMaps");
+const kzServersRouter = require("./api/kzServers");
+const kzBansRouter = require("./api/kzBans");
 const errorHandler = require("./utils/errorHandler");
 const logger = require("./utils/logger");
 
@@ -74,6 +79,13 @@ app.use("/maps", mapsRouter);
 app.use("/health", healthRouter);
 app.use("/history", historyRouter);
 app.use("/admin", adminRouter);
+
+// KZ Global endpoints
+app.use("/kzglobal/records", kzRecordsRouter);
+app.use("/kzglobal/players", kzPlayersRouter);
+app.use("/kzglobal/maps", kzMapsRouter);
+app.use("/kzglobal/servers", kzServersRouter);
+app.use("/kzglobal/bans", kzBansRouter);
 
 app.use(errorHandler);
 

@@ -69,6 +69,21 @@ function mapsKeyGenerator(req) {
 }
 
 /**
+ * Cache key generator for KZ Global endpoints
+ */
+function kzKeyGenerator(req) {
+  const params = Object.entries(req.params)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => v)
+    .join(":");
+  const query = Object.entries(req.query)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}:${v}`)
+    .join(":");
+  return `cache:kz:${req.baseUrl}${req.path}${params ? `:${params}` : ""}${query ? `:${query}` : ""}`;
+}
+
+/**
  * Generic cache key generator from params and query
  * @param {string} prefix - Cache key prefix (e.g., "history:server")
  * @param {object} params - Route params
@@ -94,5 +109,6 @@ module.exports = {
   serversKeyGenerator,
   playersKeyGenerator,
   mapsKeyGenerator,
+  kzKeyGenerator,
   generateCacheKey,
 };
