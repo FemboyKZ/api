@@ -40,6 +40,11 @@ const {
  *           type: string
  *         description: Filter by map name (partial match)
  *       - in: query
+ *         name: map_id
+ *         schema:
+ *           type: integer
+ *         description: Filter by map (ID)
+ *       - in: query
  *         name: player
  *         schema:
  *           type: string
@@ -53,7 +58,7 @@ const {
  *         name: stage
  *         schema:
  *           type: integer
- *         description: Filter by stage (0 for map completion)
+ *         description: Filter by stage (0 for map completion, 0< for bonuses)
  *       - in: query
  *         name: server
  *         schema:
@@ -63,8 +68,8 @@ const {
  *         name: teleports
  *         schema:
  *           type: string
- *           enum: [tp, pro]
- *         description: Filter by teleport usage (tp = >0, pro = 0)
+ *           enum: [tp, true, pro, false]
+ *         description: Filter by teleport usage (tp/true = >0, pro/false = 0)
  *       - in: query
  *         name: sort
  *         schema:
@@ -153,6 +158,11 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
       params.push(`%${sanitizeString(map, 255)}%`);
     }
 
+    if (map_id) {
+      query += " AND r.map_id = ?";
+      params.push(parseInt(map_id, 10));
+    }
+
     if (player) {
       // Check if it's a SteamID or name
       if (isValidSteamID(player)) {
@@ -181,9 +191,9 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
     }
 
     if (teleports) {
-      if (teleports === "pro") {
+      if (teleports === "pro" || teleports === "false") {
         query += " AND r.teleports = 0";
-      } else if (teleports === "tp") {
+      } else if (teleports === "tp" || teleports === "true") {
         query += " AND r.teleports > 0";
       }
     }

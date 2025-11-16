@@ -12,7 +12,7 @@ const {
 
 /**
  * @swagger
- * /servers-test:
+ * /servers-steam:
  *   get:
  *     summary: Get servers from Steam Master Server API
  *     description: Fetches server list from Steam's Master Server Query Protocol
