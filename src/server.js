@@ -8,6 +8,7 @@ const { initKzDatabase, closeKzDatabase } = require("./db/kzRecords");
 const { startUpdateLoop } = require("./services/updater");
 const { startAvatarUpdateJob } = require("./services/steamQuery");
 const { startScraperJob } = require("./services/kzRecordsScraper");
+const { startBanCleanupJob } = require("./services/kzBanStatus");
 const { initWebSocket } = require("./services/websocket");
 const { initRedis, closeRedis } = require("./db/redis");
 const { loadMessageIds } = require("./services/discordWebhook");
@@ -71,6 +72,14 @@ async function startServer() {
         startScraperJob(scraperInterval);
         logger.info(
           `KZ Records scraper enabled (interval: ${scraperInterval}ms)`,
+        );
+
+        // Step 11: Start ban status cleanup job (runs every hour by default)
+        const banCleanupInterval =
+          parseInt(process.env.KZ_BAN_CLEANUP_INTERVAL) || 3600000; // 1 hour
+        startBanCleanupJob(banCleanupInterval);
+        logger.info(
+          `KZ Ban cleanup job enabled (interval: ${banCleanupInterval / 1000}s)`,
         );
       }
     });

@@ -41,6 +41,7 @@ const fs = require("fs");
 const path = require("path");
 const logger = require("../utils/logger");
 const { getKzPool } = require("../db/kzRecords");
+const { updatePlayerBanStatus } = require("./kzBanStatus");
 
 // Configuration
 const GOKZ_API_URL =
@@ -731,20 +732,13 @@ async function processBans() {
               }
             }
 
-            // Update is_banned flag for all players with bans
-            const placeholders = steamIds.map(() => "?").join(",");
-            const [updateResult] = await connection.query(
-              `UPDATE kz_players 
-               SET is_banned = TRUE, updated_at = CURRENT_TIMESTAMP
-               WHERE steamid64 IN (${placeholders})`,
-              steamIds,
-            );
-
-            const playersAffected = updateResult.affectedRows;
-            playersUpdated += playersAffected;
+            // Use ban status service to update is_banned flags intelligently
+            // This checks for active vs expired bans
+            const banStatusResult = await updatePlayerBanStatus(steamIds);
+            playersUpdated += banStatusResult.banned + banStatusResult.unbanned;
 
             logger.debug(
-              `[KZ Scraper] Processed ${bans.length} bans (inserted: ${inserted}, updated: ${updated}, players updated: ${playersAffected})`,
+              `[KZ Scraper] Processed ${bans.length} bans (inserted: ${inserted}, updated: ${updated}, players banned: ${banStatusResult.banned}, unbanned: ${banStatusResult.unbanned})`,
             );
           } else {
             logger.debug(

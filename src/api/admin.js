@@ -3,6 +3,11 @@ const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
 const { getStats: getScraperStats } = require("../services/kzRecordsScraper");
+const {
+  getStats: getBanStatusStats,
+  manualBanStatusUpdate,
+  cleanupExpiredBans,
+} = require("../services/kzBanStatus");
 
 /**
  * GET /admin/scraper-status
@@ -165,6 +170,78 @@ router.post("/cleanup-history", async (req, res) => {
   } catch (error) {
     logger.error("Failed to cleanup history", { error: error.message });
     res.status(500).json({ error: "Failed to cleanup history" });
+  }
+});
+
+/**
+ * GET /admin/ban-status
+ * Get current KZ ban status service statistics
+ */
+router.get("/ban-status", async (req, res) => {
+  try {
+    const stats = getBanStatusStats();
+    res.json({
+      success: true,
+      banStatus: stats,
+    });
+  } catch (error) {
+    logger.error("Failed to get ban status", { error: error.message });
+    res.status(500).json({ error: "Failed to get ban status" });
+  }
+});
+
+/**
+ * POST /admin/update-ban-status
+ * Manually trigger ban status update for specific players or all banned players
+ * Body: { steamIds?: string[] } - Optional array of steamid64s to check
+ */
+router.post("/update-ban-status", async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const { steamIds } = req.body || {};
+
+    logger.info("Manual ban status update triggered", {
+      steamIds: steamIds ? steamIds.length : "all",
+    });
+
+    const result = await manualBanStatusUpdate(steamIds);
+
+    logger.info("Ban status update complete", result);
+    logger.logRequest(req, res, Date.now() - startTime);
+
+    res.json({
+      success: true,
+      result,
+      message: "Ban status updated successfully",
+    });
+  } catch (error) {
+    logger.error("Failed to update ban status", { error: error.message });
+    res.status(500).json({ error: "Failed to update ban status" });
+  }
+});
+
+/**
+ * POST /admin/cleanup-expired-bans
+ * Manually trigger cleanup of expired bans (unban players)
+ */
+router.post("/cleanup-expired-bans", async (req, res) => {
+  const startTime = Date.now();
+  try {
+    logger.info("Manual expired bans cleanup triggered");
+
+    const result = await cleanupExpiredBans();
+
+    logger.info("Expired bans cleanup complete", result);
+    logger.logRequest(req, res, Date.now() - startTime);
+
+    res.json({
+      success: true,
+      result,
+      message: "Expired bans cleaned up successfully",
+    });
+  } catch (error) {
+    logger.error("Failed to cleanup expired bans", { error: error.message });
+    res.status(500).json({ error: "Failed to cleanup expired bans" });
   }
 });
 
