@@ -48,17 +48,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rate limiting - 100 requests per 15 minutes per IP
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 100,
-  message: { error: "Too many requests, please try again later." },
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  // Skip rate limiting in test environment
-  skip: () => process.env.NODE_ENV === "test",
-});
+// Body parsing - must come before compression
+app.use(express.json());
 
+// Response compression - compress responses > 1KB
+// Place before rate limiting so rate limiter sees compressed response sizes
 app.use(
   compression({
     level: 6,
@@ -72,9 +66,18 @@ app.use(
   }),
 );
 
-app.use("/", limiter);
+// Rate limiting - 100 requests per 15 minutes per IP
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 100,
+  message: { error: "Too many requests, please try again later." },
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  // Skip rate limiting in test environment
+  skip: () => process.env.NODE_ENV === "test",
+});
 
-app.use(express.json());
+app.use("/", limiter);
 
 // API Documentation
 app.use(
