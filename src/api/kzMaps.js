@@ -3,10 +3,7 @@ const router = express.Router();
 const { getKzPool } = require("../db/kzRecords");
 const { validatePagination, sanitizeString } = require("../utils/validators");
 const logger = require("../utils/logger");
-const {
-  cacheMiddleware,
-  kzKeyGenerator,
-} = require("../utils/cacheMiddleware");
+const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
 
 /**
  * @swagger

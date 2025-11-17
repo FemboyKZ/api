@@ -8,10 +8,7 @@ const {
   convertToSteamID64,
 } = require("../utils/validators");
 const logger = require("../utils/logger");
-const {
-  cacheMiddleware,
-  kzKeyGenerator,
-} = require("../utils/cacheMiddleware");
+const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
 
 /**
  * @swagger
@@ -286,11 +283,17 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
  */
 router.get(
   "/leaderboard/:mapname",
-  cacheMiddleware(600, kzKeyGenerator),  // 10 min - leaderboards change slowly
+  cacheMiddleware(600, kzKeyGenerator), // 10 min - leaderboards change slowly
   async (req, res) => {
     try {
       const { mapname } = req.params;
-      const { mode = "kz_timer", stage = 0, teleports = "pro", limit = 100, include_banned } = req.query;
+      const {
+        mode = "kz_timer",
+        stage = 0,
+        teleports = "pro",
+        limit = 100,
+        include_banned,
+      } = req.query;
 
       const validLimit = Math.min(parseInt(limit, 10) || 100, 1000);
       const stageNum = parseInt(stage, 10) || 0;
@@ -334,7 +337,11 @@ router.get(
             AND r2.stage = ?
       `;
 
-      const params = [sanitizeString(mapname, 255), sanitizeString(mode, 32), stageNum];
+      const params = [
+        sanitizeString(mapname, 255),
+        sanitizeString(mode, 32),
+        stageNum,
+      ];
 
       // Filter banned players in subquery
       if (include_banned !== "true" && include_banned !== true) {
@@ -358,7 +365,11 @@ router.get(
           AND r.stage = ?
       `;
 
-      params.push(sanitizeString(mapname, 255), sanitizeString(mode, 32), stageNum);
+      params.push(
+        sanitizeString(mapname, 255),
+        sanitizeString(mode, 32),
+        stageNum,
+      );
 
       // Filter banned players in main query
       if (include_banned !== "true" && include_banned !== true) {
@@ -434,15 +445,12 @@ router.get(
  *       500:
  *         description: Server error
  */
-router.get(
-  "/recent",
-  cacheMiddleware(15, kzKeyGenerator),
-  async (req, res) => {
-    try {
-      const { limit = 50, mode, teleports, include_banned } = req.query;
-      const validLimit = Math.min(parseInt(limit, 10) || 50, 100);
+router.get("/recent", cacheMiddleware(15, kzKeyGenerator), async (req, res) => {
+  try {
+    const { limit = 50, mode, teleports, include_banned } = req.query;
+    const validLimit = Math.min(parseInt(limit, 10) || 50, 100);
 
-      let query = `
+    let query = `
         SELECT 
           r.id,
           r.original_id,
@@ -463,40 +471,39 @@ router.get(
         LEFT JOIN kz_servers s ON r.server_id = s.id
         WHERE 1=1
       `;
-      const params = [];
+    const params = [];
 
-      // Filter out banned players by default
-      if (include_banned !== "true" && include_banned !== true) {
-        query += " AND (p.is_banned IS NULL OR p.is_banned = FALSE)";
-      }
-
-      if (mode) {
-        query += " AND r.mode = ?";
-        params.push(sanitizeString(mode, 32));
-      }
-
-      if (teleports === "pro") {
-        query += " AND r.teleports = 0";
-      } else if (teleports === "tp") {
-        query += " AND r.teleports > 0";
-      }
-
-      query += " ORDER BY r.created_on DESC LIMIT ?";
-      params.push(validLimit);
-
-      const pool = getKzPool();
-      const [records] = await pool.query(query, params);
-
-      res.json({
-        data: records,
-        total: records.length,
-      });
-    } catch (e) {
-      logger.error(`Failed to fetch recent KZ records: ${e.message}`);
-      res.status(500).json({ error: "Failed to fetch recent records" });
+    // Filter out banned players by default
+    if (include_banned !== "true" && include_banned !== true) {
+      query += " AND (p.is_banned IS NULL OR p.is_banned = FALSE)";
     }
-  },
-);
+
+    if (mode) {
+      query += " AND r.mode = ?";
+      params.push(sanitizeString(mode, 32));
+    }
+
+    if (teleports === "pro") {
+      query += " AND r.teleports = 0";
+    } else if (teleports === "tp") {
+      query += " AND r.teleports > 0";
+    }
+
+    query += " ORDER BY r.created_on DESC LIMIT ?";
+    params.push(validLimit);
+
+    const pool = getKzPool();
+    const [records] = await pool.query(query, params);
+
+    res.json({
+      data: records,
+      total: records.length,
+    });
+  } catch (e) {
+    logger.error(`Failed to fetch recent KZ records: ${e.message}`);
+    res.status(500).json({ error: "Failed to fetch recent records" });
+  }
+});
 
 /**
  * @swagger
@@ -546,10 +553,16 @@ router.get(
  */
 router.get(
   "/worldrecords",
-  cacheMiddleware(3600, kzKeyGenerator),  // 1 hour - world records change infrequently
+  cacheMiddleware(3600, kzKeyGenerator), // 1 hour - world records change infrequently
   async (req, res) => {
     try {
-      const { mode = "kz_timer", stage = 0, teleports = "pro", limit = 100, include_banned } = req.query;
+      const {
+        mode = "kz_timer",
+        stage = 0,
+        teleports = "pro",
+        limit = 100,
+        include_banned,
+      } = req.query;
       const validLimit = Math.min(parseInt(limit, 10) || 100, 1000);
       const stageNum = parseInt(stage, 10) || 0;
 
@@ -661,7 +674,8 @@ router.get(
  *       500:
  *         description: Server error
  */
-router.get("/:id", cacheMiddleware(1800, kzKeyGenerator), async (req, res) => {  // 30 min - records are immutable
+router.get("/:id", cacheMiddleware(1800, kzKeyGenerator), async (req, res) => {
+  // 30 min - records are immutable
   try {
     const { id } = req.params;
     const recordId = parseInt(id, 10);
@@ -718,9 +732,7 @@ router.get("/:id", cacheMiddleware(1800, kzKeyGenerator), async (req, res) => { 
       data: records[0],
     });
   } catch (e) {
-    logger.error(
-      `Failed to fetch KZ record ${req.params.id}: ${e.message}`,
-    );
+    logger.error(`Failed to fetch KZ record ${req.params.id}: ${e.message}`);
     res.status(500).json({ error: "Failed to fetch KZ record" });
   }
 });

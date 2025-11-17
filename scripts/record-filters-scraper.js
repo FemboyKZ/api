@@ -361,7 +361,10 @@ async function scrapeAllFilters() {
 
       // Delay between batches
       if (hasMore) {
-        log("info", `Waiting ${CONFIG.delayBetweenBatches}ms before next batch...`);
+        log(
+          "info",
+          `Waiting ${CONFIG.delayBetweenBatches}ms before next batch...`,
+        );
         await sleep(CONFIG.delayBetweenBatches);
       }
     } catch (error) {

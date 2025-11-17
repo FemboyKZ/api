@@ -343,7 +343,7 @@ async function batchUpsertPlayers(players) {
       // Formula: affectedRows = inserts + (updates * 2)
       // And: inserts + updates = totalPlayers
       // Solving: inserts = (2 * totalPlayers) - affectedRows
-      inserted = (2 * totalPlayers) - result.affectedRows;
+      inserted = 2 * totalPlayers - result.affectedRows;
       updated = totalPlayers - inserted;
     } else {
       // affectedRows < totalPlayers means some updates had no changes
@@ -369,7 +369,7 @@ async function batchUpsertPlayers(players) {
 async function fetchPlayers(limit, offset, attempt = 1) {
   try {
     const url = `${CONFIG.apiUrl}/players?limit=${limit}&offset=${offset}`;
-    
+
     // Get proxy if available
     const proxy = getNextProxy();
     const axiosConfig = {
@@ -431,7 +431,7 @@ async function fetchPlayersBySteamIds(steamid64List, attempt = 1) {
     // API accepts array of integers in steamid64_list parameter
     const steamIdsParam = steamid64List.join(",");
     const url = `${CONFIG.apiUrl}/players?steamid64_list=${steamIdsParam}`;
-    
+
     // Get proxy if available
     const proxy = getNextProxy();
     const axiosConfig = {
@@ -516,9 +516,9 @@ async function getPlayersWithMissingData() {
       FROM kz_players 
       WHERE is_banned IS NULL OR total_records IS NULL OR total_records = 0
     `;
-    
+
     const [rows] = await connection.query(query);
-    return rows.map(row => row.steamid64);
+    return rows.map((row) => row.steamid64);
   } catch (error) {
     log("error", `Failed to fetch players with missing data: ${error.message}`);
     throw error;
@@ -531,39 +531,43 @@ async function getPlayersWithMissingData() {
 async function updatePlayersWithMissingData() {
   log("info", "Fetching players with missing metadata from database...");
   const steamid64List = await getPlayersWithMissingData();
-  
+
   if (steamid64List.length === 0) {
     log("info", "No players with missing metadata found");
     return;
   }
-  
+
   log("info", `Found ${steamid64List.length} players with missing metadata`);
-  
+
   // Process in batches (API might have limits on steamid64_list size)
   const apiBatchSize = 100; // Conservative batch size for steamid64_list
-  
+
   for (let i = 0; i < steamid64List.length; i += apiBatchSize) {
     if (shouldStop) {
       break;
     }
-    
+
     const batch = steamid64List.slice(i, i + apiBatchSize);
     const batchNum = Math.floor(i / apiBatchSize) + 1;
     const totalBatches = Math.ceil(steamid64List.length / apiBatchSize);
-    
-    log("info", `Processing batch ${batchNum}/${totalBatches} (${batch.length} players)...`);
-    
+
+    log(
+      "info",
+      `Processing batch ${batchNum}/${totalBatches} (${batch.length} players)...`,
+    );
+
     try {
       const players = await fetchPlayersBySteamIds(batch);
-      
+
       if (players.length > 0) {
         await processBatch(players);
-        
+
         // Log progress
         const elapsed = (Date.now() - stats.startTime) / 1000;
-        const rate = stats.playersProcessed > 0 
-          ? (stats.playersProcessed / elapsed).toFixed(2) 
-          : "0.00";
+        const rate =
+          stats.playersProcessed > 0
+            ? (stats.playersProcessed / elapsed).toFixed(2)
+            : "0.00";
         log(
           "info",
           `Progress: ${stats.playersProcessed}/${steamid64List.length} processed, ${stats.playersUpdated} updated (${rate} players/s)`,
@@ -571,16 +575,19 @@ async function updatePlayersWithMissingData() {
       } else {
         log("warn", `No data returned for batch ${batchNum}`);
       }
-      
+
       // Delay between batches
       if (i + apiBatchSize < steamid64List.length) {
-        log("info", `Waiting ${CONFIG.delayBetweenBatches}ms before next batch...`);
+        log(
+          "info",
+          `Waiting ${CONFIG.delayBetweenBatches}ms before next batch...`,
+        );
         await sleep(CONFIG.delayBetweenBatches);
       }
     } catch (error) {
       log("error", `Error processing batch ${batchNum}: ${error.message}`);
       stats.errorCount++;
-      
+
       // Back off on errors
       await sleep(CONFIG.delayBetweenBatches * 2);
     }
@@ -594,9 +601,12 @@ async function scrapeAllPlayers() {
   let offset = CONFIG.startOffset;
   let hasMore = true;
   let batchNum = Math.floor(CONFIG.startOffset / CONFIG.batchSize) + 1;
-  
+
   if (CONFIG.startOffset > 0) {
-    log("info", `Starting from offset ${CONFIG.startOffset} (batch ${batchNum})`);
+    log(
+      "info",
+      `Starting from offset ${CONFIG.startOffset} (batch ${batchNum})`,
+    );
   }
 
   while (hasMore && !shouldStop) {
@@ -734,7 +744,10 @@ async function main() {
     log("info", `  Batch size: ${CONFIG.batchSize}`);
     log("info", `  Delay: ${CONFIG.delayBetweenBatches}ms`);
     log("info", `  Start offset: ${CONFIG.startOffset}`);
-    log("info", `  Proxies: ${CONFIG.proxies.length > 0 ? CONFIG.proxies.length : "None"}`);
+    log(
+      "info",
+      `  Proxies: ${CONFIG.proxies.length > 0 ? CONFIG.proxies.length : "None"}`,
+    );
     log("info", `  Force update: ${CONFIG.force}`);
     log("info", `  Update missing only: ${CONFIG.updateMissing}`);
     log("info", `  Mode: ${CONFIG.dryRun ? "DRY RUN" : "LIVE"}`);
@@ -748,7 +761,7 @@ async function main() {
 
     // Start scraping
     stats.startTime = Date.now();
-    
+
     if (CONFIG.updateMissing) {
       log("info", "Running in UPDATE MISSING mode");
       await updatePlayersWithMissingData();

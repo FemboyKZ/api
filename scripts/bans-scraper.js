@@ -328,7 +328,7 @@ async function batchUpsertBans(bans) {
       // Formula: affectedRows = inserts + (updates * 2)
       // And: inserts + updates = totalBans
       // Solving: inserts = (2 * totalBans) - affectedRows
-      inserted = (2 * totalBans) - result.affectedRows;
+      inserted = 2 * totalBans - result.affectedRows;
       updated = totalBans - inserted;
     } else {
       // affectedRows < totalBans means some updates had no changes
@@ -435,7 +435,10 @@ async function scrapeAllBans() {
   let batchNum = Math.floor(CONFIG.startOffset / CONFIG.batchSize) + 1;
 
   if (CONFIG.startOffset > 0) {
-    log("info", `Starting from offset ${CONFIG.startOffset} (batch ${batchNum})`);
+    log(
+      "info",
+      `Starting from offset ${CONFIG.startOffset} (batch ${batchNum})`,
+    );
   }
 
   while (hasMore && !shouldStop) {

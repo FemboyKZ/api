@@ -1,10 +1,10 @@
 /**
  * Server Metadata Scraper
- * 
+ *
  * Fetches and populates server metadata from the GlobalKZ API into the kz_servers table.
- * 
+ *
  * API Endpoint: GET https://kztimerglobal.com/api/v2/servers/{server_id}
- * 
+ *
  * Response format:
  * {
  *   "id": 1279,
@@ -18,10 +18,10 @@
  *   "approval_status": 1,
  *   "approved_by_steamid64": 76561198123456789
  * }
- * 
+ *
  * Usage:
  *   node scripts/server-metadata-scraper.js [options]
- * 
+ *
  * Options:
  *   --batch-size N    Number of servers to process per batch (default: 10)
  *   --delay N         Delay between batches in milliseconds (default: 1000)
@@ -31,9 +31,9 @@
  *   --help            Show this help message
  */
 
-const mysql = require('mysql2/promise');
-const axios = require('axios');
-require('dotenv').config();
+const mysql = require("mysql2/promise");
+const axios = require("axios");
+require("dotenv").config();
 
 // Configuration
 const CONFIG = {
@@ -43,9 +43,9 @@ const CONFIG = {
     user: process.env.KZ_DB_USER || "root",
     password: process.env.KZ_DB_PASSWORD || "",
     database: process.env.KZ_DB_NAME || "kz_records",
-    charset: 'utf8mb4',
+    charset: "utf8mb4",
   },
-  gokzApi: process.env.GOKZ_API_URL || 'https://kztimerglobal.com/api/v2',
+  gokzApi: process.env.GOKZ_API_URL || "https://kztimerglobal.com/api/v2",
   batchSize: 10,
   delayBetweenBatches: 1000, // ms
   retryAttempts: 3,
@@ -75,7 +75,7 @@ let isShuttingDown = false;
  * Logger utility
  */
 function log(level, message) {
-  const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+  const timestamp = new Date().toISOString().replace("T", " ").substring(0, 19);
   console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`);
 }
 
@@ -84,27 +84,27 @@ function log(level, message) {
  */
 function parseArgs() {
   const args = process.argv.slice(2);
-  
+
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    
+
     switch (arg) {
-      case '--batch-size':
+      case "--batch-size":
         CONFIG.batchSize = parseInt(args[++i], 10);
         break;
-      case '--delay':
+      case "--delay":
         CONFIG.delayBetweenBatches = parseInt(args[++i], 10);
         break;
-      case '--force':
+      case "--force":
         CONFIG.forceUpdate = true;
         break;
-      case '--server-id':
+      case "--server-id":
         CONFIG.targetServerId = parseInt(args[++i], 10);
         break;
-      case '--dry-run':
+      case "--dry-run":
         CONFIG.dryRun = true;
         break;
-      case '--help':
+      case "--help":
         console.log(`
 Server Metadata Scraper
 
@@ -147,11 +147,14 @@ Examples:
  * Validate environment variables
  */
 function validateEnvironment() {
-  const required = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
-  const missing = required.filter(key => !process.env[key]);
-  
+  const required = ["DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME"];
+  const missing = required.filter((key) => !process.env[key]);
+
   if (missing.length > 0) {
-    log('error', `Missing required environment variables: ${missing.join(', ')}`);
+    log(
+      "error",
+      `Missing required environment variables: ${missing.join(", ")}`,
+    );
     process.exit(1);
   }
 }
@@ -162,10 +165,10 @@ function validateEnvironment() {
 async function connectDatabase() {
   try {
     connection = await mysql.createConnection(CONFIG.db);
-    log('info', `Connected to database: ${CONFIG.db.database}`);
+    log("info", `Connected to database: ${CONFIG.db.database}`);
     return connection;
   } catch (error) {
-    log('error', `Failed to connect to database: ${error.message}`);
+    log("error", `Failed to connect to database: ${error.message}`);
     throw error;
   }
 }
@@ -177,14 +180,16 @@ async function getServersToProcess() {
   try {
     let query;
     let params = [];
-    
+
     if (CONFIG.targetServerId) {
       // Process specific server
-      query = 'SELECT id, server_id, server_name FROM kz_servers WHERE server_id = ?';
+      query =
+        "SELECT id, server_id, server_name FROM kz_servers WHERE server_id = ?";
       params = [CONFIG.targetServerId];
     } else if (CONFIG.forceUpdate) {
       // Process all servers
-      query = 'SELECT id, server_id, server_name FROM kz_servers ORDER BY server_id';
+      query =
+        "SELECT id, server_id, server_name FROM kz_servers ORDER BY server_id";
     } else {
       // Process only servers with missing metadata
       query = `
@@ -194,11 +199,11 @@ async function getServersToProcess() {
         ORDER BY server_id
       `;
     }
-    
+
     const [rows] = await connection.query(query, params);
     return rows;
   } catch (error) {
-    log('error', `Failed to fetch servers: ${error.message}`);
+    log("error", `Failed to fetch servers: ${error.message}`);
     throw error;
   }
 }
@@ -212,10 +217,10 @@ async function fetchServerMetadata(serverId, attempt = 1) {
     const response = await axios.get(url, {
       timeout: 10000,
       headers: {
-        'User-Agent': 'KZ-Records-Scraper/1.0',
+        "User-Agent": "KZ-Records-Scraper/1.0",
       },
     });
-    
+
     return response.data;
   } catch (error) {
     if (error.response) {
@@ -225,25 +230,28 @@ async function fetchServerMetadata(serverId, attempt = 1) {
         return null;
       } else if (error.response.status === 429) {
         // Rate limited
-        log('warn', `Rate limited by API. Waiting 60 seconds...`);
+        log("warn", `Rate limited by API. Waiting 60 seconds...`);
         await sleep(60000);
-        
+
         if (attempt < CONFIG.retryAttempts) {
           return await fetchServerMetadata(serverId, attempt + 1);
         } else {
-          throw new Error('Max retry attempts reached for rate limiting');
+          throw new Error("Max retry attempts reached for rate limiting");
         }
       }
     }
-    
+
     // Network error or other issue - retry with exponential backoff
     if (attempt < CONFIG.retryAttempts) {
       const delay = CONFIG.retryDelay * Math.pow(2, attempt - 1);
-      log('warn', `Error fetching server ${serverId}: ${error.message}. Retrying in ${delay}ms... (attempt ${attempt}/${CONFIG.retryAttempts})`);
+      log(
+        "warn",
+        `Error fetching server ${serverId}: ${error.message}. Retrying in ${delay}ms... (attempt ${attempt}/${CONFIG.retryAttempts})`,
+      );
       await sleep(delay);
       return await fetchServerMetadata(serverId, attempt + 1);
     }
-    
+
     throw error;
   }
 }
@@ -255,7 +263,7 @@ function formatDateTime(isoString) {
   if (!isoString) return null;
   try {
     const date = new Date(isoString);
-    return date.toISOString().slice(0, 19).replace('T', ' ');
+    return date.toISOString().slice(0, 19).replace("T", " ");
   } catch (error) {
     return null;
   }
@@ -266,10 +274,13 @@ function formatDateTime(isoString) {
  */
 async function updateServerMetadata(serverId, metadata) {
   if (CONFIG.dryRun) {
-    log('info', `[DRY RUN] Would update server ${serverId} with: ip=${metadata.ip}, port=${metadata.port}, owner=${metadata.owner_steamid64}`);
+    log(
+      "info",
+      `[DRY RUN] Would update server ${serverId} with: ip=${metadata.ip}, port=${metadata.port}, owner=${metadata.owner_steamid64}`,
+    );
     return;
   }
-  
+
   try {
     const query = `
       UPDATE kz_servers 
@@ -285,11 +296,15 @@ async function updateServerMetadata(serverId, metadata) {
         approved_by_steamid64 = ?
       WHERE server_id = ?
     `;
-    
+
     // Convert owner_steamid64 and approved_by_steamid64 to strings for precision
-    const ownerSteamId = metadata.owner_steamid64 ? String(metadata.owner_steamid64) : null;
-    const approverSteamId = metadata.approved_by_steamid64 ? String(metadata.approved_by_steamid64) : null;
-    
+    const ownerSteamId = metadata.owner_steamid64
+      ? String(metadata.owner_steamid64)
+      : null;
+    const approverSteamId = metadata.approved_by_steamid64
+      ? String(metadata.approved_by_steamid64)
+      : null;
+
     const params = [
       metadata.api_key || null,
       metadata.port,
@@ -302,10 +317,10 @@ async function updateServerMetadata(serverId, metadata) {
       approverSteamId,
       serverId,
     ];
-    
+
     await connection.query(query, params);
   } catch (error) {
-    log('error', `Failed to update server ${serverId}: ${error.message}`);
+    log("error", `Failed to update server ${serverId}: ${error.message}`);
     throw error;
   }
 }
@@ -317,31 +332,32 @@ async function processServer(server) {
   if (isShuttingDown) {
     return;
   }
-  
+
   const { server_id, server_name } = server;
-  
+
   try {
-    log('info', `Processing server: ${server_name} (ID: ${server_id})`);
-    
+    log("info", `Processing server: ${server_name} (ID: ${server_id})`);
+
     // Fetch metadata from API
     const metadata = await fetchServerMetadata(server_id);
-    
+
     if (!metadata) {
-      log('warn', `✗ Server ${server_id} not found in GlobalKZ API`);
+      log("warn", `✗ Server ${server_id} not found in GlobalKZ API`);
       stats.serversNotFound++;
       return;
     }
-    
+
     // Update database
     await updateServerMetadata(server_id, metadata);
-    
-    const approvalStr = metadata.approval_status ? `status=${metadata.approval_status}` : 'not approved';
-    const summary = `ip=${metadata.ip}:${metadata.port}, owner=${metadata.owner_steamid64 || 'none'}, ${approvalStr}`;
-    log('info', `✓ Updated ${server_name}: ${summary}`);
+
+    const approvalStr = metadata.approval_status
+      ? `status=${metadata.approval_status}`
+      : "not approved";
+    const summary = `ip=${metadata.ip}:${metadata.port}, owner=${metadata.owner_steamid64 || "none"}, ${approvalStr}`;
+    log("info", `✓ Updated ${server_name}: ${summary}`);
     stats.serversUpdated++;
-    
   } catch (error) {
-    log('error', `✗ Error processing server ${server_id}: ${error.message}`);
+    log("error", `✗ Error processing server ${server_id}: ${error.message}`);
     stats.errors++;
   } finally {
     stats.serversProcessed++;
@@ -354,34 +370,43 @@ async function processServer(server) {
 async function processServers(servers) {
   const totalServers = servers.length;
   let processedCount = 0;
-  
+
   for (let i = 0; i < servers.length; i += CONFIG.batchSize) {
     if (isShuttingDown) {
-      log('info', 'Graceful shutdown initiated. Stopping server processing...');
+      log("info", "Graceful shutdown initiated. Stopping server processing...");
       break;
     }
-    
+
     const batch = servers.slice(i, i + CONFIG.batchSize);
     const batchNum = Math.floor(i / CONFIG.batchSize) + 1;
     const totalBatches = Math.ceil(totalServers / CONFIG.batchSize);
-    
-    log('info', `Processing batch ${batchNum}/${totalBatches} (${batch.length} servers)...`);
-    
+
+    log(
+      "info",
+      `Processing batch ${batchNum}/${totalBatches} (${batch.length} servers)...`,
+    );
+
     // Process batch sequentially to avoid rate limiting
     for (const server of batch) {
       await processServer(server);
       processedCount++;
-      
+
       // Show progress every 10 servers
       if (processedCount % 10 === 0) {
         const percent = ((processedCount / totalServers) * 100).toFixed(1);
-        log('info', `Progress: ${processedCount}/${totalServers} (${percent}%)`);
+        log(
+          "info",
+          `Progress: ${processedCount}/${totalServers} (${percent}%)`,
+        );
       }
     }
-    
+
     // Delay between batches
     if (i + CONFIG.batchSize < servers.length && !isShuttingDown) {
-      log('info', `Waiting ${CONFIG.delayBetweenBatches}ms before next batch...`);
+      log(
+        "info",
+        `Waiting ${CONFIG.delayBetweenBatches}ms before next batch...`,
+      );
       await sleep(CONFIG.delayBetweenBatches);
     }
   }
@@ -391,7 +416,7 @@ async function processServers(servers) {
  * Sleep utility
  */
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -399,18 +424,27 @@ function sleep(ms) {
  */
 function printStats() {
   const elapsed = (Date.now() - stats.startTime) / 1000;
-  const rate = stats.serversProcessed > 0 ? (stats.serversProcessed / elapsed).toFixed(2) : '0.00';
-  
-  log('info', '======================================================================');
-  log('info', 'Scraper completed!');
-  log('info', `  Total processed: ${stats.serversProcessed}`);
-  log('info', `  Updated: ${stats.serversUpdated}`);
-  log('info', `  Skipped: ${stats.serversSkipped}`);
-  log('info', `  Not found: ${stats.serversNotFound}`);
-  log('info', `  Errors: ${stats.errors}`);
-  log('info', `  Time elapsed: ${elapsed.toFixed(2)}s`);
-  log('info', `  Rate: ${rate} servers/s`);
-  log('info', '======================================================================');
+  const rate =
+    stats.serversProcessed > 0
+      ? (stats.serversProcessed / elapsed).toFixed(2)
+      : "0.00";
+
+  log(
+    "info",
+    "======================================================================",
+  );
+  log("info", "Scraper completed!");
+  log("info", `  Total processed: ${stats.serversProcessed}`);
+  log("info", `  Updated: ${stats.serversUpdated}`);
+  log("info", `  Skipped: ${stats.serversSkipped}`);
+  log("info", `  Not found: ${stats.serversNotFound}`);
+  log("info", `  Errors: ${stats.errors}`);
+  log("info", `  Time elapsed: ${elapsed.toFixed(2)}s`);
+  log("info", `  Rate: ${rate} servers/s`);
+  log(
+    "info",
+    "======================================================================",
+  );
 }
 
 /**
@@ -420,19 +454,19 @@ async function gracefulShutdown(signal) {
   if (isShuttingDown) {
     return;
   }
-  
+
   isShuttingDown = true;
-  log('info', `Received ${signal}. Shutting down gracefully...`);
-  
+  log("info", `Received ${signal}. Shutting down gracefully...`);
+
   // Print current stats
   printStats();
-  
+
   // Close database connection
   if (connection) {
     await connection.end();
-    log('info', 'Database connection closed');
+    log("info", "Database connection closed");
   }
-  
+
   process.exit(0);
 }
 
@@ -442,57 +476,68 @@ async function gracefulShutdown(signal) {
 async function main() {
   try {
     // Setup signal handlers
-    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-    
+    process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+    process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+
     // Parse arguments
     parseArgs();
-    
+
     // Validate environment
     validateEnvironment();
-    
+
     // Print configuration
-    log('info', '======================================================================');
-    log('info', 'Server Metadata Scraper');
-    log('info', '======================================================================');
-    log('info', 'Configuration:');
-    log('info', `  Database: ${CONFIG.db.host}:${CONFIG.db.port}/${CONFIG.db.database}`);
-    log('info', `  API: ${CONFIG.gokzApi}`);
-    log('info', `  Batch size: ${CONFIG.batchSize}`);
-    log('info', `  Delay: ${CONFIG.delayBetweenBatches}ms`);
-    log('info', `  Force update: ${CONFIG.forceUpdate}`);
-    log('info', `  Target server ID: ${CONFIG.targetServerId || 'none'}`);
-    log('info', `  Mode: ${CONFIG.dryRun ? 'DRY RUN' : 'LIVE'}`);
-    log('info', '======================================================================');
-    
+    log(
+      "info",
+      "======================================================================",
+    );
+    log("info", "Server Metadata Scraper");
+    log(
+      "info",
+      "======================================================================",
+    );
+    log("info", "Configuration:");
+    log(
+      "info",
+      `  Database: ${CONFIG.db.host}:${CONFIG.db.port}/${CONFIG.db.database}`,
+    );
+    log("info", `  API: ${CONFIG.gokzApi}`);
+    log("info", `  Batch size: ${CONFIG.batchSize}`);
+    log("info", `  Delay: ${CONFIG.delayBetweenBatches}ms`);
+    log("info", `  Force update: ${CONFIG.forceUpdate}`);
+    log("info", `  Target server ID: ${CONFIG.targetServerId || "none"}`);
+    log("info", `  Mode: ${CONFIG.dryRun ? "DRY RUN" : "LIVE"}`);
+    log(
+      "info",
+      "======================================================================",
+    );
+
     // Connect to database
     await connectDatabase();
-    
+
     // Get servers to process
-    log('info', 'Fetching servers needing metadata...');
+    log("info", "Fetching servers needing metadata...");
     const servers = await getServersToProcess();
-    
+
     if (servers.length === 0) {
-      log('info', 'No servers need metadata updates. Exiting.');
+      log("info", "No servers need metadata updates. Exiting.");
       await connection.end();
       return;
     }
-    
-    log('info', `Found ${servers.length} server(s) to process`);
-    
+
+    log("info", `Found ${servers.length} server(s) to process`);
+
     // Start processing
     stats.startTime = Date.now();
     await processServers(servers);
-    
+
     // Print final statistics
     printStats();
-    
+
     // Close connection
     await connection.end();
-    log('info', 'Database connection closed');
-    
+    log("info", "Database connection closed");
   } catch (error) {
-    log('error', `Fatal error: ${error.message}`);
+    log("error", `Fatal error: ${error.message}`);
     if (connection) {
       await connection.end();
     }
@@ -502,8 +547,8 @@ async function main() {
 
 // Run the scraper
 if (require.main === module) {
-  main().catch(error => {
-    log('error', `Unhandled error: ${error.message}`);
+  main().catch((error) => {
+    log("error", `Unhandled error: ${error.message}`);
     process.exit(1);
   });
 }

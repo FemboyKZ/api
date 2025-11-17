@@ -5,6 +5,7 @@ const logger = require("./utils/logger");
 const { validateEnvironment } = require("./utils/envValidator");
 const { initDatabase, closeDatabase } = require("./db");
 const { initKzDatabase, closeKzDatabase } = require("./db/kzRecords");
+const { initKzLocalDatabase, closeKzLocalDatabase } = require("./db/kzLocal");
 const { startUpdateLoop } = require("./services/updater");
 const { startAvatarUpdateJob } = require("./services/steamQuery");
 const { startScraperJob } = require("./services/kzRecordsScraper");
@@ -12,6 +13,7 @@ const { startBanCleanupJob } = require("./services/kzBanStatus");
 const { initWebSocket } = require("./services/websocket");
 const { initRedis, closeRedis } = require("./db/redis");
 const { loadMessageIds } = require("./services/discordWebhook");
+const { startWorldRecordsCacheJob } = require("./services/worldRecordsCache");
 
 const port = process.env.PORT || 3000;
 const host = process.env.HOST || "0.0.0.0"; // Use 127.0.0.1 in production with reverse proxy
@@ -30,10 +32,12 @@ async function startServer() {
     await initDatabase();
 
     // Step 2b: Initialize KZ Records database (if scraper enabled)
-    if (process.env.KZ_SCRAPER_ENABLED !== "false") {
-      logger.info("Initializing KZ Records database connection...");
-      await initKzDatabase();
-    }
+    logger.info("Initializing KZ Records database connection...");
+    await initKzDatabase();
+
+    // Step 2b: Initialize FKZ Local Records database (if scraper enabled)
+    logger.info("Initializing FKZ Local Records database connection...");
+    await initKzLocalDatabase();
 
     // Step 3: Initialize Redis (optional)
     logger.info("Initializing Redis...");
@@ -65,7 +69,10 @@ async function startServer() {
       // Step 9: Start avatar update job (runs every hour)
       startAvatarUpdateJob(60 * 60 * 1000);
 
-      // Step 10: Start KZ records scraper (runs every 3.75s for 80% rate limit utilization)
+      // Step 10: Start world records cache refresh job (runs every 5 minutes)
+      startWorldRecordsCacheJob(5 * 60 * 1000);
+
+      // Step 11: Start KZ records scraper (runs every 3.75s for 80% rate limit utilization)
       if (process.env.KZ_SCRAPER_ENABLED !== "false") {
         const scraperInterval =
           parseInt(process.env.KZ_SCRAPER_INTERVAL) || 3750; // 3.75 seconds for 80% rate limit (400 req/5min)
@@ -74,7 +81,7 @@ async function startServer() {
           `KZ Records scraper enabled (interval: ${scraperInterval}ms)`,
         );
 
-        // Step 11: Start ban status cleanup job (runs every hour by default)
+        // Step 12: Start ban status cleanup job (runs every hour by default)
         const banCleanupInterval =
           parseInt(process.env.KZ_BAN_CLEANUP_INTERVAL) || 3600000; // 1 hour
         startBanCleanupJob(banCleanupInterval);
@@ -114,11 +121,8 @@ async function gracefulShutdown(signal) {
     // Step 2: Close database connection pools
     logger.info("Closing database connections...");
     await closeDatabase();
-
-    // Step 2b: Close KZ database connection pool
-    if (process.env.KZ_SCRAPER_ENABLED !== "false") {
-      await closeKzDatabase();
-    }
+    await closeKzDatabase();
+    await closeKzLocalDatabase();
 
     // Step 3: Close HTTP server
     logger.info("Closing HTTP server...");

@@ -3,6 +3,7 @@ const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./config/swagger");
+const compression = require("compression");
 const app = express();
 
 const serversRouter = require("./api/servers");
@@ -57,6 +58,19 @@ const limiter = rateLimit({
   // Skip rate limiting in test environment
   skip: () => process.env.NODE_ENV === "test",
 });
+
+app.use(
+  compression({
+    level: 6,
+    threshold: 1024, // Only compress responses > 1KB
+    filter: (req, res) => {
+      if (req.headers["x-no-compression"]) {
+        return false;
+      }
+      return compression.filter(req, res);
+    },
+  }),
+);
 
 app.use("/", limiter);
 

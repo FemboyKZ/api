@@ -46,7 +46,10 @@ async function loadMessageIds() {
     rows.forEach((row) => {
       if (row.setting_key === "discord_message_id_csgo" && row.setting_value) {
         csgoMessageId = row.setting_value;
-      } else if (row.setting_key === "discord_message_id_cs2" && row.setting_value) {
+      } else if (
+        row.setting_key === "discord_message_id_cs2" &&
+        row.setting_value
+      ) {
         cs2MessageId = row.setting_value;
       }
     });
@@ -62,7 +65,8 @@ async function loadMessageIds() {
  */
 async function saveMessageId(game, messageId) {
   try {
-    const key = game === "csgo" ? "discord_message_id_csgo" : "discord_message_id_cs2";
+    const key =
+      game === "csgo" ? "discord_message_id_csgo" : "discord_message_id_cs2";
     await pool.query(
       "INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?, updated_at = CURRENT_TIMESTAMP",
       [key, messageId, messageId],
@@ -82,13 +86,13 @@ async function saveMessageId(game, messageId) {
  */
 function parseWebhookUrl(url) {
   if (!url) return null;
-  
+
   const match = url.match(/\/webhooks\/(\d+)\/([^/]+)/);
   if (!match) {
     logger.error("Invalid webhook URL format", { url });
     return null;
   }
-  
+
   return {
     id: match[1],
     token: match[2],
@@ -153,21 +157,31 @@ function buildEmbeds(servers, game) {
     const gameLower = game === "csgo" ? "csgo" : "cs2";
 
     // Group servers by region
-    const euServers = servers.filter(s => s.region === "eu");
-    const naServers = servers.filter(s => s.region === "na");
-    const otherServers = servers.filter(s => s.region !== "eu" && s.region !== "na");
+    const euServers = servers.filter((s) => s.region === "eu");
+    const naServers = servers.filter((s) => s.region === "na");
+    const otherServers = servers.filter(
+      (s) => s.region !== "eu" && s.region !== "na",
+    );
 
     const embeds = [];
 
     // Helper function to build a single embed for a region
     function buildRegionEmbed(regionServers, regionName) {
       const onlineServers = regionServers.filter((s) => s.status === 1);
-      const totalPlayers = regionServers.reduce((sum, s) => sum + (s.players || 0), 0);
+      const totalPlayers = regionServers.reduce(
+        (sum, s) => sum + (s.players || 0),
+        0,
+      );
 
       // Color: Pink if any server online, Red if all offline
       const color = onlineServers.length > 0 ? 0xff00b3 : 0xf04747;
 
-      const regionFlag = regionName === "EU" ? ":flag_eu:" : regionName === "NA" ? ":flag_us:" : ":globe_with_meridians:";
+      const regionFlag =
+        regionName === "EU"
+          ? ":flag_eu:"
+          : regionName === "NA"
+            ? ":flag_us:"
+            : ":globe_with_meridians:";
 
       const regionFlags = {
         na: "",
@@ -194,11 +208,14 @@ function buildEmbeds(servers, game) {
 
       // Add field for each server
       regionServers.forEach((server, index) => {
-        const statusEmoji = server.status === 1 ? ":green_circle:" : ":broken_heart:";
-        const serverName = `${regionFlags[server.region]} ${server.hostname}` || `${regionFlags[server.region]} ${server.ip}:${server.port}`;
-        
+        const statusEmoji =
+          server.status === 1 ? ":green_circle:" : ":broken_heart:";
+        const serverName =
+          `${regionFlags[server.region]} ${server.hostname}` ||
+          `${regionFlags[server.region]} ${server.ip}:${server.port}`;
+
         let fieldValue = `${statusEmoji} - Players: \`${server.players || 0}/${server.maxplayers || 0}\``;
-        
+
         if (server.status === 1) {
           fieldValue += ` - Map: \`${server.map || "Unknown"}\``;
           if (server.playersList.length > 0) {
@@ -206,17 +223,20 @@ function buildEmbeds(servers, game) {
               .slice(0, 15)
               .map((p) => {
                 // Sanitize player name (removes invisible Unicode, control chars)
-                const displayName = sanitizePlayerName(p.name) || 'Unknown';
-                
+                const displayName = sanitizePlayerName(p.name) || "Unknown";
+
                 if (p.steamid) {
                   return `• [${displayName}](<https://steamcommunity.com/profiles/${p.steamid}>)`;
                 }
                 return `• ${displayName}`;
               })
               .join("\n");
-            
-            const remaining = server.playersList.length > 15 ? `\n... +${server.playersList.length - 15} more` : "";
-            
+
+            const remaining =
+              server.playersList.length > 15
+                ? `\n... +${server.playersList.length - 15} more`
+                : "";
+
             fieldValue += `\n\nPlayers:\n${playerLinks}${remaining}`;
           }
         } else {
@@ -257,7 +277,11 @@ function buildEmbeds(servers, game) {
 
     return embeds;
   } catch (error) {
-    logger.error("Error in buildEmbeds", { error: error.message, stack: error.stack, game });
+    logger.error("Error in buildEmbeds", {
+      error: error.message,
+      stack: error.stack,
+      game,
+    });
     return [];
   }
 }

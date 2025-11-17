@@ -52,7 +52,8 @@ const RETRY_DELAY = 2000; // Initial retry delay in ms (exponential backoff)
 const REQUEST_DELAY = parseInt(process.env.KZ_SCRAPER_REQUEST_DELAY) || 100;
 const STATE_FILE = path.join(__dirname, "../../logs/kz-scraper-state.json");
 const REQUEST_TIMEOUT = 10000;
-const BANS_CHECK_INTERVAL = parseInt(process.env.KZ_SCRAPER_BANS_INTERVAL) || 300000; // 5 minutes
+const BANS_CHECK_INTERVAL =
+  parseInt(process.env.KZ_SCRAPER_BANS_INTERVAL) || 300000; // 5 minutes
 
 // Caches for normalized data
 const playerCache = new Map();
@@ -633,18 +634,19 @@ async function processBans() {
   try {
     logger.info("[KZ Scraper] Checking for new bans...");
 
-      const pool = getKzPool();
-      const connection = await pool.getConnection();
+    const pool = getKzPool();
+    const connection = await pool.getConnection();
 
-      try {
-        const limit = 200; // Reduced from 1000 to avoid timeout
-        let totalProcessed = 0;
-        let totalInserted = 0;
-        let totalUpdated = 0;
-        let playersUpdated = 0;
+    try {
+      const limit = 200; // Reduced from 1000 to avoid timeout
+      let totalProcessed = 0;
+      let totalInserted = 0;
+      let totalUpdated = 0;
+      let playersUpdated = 0;
 
-        // Always fetch from offset 0 - API returns latest bans first
-        const bans = await fetchBans(limit, 0);      if (bans.length > 0) {
+      // Always fetch from offset 0 - API returns latest bans first
+      const bans = await fetchBans(limit, 0);
+      if (bans.length > 0) {
         // Batch insert/update bans
         if (bans.length > 0) {
           const values = bans.map((ban) => [
@@ -899,7 +901,8 @@ async function startScraperJob(intervalMs = 3750) {
 function getStats() {
   const uptime = stats.startTime ? (Date.now() - stats.startTime) / 1000 : 0;
   const rate = uptime > 0 ? Math.round(stats.recordsProcessed / uptime) : 0;
-  const timeSinceLastBanCheck = lastBanCheck > 0 ? Date.now() - lastBanCheck : null;
+  const timeSinceLastBanCheck =
+    lastBanCheck > 0 ? Date.now() - lastBanCheck : null;
 
   return {
     isRunning,
@@ -917,8 +920,11 @@ function getStats() {
     bansInserted: stats.bansInserted,
     bansUpdated: stats.bansUpdated,
     playersUpdated: stats.playersUpdated,
-    lastBanCheck: lastBanCheck > 0 ? new Date(lastBanCheck).toISOString() : null,
-    timeSinceLastBanCheck: timeSinceLastBanCheck ? Math.round(timeSinceLastBanCheck / 1000) : null,
+    lastBanCheck:
+      lastBanCheck > 0 ? new Date(lastBanCheck).toISOString() : null,
+    timeSinceLastBanCheck: timeSinceLastBanCheck
+      ? Math.round(timeSinceLastBanCheck / 1000)
+      : null,
     cacheSize: {
       players: playerCache.size,
       maps: mapCache.size,

@@ -3,10 +3,7 @@ const router = express.Router();
 const { getKzPool } = require("../db/kzRecords");
 const { validatePagination, sanitizeString } = require("../utils/validators");
 const logger = require("../utils/logger");
-const {
-  cacheMiddleware,
-  kzKeyGenerator,
-} = require("../utils/cacheMiddleware");
+const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
 
 /**
  * @swagger
@@ -345,9 +342,7 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       recent_records: recentRecords,
     });
   } catch (e) {
-    logger.error(
-      `Failed to fetch KZ server ${req.params.id}: ${e.message}`,
-    );
+    logger.error(`Failed to fetch KZ server ${req.params.id}: ${e.message}`);
     res.status(500).json({ error: "Failed to fetch KZ server" });
   }
 });
@@ -404,7 +399,14 @@ router.get(
   async (req, res) => {
     try {
       const { id } = req.params;
-      const { page, limit, mode, map, sort = "created_on", order = "desc" } = req.query;
+      const {
+        page,
+        limit,
+        mode,
+        map,
+        sort = "created_on",
+        order = "desc",
+      } = req.query;
       const serverId = parseInt(id, 10);
 
       if (isNaN(serverId)) {

@@ -31,8 +31,7 @@ const { getKzPool } = require("../db/kzRecords");
 // Configuration
 const CLEANUP_INTERVAL =
   parseInt(process.env.KZ_BAN_CLEANUP_INTERVAL) || 3600000; // 1 hour
-const CLEANUP_ENABLED =
-  process.env.KZ_BAN_CLEANUP_ENABLED !== "false"; // Default true
+const CLEANUP_ENABLED = process.env.KZ_BAN_CLEANUP_ENABLED !== "false"; // Default true
 
 // State tracking
 let isCleanupRunning = false;

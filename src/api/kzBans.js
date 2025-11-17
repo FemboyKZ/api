@@ -8,10 +8,7 @@ const {
   convertToSteamID64,
 } = require("../utils/validators");
 const logger = require("../utils/logger");
-const {
-  cacheMiddleware,
-  kzKeyGenerator,
-} = require("../utils/cacheMiddleware");
+const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
 
 /**
  * @swagger
@@ -202,19 +199,12 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.get(
-  "/active",
-  cacheMiddleware(60, kzKeyGenerator),
-  async (req, res) => {
-    try {
-      const { page, limit, ban_type } = req.query;
-      const { limit: validLimit, offset } = validatePagination(
-        page,
-        limit,
-        100,
-      );
+router.get("/active", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
+  try {
+    const { page, limit, ban_type } = req.query;
+    const { limit: validLimit, offset } = validatePagination(page, limit, 100);
 
-      let query = `
+    let query = `
         SELECT 
           b.id,
           b.ban_type,
@@ -230,43 +220,42 @@ router.get(
         LEFT JOIN kz_servers s ON b.server_id = s.server_id
         WHERE (b.expires_on IS NULL OR b.expires_on > NOW())
       `;
-      const params = [];
+    const params = [];
 
-      if (ban_type) {
-        query += " AND b.ban_type = ?";
-        params.push(sanitizeString(ban_type, 50));
-      }
-
-      // Count total
-      const countQuery = query.replace(
-        /SELECT.*FROM/s,
-        "SELECT COUNT(*) as total FROM",
-      );
-      const pool = getKzPool();
-      const [countResult] = await pool.query(countQuery, params);
-      const total = countResult[0].total;
-
-      query += " ORDER BY b.created_on DESC";
-      query += " LIMIT ? OFFSET ?";
-      params.push(validLimit, offset);
-
-      const [bans] = await pool.query(query, params);
-
-      res.json({
-        data: bans,
-        pagination: {
-          page: parseInt(page, 10) || 1,
-          limit: validLimit,
-          total: total,
-          totalPages: Math.ceil(total / validLimit),
-        },
-      });
-    } catch (e) {
-      logger.error(`Failed to fetch active bans: ${e.message}`);
-      res.status(500).json({ error: "Failed to fetch active bans" });
+    if (ban_type) {
+      query += " AND b.ban_type = ?";
+      params.push(sanitizeString(ban_type, 50));
     }
-  },
-);
+
+    // Count total
+    const countQuery = query.replace(
+      /SELECT.*FROM/s,
+      "SELECT COUNT(*) as total FROM",
+    );
+    const pool = getKzPool();
+    const [countResult] = await pool.query(countQuery, params);
+    const total = countResult[0].total;
+
+    query += " ORDER BY b.created_on DESC";
+    query += " LIMIT ? OFFSET ?";
+    params.push(validLimit, offset);
+
+    const [bans] = await pool.query(query, params);
+
+    res.json({
+      data: bans,
+      pagination: {
+        page: parseInt(page, 10) || 1,
+        limit: validLimit,
+        total: total,
+        totalPages: Math.ceil(total / validLimit),
+      },
+    });
+  } catch (e) {
+    logger.error(`Failed to fetch active bans: ${e.message}`);
+    res.status(500).json({ error: "Failed to fetch active bans" });
+  }
+});
 
 /**
  * @swagger
@@ -281,15 +270,12 @@ router.get(
  *       500:
  *         description: Server error
  */
-router.get(
-  "/stats",
-  cacheMiddleware(300, kzKeyGenerator),
-  async (req, res) => {
-    try {
-      const pool = getKzPool();
+router.get("/stats", cacheMiddleware(300, kzKeyGenerator), async (req, res) => {
+  try {
+    const pool = getKzPool();
 
-      // Get overall stats
-      const [overallStats] = await pool.query(`
+    // Get overall stats
+    const [overallStats] = await pool.query(`
         SELECT 
           COUNT(*) as total_bans,
           SUM(CASE WHEN expires_on IS NULL OR expires_on > NOW() THEN 1 ELSE 0 END) as active_bans,
@@ -298,8 +284,8 @@ router.get(
         FROM kz_bans
       `);
 
-      // Get ban type breakdown
-      const [banTypes] = await pool.query(`
+    // Get ban type breakdown
+    const [banTypes] = await pool.query(`
         SELECT 
           ban_type,
           COUNT(*) as count,
@@ -309,8 +295,8 @@ router.get(
         ORDER BY count DESC
       `);
 
-      // Get recent bans
-      const [recentBans] = await pool.query(`
+    // Get recent bans
+    const [recentBans] = await pool.query(`
         SELECT 
           b.id,
           b.ban_type,
@@ -327,17 +313,16 @@ router.get(
         LIMIT 10
       `);
 
-      res.json({
-        statistics: overallStats[0],
-        ban_type_breakdown: banTypes,
-        recent_bans: recentBans,
-      });
-    } catch (e) {
-      logger.error(`Failed to fetch ban statistics: ${e.message}`);
-      res.status(500).json({ error: "Failed to fetch ban statistics" });
-    }
-  },
-);
+    res.json({
+      statistics: overallStats[0],
+      ban_type_breakdown: banTypes,
+      recent_bans: recentBans,
+    });
+  } catch (e) {
+    logger.error(`Failed to fetch ban statistics: ${e.message}`);
+    res.status(500).json({ error: "Failed to fetch ban statistics" });
+  }
+});
 
 /**
  * @swagger

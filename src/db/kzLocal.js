@@ -20,8 +20,8 @@ function createKzLocalPool() {
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
-    connectTimeout: 60000,  // 60 seconds
-    timeout: 60000,         // 60 seconds for queries
+    connectTimeout: 60000, // 60 seconds
+    timeout: 60000, // 60 seconds for queries
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
     jsonStrings: false,

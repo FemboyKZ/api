@@ -8,10 +8,7 @@ const {
   convertToSteamID64,
 } = require("../utils/validators");
 const logger = require("../utils/logger");
-const {
-  cacheMiddleware,
-  kzKeyGenerator,
-} = require("../utils/cacheMiddleware");
+const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
 
 /**
  * @swagger
@@ -105,7 +102,8 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       params.push(isBanned);
     }
 
-    query += " GROUP BY p.id, p.steamid64, p.steam_id, p.player_name, p.is_banned, p.created_at, p.updated_at";
+    query +=
+      " GROUP BY p.id, p.steamid64, p.steam_id, p.player_name, p.is_banned, p.created_at, p.updated_at";
 
     // Get total count
     const countQuery = `SELECT COUNT(DISTINCT p.id) as total FROM kz_players p WHERE 1=1${
@@ -252,36 +250,39 @@ router.get(
  *       500:
  *         description: Server error
  */
-router.get("/:steamid", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
-  try {
-    const { steamid } = req.params;
+router.get(
+  "/:steamid",
+  cacheMiddleware(60, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const { steamid } = req.params;
 
-    if (!isValidSteamID(steamid)) {
-      return res.status(400).json({ error: "Invalid SteamID format" });
-    }
+      if (!isValidSteamID(steamid)) {
+        return res.status(400).json({ error: "Invalid SteamID format" });
+      }
 
-    const steamid64 = convertToSteamID64(steamid);
-    if (!steamid64) {
-      return res.status(400).json({ error: "Failed to convert SteamID" });
-    }
+      const steamid64 = convertToSteamID64(steamid);
+      if (!steamid64) {
+        return res.status(400).json({ error: "Failed to convert SteamID" });
+      }
 
-    const pool = getKzPool();
+      const pool = getKzPool();
 
-    // Get player info
-    const [players] = await pool.query(
-      "SELECT * FROM kz_players WHERE steamid64 = ?",
-      [steamid64],
-    );
+      // Get player info
+      const [players] = await pool.query(
+        "SELECT * FROM kz_players WHERE steamid64 = ?",
+        [steamid64],
+      );
 
-    if (players.length === 0) {
-      return res.status(404).json({ error: "Player not found" });
-    }
+      if (players.length === 0) {
+        return res.status(404).json({ error: "Player not found" });
+      }
 
-    const player = players[0];
+      const player = players[0];
 
-    // Get record statistics
-    const [stats] = await pool.query(
-      `
+      // Get record statistics
+      const [stats] = await pool.query(
+        `
       SELECT 
         COUNT(DISTINCT r.id) as total_records,
         COUNT(DISTINCT r.map_id) as maps_completed,
@@ -296,12 +297,12 @@ router.get("/:steamid", cacheMiddleware(60, kzKeyGenerator), async (req, res) =>
       FROM kz_records r
       WHERE r.player_id = ?
     `,
-      [steamid64],
-    );
+        [steamid64],
+      );
 
-    // Get world records count (best time per map/mode/stage combination)
-    const [wrStats] = await pool.query(
-      `
+      // Get world records count (best time per map/mode/stage combination)
+      const [wrStats] = await pool.query(
+        `
       SELECT COUNT(*) as world_records
       FROM (
         SELECT r.map_id, r.mode, r.stage, MIN(r.time) as best_time
@@ -317,12 +318,12 @@ router.get("/:steamid", cacheMiddleware(60, kzKeyGenerator), async (req, res) =>
         )
       ) wr
     `,
-      [steamid64],
-    );
+        [steamid64],
+      );
 
-    // Get mode breakdown
-    const [modeStats] = await pool.query(
-      `
+      // Get mode breakdown
+      const [modeStats] = await pool.query(
+        `
       SELECT 
         mode,
         COUNT(*) as records,
@@ -333,12 +334,12 @@ router.get("/:steamid", cacheMiddleware(60, kzKeyGenerator), async (req, res) =>
       WHERE player_id = ?
       GROUP BY mode
     `,
-      [steamid64],
-    );
+        [steamid64],
+      );
 
-    // Get recent records
-    const [recentRecords] = await pool.query(
-      `
+      // Get recent records
+      const [recentRecords] = await pool.query(
+        `
       SELECT 
         r.id,
         r.original_id,
@@ -357,30 +358,33 @@ router.get("/:steamid", cacheMiddleware(60, kzKeyGenerator), async (req, res) =>
       ORDER BY r.created_on DESC
       LIMIT 10
     `,
-      [steamid64],
-    );
+        [steamid64],
+      );
 
-    res.json({
-      player: {
-        steamid64: player.steamid64,
-        steam_id: player.steam_id,
-        player_name: player.player_name,
-        is_banned: player.is_banned,
-        created_at: player.created_at,
-        updated_at: player.updated_at,
-      },
-      statistics: {
-        ...stats[0],
-        world_records: wrStats[0].world_records,
-        mode_breakdown: modeStats,
-      },
-      recent_records: recentRecords,
-    });
-  } catch (e) {
-    logger.error(`Failed to fetch KZ player ${req.params.steamid}: ${e.message}`);
-    res.status(500).json({ error: "Failed to fetch KZ player" });
-  }
-});
+      res.json({
+        player: {
+          steamid64: player.steamid64,
+          steam_id: player.steam_id,
+          player_name: player.player_name,
+          is_banned: player.is_banned,
+          created_at: player.created_at,
+          updated_at: player.updated_at,
+        },
+        statistics: {
+          ...stats[0],
+          world_records: wrStats[0].world_records,
+          mode_breakdown: modeStats,
+        },
+        recent_records: recentRecords,
+      });
+    } catch (e) {
+      logger.error(
+        `Failed to fetch KZ player ${req.params.steamid}: ${e.message}`,
+      );
+      res.status(500).json({ error: "Failed to fetch KZ player" });
+    }
+  },
+);
 
 /**
  * @swagger
@@ -437,14 +441,25 @@ router.get(
   async (req, res) => {
     try {
       const { steamid } = req.params;
-      const { page, limit, map, mode, sort = "created_on", order = "desc" } = req.query;
+      const {
+        page,
+        limit,
+        map,
+        mode,
+        sort = "created_on",
+        order = "desc",
+      } = req.query;
 
       if (!isValidSteamID(steamid)) {
         return res.status(400).json({ error: "Invalid SteamID format" });
       }
 
       const steamid64 = convertToSteamID64(steamid);
-      const { limit: validLimit, offset } = validatePagination(page, limit, 100);
+      const { limit: validLimit, offset } = validatePagination(
+        page,
+        limit,
+        100,
+      );
 
       const validSortFields = ["time", "created_on", "points"];
       const sortField = validSortFields.includes(sort) ? sort : "created_on";
