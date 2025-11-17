@@ -12,12 +12,9 @@ CREATE TABLE IF NOT EXISTS kz_players (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   
   INDEX idx_steam_id (steam_id),
-  INDEX idx_players_steamid64(steamid64),
-  INDEX idx_player_name (player_name(20)),
-  INDEX idx_is_banned(is_banned),
-  INDEX idx_total_records (total_records),
-  INDEX idx_players_ban_lookup (steamid64, is_banned),
-  INDEX idx_players_name_ban (player_name(50), is_banned)
+  INDEX idx_player_name (player_name(50)),
+  INDEX idx_total_records (total_records DESC),
+  INDEX idx_is_banned (is_banned)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Maps table - normalized map data
@@ -38,10 +35,7 @@ CREATE TABLE IF NOT EXISTS kz_maps (
   
   UNIQUE KEY unique_map_id_name (map_id, map_name),
   INDEX idx_map_name (map_name(50)),
-  INDEX idx_maps_id (id),
-  INDEX idx_validated (validated),
-  INDEX idx_difficulty (difficulty),
-  INDEX idx_maps_stats (validated, difficulty, map_name(50))
+  INDEX idx_maps_filter (validated, difficulty)
 ) COMMENT = 'Normalized map data with GlobalAPI metadata' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Servers table - normalized server data
@@ -60,18 +54,18 @@ CREATE TABLE IF NOT EXISTS kz_servers (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
   INDEX idx_server_name (server_name(50)),
-  INDEX idx_servers_id (server_id),
   INDEX idx_ip_port (ip, port),
-  INDEX idx_owner (owner_steamid64);
+  
+  CONSTRAINT fk_server_owner FOREIGN KEY (owner_steamid64) REFERENCES kz_players(steamid64) ON DELETE SET NULL,
+  CONSTRAINT fk_server_approver FOREIGN KEY (approved_by_steamid64) REFERENCES kz_players(steamid64) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Records table - main table for 25M+ records
--- Note: Foreign keys not supported with partitioning, enforced at application level
 CREATE TABLE IF NOT EXISTS kz_records (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   original_id BIGINT UNSIGNED NULL UNIQUE, -- Original ID from source API data
   
-  -- Foreign keys (referenced but not enforced by DB due to partitioning)
+  -- Foreign keys
   player_id VARCHAR(20) NOT NULL,
   map_id INT UNSIGNED NOT NULL,
   server_id INT UNSIGNED NOT NULL,
@@ -94,34 +88,18 @@ CREATE TABLE IF NOT EXISTS kz_records (
   updated_on TIMESTAMP NOT NULL,
   inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   
-  -- Indexes for common queries
-  INDEX idx_original_id (original_id),
-  INDEX idx_player_id (player_id),
-  INDEX idx_map_id (map_id),
-  INDEX idx_server_id (server_id),
-  INDEX idx_player_time (player_id, time),
-  INDEX idx_map_time (map_id, time),
-  INDEX idx_mode_time (mode, time),
-  INDEX idx_created_on (created_on),
-  INDEX idx_compound_player_map (player_id, map_id, mode, stage),
-  INDEX idx_compound_map_mode (map_id, mode, time),
+  -- Essential indexes for common queries
+  INDEX idx_player_map_mode (player_id, map_id, mode, stage, time),
   INDEX idx_leaderboard (map_id, mode, stage, teleports, time),
-  INDEX idx_records_mode_stage_teleports (mode, stage, teleports),
-  INDEX idx_records_created_on (created_on DESC),
-  INDEX idx_records_map_id_mode_stage_time (map_id, mode, stage, time),
-  INDEX idx_records_player_id (player_id),
-  INDEX idx_records_composite (mode, stage, teleports, time),
-  INDEX idx_records_wr_lookup (mode, stage, teleports, map_id, time),
-  INDEX idx_records_wr_with_player (mode, stage, map_id, player_id, time, teleports),
-  INDEX idx_records_map_leaderboard (map_id, mode, stage, teleports, player_id, time),
-  INDEX idx_records_player_best (player_id, map_id, mode, stage, time),
-  INDEX idx_records_recent_mode (created_on DESC, mode, stage),
-  INDEX idx_records_recent_map (created_on DESC, map_id, mode),
-  INDEX idx_records_player_mode (player_id, mode, stage, created_on DESC),
-  INDEX idx_records_player_stats (player_id, mode, time, points),
-  INDEX idx_records_server_stats (server_id, created_on DESC, mode),
-  INDEX idx_records_player_map_covering (player_id, map_id, mode, stage, time, teleports, points, created_on),
-  INDEX idx_records_wr_covering (mode, stage, teleports, map_id, time, player_id, points, server_id, created_on)
+  INDEX idx_recent_records (created_on DESC, mode, map_id),
+  INDEX idx_server_records (server_id, created_on DESC),
+  INDEX idx_mode_stage (mode, stage, teleports, time),
+  INDEX idx_original_id (original_id),
+  
+  -- Foreign key constraints
+  CONSTRAINT fk_player FOREIGN KEY (player_id) REFERENCES kz_players(steamid64) ON DELETE CASCADE,
+  CONSTRAINT fk_map FOREIGN KEY (map_id) REFERENCES kz_maps(id) ON DELETE CASCADE,
+  CONSTRAINT fk_server FOREIGN KEY (server_id) REFERENCES kz_servers(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Statistics table for aggregated data (speeds up common queries)
@@ -146,18 +124,23 @@ CREATE TABLE IF NOT EXISTS kz_map_statistics (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS kz_worldrecords_cache (
-  map_id INT,
-  mode VARCHAR(32),
-  stage INT,
-  teleports INT,
-  player_id BIGINT,
-  time FLOAT,
-  points INT,
-  server_id INT,
-  created_on DATETIME,
+  map_id INT UNSIGNED NOT NULL,
+  mode VARCHAR(32) NOT NULL,
+  stage INT NOT NULL,
+  teleports INT NOT NULL,
+  player_id VARCHAR(20) NOT NULL,
+  time FLOAT NOT NULL,
+  points INT NOT NULL DEFAULT 0,
+  server_id INT UNSIGNED NOT NULL,
+  created_on DATETIME NOT NULL,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  
   PRIMARY KEY (map_id, mode, stage, teleports),
-  INDEX idx_mode_stage_teleports (mode, stage, teleports)
+  INDEX idx_player_records (player_id, created_on DESC),
+  
+  CONSTRAINT fk_wr_map FOREIGN KEY (map_id) REFERENCES kz_maps(id) ON DELETE CASCADE,
+  CONSTRAINT fk_wr_player FOREIGN KEY (player_id) REFERENCES kz_players(steamid64) ON DELETE CASCADE,
+  CONSTRAINT fk_wr_server FOREIGN KEY (server_id) REFERENCES kz_servers(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Player statistics
@@ -187,22 +170,25 @@ CREATE TABLE IF NOT EXISTS kz_bans (
   steam_id VARCHAR(32) NULL,
   notes TEXT NULL,
   stats TEXT NULL,
-  server_id INT NULL,
+  server_id INT UNSIGNED NULL,
   updated_by_id VARCHAR(20) NULL,
   created_on DATETIME NULL,
   updated_on DATETIME NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  
   INDEX idx_steamid64 (steamid64),
-  INDEX idx_ban_type (ban_type),
-  INDEX idx_server_id (server_id),
-  INDEX idx_expires_on (expires_on),
-  INDEX idx_created_on (created_on)
+  INDEX idx_ban_lookup (ban_type, expires_on, created_on DESC),
+  INDEX idx_server_bans (server_id, created_on DESC),
+  
+  CONSTRAINT fk_ban_player FOREIGN KEY (steamid64) REFERENCES kz_players(steamid64) ON DELETE CASCADE,
+  CONSTRAINT fk_ban_server FOREIGN KEY (server_id) REFERENCES kz_servers(id) ON DELETE SET NULL,
+  CONSTRAINT fk_ban_updater FOREIGN KEY (updated_by_id) REFERENCES kz_players(steamid64) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS kz_jumpstats (
   id INT PRIMARY KEY,
-  server_id INT NULL,
+  server_id INT UNSIGNED NULL,
   steamid64 VARCHAR(20) NULL,
   player_name VARCHAR(255) NULL,
   steam_id VARCHAR(32) NULL,
@@ -217,18 +203,19 @@ CREATE TABLE IF NOT EXISTS kz_jumpstats (
   updated_by_id VARCHAR(20) NULL,
   created_on DATETIME NULL,
   updated_on DATETIME NULL,
-  INDEX idx_steamid64 (steamid64),
-  INDEX idx_jump_type (jump_type),
-  INDEX idx_server_id (server_id),
-  INDEX idx_is_crouch_bind (is_crouch_bind),
-  INDEX idx_is_forward_bind (is_forward_bind),
-  INDEX idx_is_crouch_boost (is_crouch_boost),
-  INDEX idx_created_on (created_on)
+  
+  INDEX idx_leaderboard (jump_type, is_crouch_bind, is_forward_bind, is_crouch_boost, distance DESC),
+  INDEX idx_player_jumps (steamid64, jump_type, created_on DESC),
+  INDEX idx_server_jumps (server_id, created_on DESC),
+  
+  CONSTRAINT fk_jump_player FOREIGN KEY (steamid64) REFERENCES kz_players(steamid64) ON DELETE CASCADE,
+  CONSTRAINT fk_jump_server FOREIGN KEY (server_id) REFERENCES kz_servers(id) ON DELETE SET NULL,
+  CONSTRAINT fk_jump_updater FOREIGN KEY (updated_by_id) REFERENCES kz_players(steamid64) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS kz_record_filters (
   id INT PRIMARY KEY,
-  map_id INT NOT NULL,
+  map_id INT UNSIGNED NOT NULL,
   stage TINYINT NOT NULL DEFAULT 0,
   mode_id INT NOT NULL,
   tickrate SMALLINT NOT NULL,
@@ -237,12 +224,13 @@ CREATE TABLE IF NOT EXISTS kz_record_filters (
   updated_on DATETIME,
   updated_by_id VARCHAR(20),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_map_mode (map_id, mode_id),
-  INDEX idx_mode (mode_id),
-  INDEX idx_stage (stage),
-  INDEX idx_tickrate (tickrate),
-  INDEX idx_teleports (has_teleports),
-  UNIQUE KEY unique_filter (map_id, stage, mode_id, tickrate, has_teleports)
+  
+  UNIQUE KEY unique_filter (map_id, stage, mode_id, tickrate, has_teleports),
+  INDEX idx_mode_filters (mode_id, tickrate, has_teleports),
+  
+  CONSTRAINT fk_filter_map FOREIGN KEY (map_id) REFERENCES kz_maps(id) ON DELETE CASCADE,
+  CONSTRAINT fk_filter_mode FOREIGN KEY (mode_id) REFERENCES kz_modes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_filter_updater FOREIGN KEY (updated_by_id) REFERENCES kz_players(steamid64) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create kz_modes table
@@ -260,7 +248,9 @@ CREATE TABLE IF NOT EXISTS kz_modes (
   created_on DATETIME,
   updated_on DATETIME,
   updated_by_id VARCHAR(20),
-  INDEX idx_name (name)
+  
+  CONSTRAINT fk_mode_contact FOREIGN KEY (contact_steamid64) REFERENCES kz_players(steamid64) ON DELETE SET NULL,
+  CONSTRAINT fk_mode_updater FOREIGN KEY (updated_by_id) REFERENCES kz_players(steamid64) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DELIMITER $$
