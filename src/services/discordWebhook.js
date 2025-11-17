@@ -46,10 +46,8 @@ async function loadMessageIds() {
     rows.forEach((row) => {
       if (row.setting_key === "discord_message_id_csgo" && row.setting_value) {
         csgoMessageId = row.setting_value;
-        logger.info("Loaded CS:GO Discord message ID", { messageId: csgoMessageId });
       } else if (row.setting_key === "discord_message_id_cs2" && row.setting_value) {
         cs2MessageId = row.setting_value;
-        logger.info("Loaded CS2 Discord message ID", { messageId: cs2MessageId });
       }
     });
   } catch (error) {
@@ -150,16 +148,9 @@ async function getServersByGame(game) {
  * Build Discord embeds for servers grouped by region
  */
 function buildEmbeds(servers, game) {
-  logger.info("buildEmbeds called", { game, serverCount: servers.length });
-  
   try {
     const gameTitle = game === "csgo" ? "CS:GO" : "CS2";
     const gameLower = game === "csgo" ? "csgo" : "cs2";
-
-    // Log actual region values
-    logger.info("Server regions", { 
-      regions: servers.map(s => ({ ip: s.ip, region: s.region }))
-    });
 
     // Group servers by region
     const euServers = servers.filter(s => s.region === "eu");
@@ -252,14 +243,6 @@ function buildEmbeds(servers, game) {
       return embed;
     }
 
-    // Build embeds for each region that has servers
-    logger.info("Region grouping", {
-      euCount: euServers.length,
-      naCount: naServers.length,
-      otherCount: otherServers.length,
-      totalServers: servers.length
-    });
-
     if (euServers.length > 0) {
       embeds.push(buildRegionEmbed(euServers, "EU"));
     }
@@ -271,8 +254,6 @@ function buildEmbeds(servers, game) {
     if (otherServers.length > 0) {
       embeds.push(buildRegionEmbed(otherServers, "Other"));
     }
-
-    logger.info("Embeds created", { count: embeds.length });
 
     return embeds;
   } catch (error) {
@@ -305,7 +286,6 @@ async function sendOrUpdateMessage(webhookUrl, embeds, messageId = null) {
       const response = await axios.post(createUrl, {
         embeds: embeds,
       });
-      logger.info("Created new Discord message", { messageId: response.data.id });
       return response.data.id;
     }
   } catch (error) {
