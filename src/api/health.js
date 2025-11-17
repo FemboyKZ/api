@@ -33,37 +33,34 @@ router.get("/", async (req, res) => {
 
 router.get("/stats", async (req, res) => {
   try {
-    const [serverStats] = await pool.query(
-      "SELECT COUNT(*) as total, SUM(CASE WHEN status=1 THEN 1 ELSE 0 END) as online, SUM(CASE WHEN status=0 THEN 1 ELSE 0 END) as offline FROM servers",
-    );
+    // Optimized: Combine all stats into a single query
+    const [stats] = await pool.query(`
+      SELECT 
+        (SELECT COUNT(*) FROM servers) as server_total,
+        (SELECT SUM(CASE WHEN status=1 THEN 1 ELSE 0 END) FROM servers) as server_online,
+        (SELECT SUM(CASE WHEN status=0 THEN 1 ELSE 0 END) FROM servers) as server_offline,
+        (SELECT COUNT(DISTINCT steamid) FROM players) as player_total,
+        (SELECT COUNT(DISTINCT steamid) FROM players WHERE last_seen >= DATE_SUB(NOW(), INTERVAL 24 HOUR)) as players_active_24h,
+        (SELECT COUNT(DISTINCT name) FROM maps) as map_total
+    `);
 
-    const [playerStats] = await pool.query(
-      "SELECT COUNT(DISTINCT steamid) as total FROM players",
-    );
-
-    const [activePlayersStats] = await pool.query(
-      "SELECT COUNT(DISTINCT steamid) as active_24h FROM players WHERE last_seen >= DATE_SUB(NOW(), INTERVAL 24 HOUR)",
-    );
-
-    const [mapStats] = await pool.query(
-      "SELECT COUNT(DISTINCT name) as total FROM maps",
-    );
+    const result = stats[0];
 
     const uptime = process.uptime();
     const wsStats = getWebSocketStats();
 
     res.json({
       servers: {
-        total: serverStats[0].total,
-        online: serverStats[0].online,
-        offline: serverStats[0].offline,
+        total: result.server_total,
+        online: result.server_online,
+        offline: result.server_offline,
       },
       players: {
-        total: playerStats[0].total,
-        active_24h: activePlayersStats[0].active_24h,
+        total: result.player_total,
+        active_24h: result.players_active_24h,
       },
       maps: {
-        total: mapStats[0].total,
+        total: result.map_total,
       },
       websocket: {
         connected: wsStats.connected,

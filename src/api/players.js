@@ -172,15 +172,26 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
     const sortField = validSortFields.includes(sort) ? sort : "total_playtime";
     const sortOrder = order === "asc" ? "ASC" : "DESC";
 
-    // Get all player data grouped by steamid and game
+    // Optimized: Use SQL aggregation with JSON functions for better performance
     let query = `
       SELECT 
-        steamid, 
-        latest_name as name, 
-        game, 
-        SUM(playtime) as total_playtime,
-        MAX(last_seen) as last_seen,
-        MAX(avatar) as avatar
+        steamid,
+        MAX(latest_name) as name,
+        MAX(avatar) as avatar,
+        MAX(CASE WHEN game = 'csgo' THEN 
+          JSON_OBJECT(
+            'total_playtime', SUM(playtime),
+            'last_seen', MAX(last_seen)
+          )
+        END) as csgo,
+        MAX(CASE WHEN game = 'counterstrike2' THEN 
+          JSON_OBJECT(
+            'total_playtime', SUM(playtime),
+            'last_seen', MAX(last_seen)
+          )
+        END) as counterstrike2,
+        SUM(playtime) as _total_playtime,
+        MAX(last_seen) as _last_seen
       FROM players 
       WHERE 1=1
     `;
@@ -196,99 +207,55 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
       params.push(`%${sanitizeString(name, 100)}%`);
     }
 
-    query += " GROUP BY steamid, game";
+    query += " GROUP BY steamid";
+
+    // Add SQL-based sorting instead of JavaScript sorting
+    if (sortField === "total_playtime") {
+      query += ` ORDER BY _total_playtime ${sortOrder}`;
+    } else if (sortField === "last_seen") {
+      query += ` ORDER BY _last_seen ${sortOrder}`;
+    } else {
+      query += ` ORDER BY steamid ${sortOrder}`;
+    }
+
+    // Add pagination in SQL
+    query += " LIMIT ? OFFSET ?";
+    params.push(validLimit, offset);
 
     const [rawPlayers] = await pool.query(query, params);
 
-    // Group by steamid and structure data by game
-    const playerMap = new Map();
+    // Parse JSON fields from SQL (MariaDB returns JSON as strings)
+    const players = rawPlayers.map((row) => {
+      const { _total_playtime, _last_seen, ...player } = row;
 
-    for (const row of rawPlayers) {
-      if (!playerMap.has(row.steamid)) {
-        playerMap.set(row.steamid, {
-          steamid: row.steamid,
-          name: row.name, // Will be updated to most recent
-          avatar: row.avatar,
-          csgo: {},
-          counterstrike2: {},
-          _lastSeen: null, // For sorting
-          _totalPlaytime: 0, // For sorting
-        });
-      }
+      // Parse JSON objects or set to empty objects
+      player.csgo = row.csgo
+        ? typeof row.csgo === "string"
+          ? JSON.parse(row.csgo)
+          : row.csgo
+        : {};
+      player.counterstrike2 = row.counterstrike2
+        ? typeof row.counterstrike2 === "string"
+          ? JSON.parse(row.counterstrike2)
+          : row.counterstrike2
+        : {};
 
-      const player = playerMap.get(row.steamid);
+      return player;
+    });
 
-      // Update name to most recent across all games
-      if (
-        !player._lastSeen ||
-        new Date(row.last_seen) > new Date(player._lastSeen)
-      ) {
-        player.name = row.name;
-        player._lastSeen = row.last_seen;
-      }
-
-      // Add game-specific stats
-      if (row.game === "csgo") {
-        player.csgo = {
-          total_playtime: parseInt(row.total_playtime, 10) || 0,
-          last_seen: row.last_seen,
-        };
-      } else if (row.game === "counterstrike2") {
-        player.counterstrike2 = {
-          total_playtime: parseInt(row.total_playtime, 10) || 0,
-          last_seen: row.last_seen,
-        };
-      }
-
-      // Track combined playtime for sorting
-      player._totalPlaytime += parseInt(row.total_playtime, 10) || 0;
+    // Get total count (separate query for accuracy)
+    let countQuery =
+      "SELECT COUNT(DISTINCT steamid) as total FROM players WHERE 1=1";
+    const countParams = [];
+    if (game) {
+      countQuery += " AND game = ?";
+      countParams.push(sanitizeString(game, 50));
     }
-
-    // Convert map to array and remove internal sorting fields
-    let players = Array.from(playerMap.values()).map((p) => {
-      const { _lastSeen, _totalPlaytime, ...playerData } = p;
-      return playerData;
-    });
-
-    // Sort based on requested field
-    players.sort((a, b) => {
-      let aVal, bVal;
-
-      if (sortField === "total_playtime") {
-        // Sum playtime across both games for sorting
-        aVal =
-          (a.csgo.total_playtime || 0) + (a.counterstrike2.total_playtime || 0);
-        bVal =
-          (b.csgo.total_playtime || 0) + (b.counterstrike2.total_playtime || 0);
-      } else if (sortField === "last_seen") {
-        // Get most recent last_seen across both games
-        const aDate =
-          [a.csgo.last_seen, a.counterstrike2.last_seen]
-            .filter((d) => d)
-            .sort()
-            .reverse()[0] || "";
-        const bDate =
-          [b.csgo.last_seen, b.counterstrike2.last_seen]
-            .filter((d) => d)
-            .sort()
-            .reverse()[0] || "";
-        aVal = aDate;
-        bVal = bDate;
-      } else {
-        aVal = a[sortField];
-        bVal = b[sortField];
-      }
-
-      if (sortOrder === "DESC") {
-        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
-      } else {
-        return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-      }
-    });
-
-    // Apply pagination
-    const total = players.length;
-    players = players.slice(offset, offset + validLimit);
+    if (name) {
+      countQuery += " AND latest_name LIKE ?";
+      countParams.push(`%${sanitizeString(name, 100)}%`);
+    }
+    const [[{ total }]] = await pool.query(countQuery, countParams);
 
     res.json({
       data: players,

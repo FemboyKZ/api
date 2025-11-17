@@ -122,8 +122,15 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
     const sortField = validSortFields.includes(sort) ? sort : "total_playtime";
     const sortOrder = order === "asc" ? "ASC" : "DESC";
 
-    let query =
-      "SELECT name, game, COALESCE(SUM(playtime), 0) AS total_playtime FROM maps WHERE 1=1";
+    // Optimized: Use window function to get total count in single query
+    let query = `
+      SELECT 
+        name, 
+        game, 
+        COALESCE(SUM(playtime), 0) AS total_playtime,
+        COUNT(*) OVER() as total_count
+      FROM maps 
+      WHERE 1=1`;
     const params = [];
 
     if (game) {
@@ -149,26 +156,11 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
 
     const [maps] = await pool.query(query, params);
 
-    let countQuery =
-      "SELECT COUNT(DISTINCT CONCAT(name, '-', game)) as total FROM maps WHERE 1=1";
-    const countParams = [];
-    if (game) {
-      countQuery += " AND game = ?";
-      countParams.push(sanitizeString(game, 50));
-    }
-    if (server) {
-      const [ip, port] = server.split(":");
-      if (ip && port && isValidIP(ip) && isValidPort(port)) {
-        countQuery += " AND server_ip = ? AND server_port = ?";
-        countParams.push(ip, parseInt(port, 10));
-      }
-    }
-    if (name) {
-      countQuery += " AND name LIKE ?";
-      countParams.push(`%${sanitizeString(name, 100)}%`);
-    }
+    // Extract total from first row (same for all rows due to window function)
+    const total = maps.length > 0 ? maps[0].total_count : 0;
 
-    const [countResult] = await pool.query(countQuery, countParams);
+    // Remove total_count from each map object
+    maps.forEach((map) => delete map.total_count);
 
     res.json({
       total: maps.length,
@@ -176,8 +168,8 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
       pagination: {
         page: parseInt(page, 10) || 1,
         limit: validLimit,
-        total: countResult[0].total,
-        totalPages: Math.ceil(countResult[0].total / validLimit),
+        total: total,
+        totalPages: Math.ceil(total / validLimit),
       },
     });
   } catch (e) {

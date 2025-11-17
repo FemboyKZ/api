@@ -196,13 +196,25 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
       }
     }
 
-    // Get total count
-    const countQuery = query.replace(
-      /SELECT.*FROM/s,
-      "SELECT COUNT(DISTINCT r.id) as total FROM",
-    );
+    // Optimized: Use SQL_CALC_FOUND_ROWS for single query count (MySQL/MariaDB)
+    // Or use window function for better performance
     const pool = getKzPool();
-    const [countResult] = await pool.query(countQuery, params);
+
+    // Build count query efficiently - reuse WHERE clause
+    const countQuery =
+      `
+      SELECT COUNT(r.id) as total
+      FROM kz_records r
+      LEFT JOIN kz_players p ON r.player_id = p.steamid64
+      LEFT JOIN kz_maps m ON r.map_id = m.id
+      LEFT JOIN kz_servers s ON r.server_id = s.id
+      WHERE 1=1` +
+      query.substring(
+        query.indexOf("WHERE 1=1") + 9,
+        query.indexOf("ORDER BY") || query.length,
+      );
+
+    const [countResult] = await pool.query(countQuery, params.slice(0, -2)); // Remove LIMIT/OFFSET
     const total = countResult[0].total;
 
     // Add sorting and pagination
