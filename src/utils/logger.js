@@ -72,10 +72,10 @@ if (isProduction || isDevelopment) {
     }),
   );
 
-  // Access log (info level for API requests)
+  // Info log (info level and above - includes API requests, general app info)
   transports.push(
     new winston.transports.File({
-      filename: path.join(logsDir, "access.log"),
+      filename: path.join(logsDir, "info.log"),
       level: "info",
       format: customFormat,
       maxsize: 10485760, // 10MB
