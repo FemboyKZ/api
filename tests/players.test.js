@@ -21,31 +21,40 @@ describe("Players Endpoints", () => {
 
   describe("GET /players", () => {
     it("should return all players grouped by game with default pagination", async () => {
-      pool.query.mockResolvedValueOnce([
-        [
-          {
-            steamid: "76561198000000001",
-            name: "Player1",
-            game: "csgo",
-            total_playtime: 12345,
-            last_seen: "2025-10-26T12:00:00Z",
-          },
-          {
-            steamid: "76561198000000001",
-            name: "Player1",
-            game: "counterstrike2",
-            total_playtime: 5000,
-            last_seen: "2025-10-26T14:00:00Z",
-          },
-          {
-            steamid: "76561198000000002",
-            name: "Player2",
-            game: "csgo",
-            total_playtime: 54321,
-            last_seen: "2025-10-25T10:00:00Z",
-          },
-        ],
-      ]);
+      // Mock optimized query with SQL aggregation (JSON_OBJECT)
+      pool.query
+        .mockResolvedValueOnce([
+          [
+            {
+              steamid: "76561198000000001",
+              name: "Player1",
+              avatar: "https://avatars.akamai.steamstatic.com/avatar1.jpg",
+              csgo: JSON.stringify({
+                total_playtime: 12345,
+                last_seen: "2025-10-26T12:00:00Z",
+              }),
+              counterstrike2: JSON.stringify({
+                total_playtime: 5000,
+                last_seen: "2025-10-26T14:00:00Z",
+              }),
+              _total_playtime: 17345,
+              _last_seen: "2025-10-26T14:00:00Z",
+            },
+            {
+              steamid: "76561198000000002",
+              name: "Player2",
+              avatar: null,
+              csgo: JSON.stringify({
+                total_playtime: 54321,
+                last_seen: "2025-10-25T10:00:00Z",
+              }),
+              counterstrike2: null,
+              _total_playtime: 54321,
+              _last_seen: "2025-10-25T10:00:00Z",
+            },
+          ],
+        ])
+        .mockResolvedValueOnce([[{ total: 2 }]]); // Count query
 
       const response = await request(app)
         .get("/players")
@@ -79,17 +88,24 @@ describe("Players Endpoints", () => {
     });
 
     it("should filter by game type", async () => {
-      pool.query.mockResolvedValueOnce([
-        [
-          {
-            steamid: "76561198000000001",
-            name: "Player1",
-            game: "csgo",
-            total_playtime: 12345,
-            last_seen: "2025-10-26T12:00:00Z",
-          },
-        ],
-      ]);
+      pool.query
+        .mockResolvedValueOnce([
+          [
+            {
+              steamid: "76561198000000001",
+              name: "Player1",
+              avatar: null,
+              csgo: JSON.stringify({
+                total_playtime: 12345,
+                last_seen: "2025-10-26T12:00:00Z",
+              }),
+              counterstrike2: null,
+              _total_playtime: 12345,
+              _last_seen: "2025-10-26T12:00:00Z",
+            },
+          ],
+        ])
+        .mockResolvedValueOnce([[{ total: 1 }]]);
 
       const response = await request(app)
         .get("/players?game=csgo")
@@ -105,17 +121,24 @@ describe("Players Endpoints", () => {
     });
 
     it("should filter by name", async () => {
-      pool.query.mockResolvedValueOnce([
-        [
-          {
-            steamid: "76561198000000001",
-            name: "TestPlayer",
-            game: "csgo",
-            total_playtime: 12345,
-            last_seen: "2025-10-26T12:00:00Z",
-          },
-        ],
-      ]);
+      pool.query
+        .mockResolvedValueOnce([
+          [
+            {
+              steamid: "76561198000000001",
+              name: "TestPlayer",
+              avatar: null,
+              csgo: JSON.stringify({
+                total_playtime: 12345,
+                last_seen: "2025-10-26T12:00:00Z",
+              }),
+              counterstrike2: null,
+              _total_playtime: 12345,
+              _last_seen: "2025-10-26T12:00:00Z",
+            },
+          ],
+        ])
+        .mockResolvedValueOnce([[{ total: 1 }]]);
 
       const response = await request(app)
         .get("/players?name=Test")
@@ -128,7 +151,9 @@ describe("Players Endpoints", () => {
     });
 
     it("should handle pagination parameters", async () => {
-      pool.query.mockResolvedValueOnce([[]]);
+      pool.query
+        .mockResolvedValueOnce([[]]) // Main query
+        .mockResolvedValueOnce([[{ total: 0 }]]); // Count query
 
       const response = await request(app)
         .get("/players?page=2&limit=5")
@@ -138,6 +163,79 @@ describe("Players Endpoints", () => {
       expect(response.body).toHaveProperty("data");
       expect(response.body).toHaveProperty("pagination");
       expect(Array.isArray(response.body.data)).toBe(true);
+    });
+
+    it("should handle sorting by different fields", async () => {
+      pool.query
+        .mockResolvedValueOnce([
+          [
+            {
+              steamid: "76561198000000001",
+              name: "Player1",
+              avatar: null,
+              csgo: JSON.stringify({
+                total_playtime: 12345,
+                last_seen: "2025-10-26T12:00:00Z",
+              }),
+              counterstrike2: null,
+              _total_playtime: 12345,
+              _last_seen: "2025-10-26T12:00:00Z",
+            },
+          ],
+        ])
+        .mockResolvedValueOnce([[{ total: 1 }]]);
+
+      const response = await request(app)
+        .get("/players?sort=last_seen&order=desc")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      expect(response.body).toHaveProperty("data");
+      expect(Array.isArray(response.body.data)).toBe(true);
+    });
+
+    it("should handle SQL injection attempts safely", async () => {
+      pool.query
+        .mockResolvedValueOnce([[]])
+        .mockResolvedValueOnce([[{ total: 0 }]]);
+
+      const response = await request(app)
+        .get("/players?name=Test' OR '1'='1")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      // Should not error - parameterized queries prevent injection
+      expect(response.body).toHaveProperty("data");
+    });
+
+    it("should parse JSON fields correctly from MariaDB", async () => {
+      pool.query
+        .mockResolvedValueOnce([
+          [
+            {
+              steamid: "76561198000000001",
+              name: "Player1",
+              avatar: null,
+              // MariaDB returns JSON as string
+              csgo: '{"total_playtime":12345,"last_seen":"2025-10-26T12:00:00Z"}',
+              counterstrike2: null,
+              _total_playtime: 12345,
+              _last_seen: "2025-10-26T12:00:00Z",
+            },
+          ],
+        ])
+        .mockResolvedValueOnce([[{ total: 1 }]]);
+
+      const response = await request(app)
+        .get("/players")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      expect(response.body.data[0].csgo).toHaveProperty(
+        "total_playtime",
+        12345,
+      );
+      expect(response.body.data[0].csgo).toHaveProperty("last_seen");
     });
 
     it("should handle database errors", async () => {
