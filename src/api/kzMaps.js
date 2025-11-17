@@ -79,7 +79,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
     const sortField = validSortFields.includes(sort) ? sort : "name";
     const sortOrder = order === "asc" ? "ASC" : "DESC";
 
-    // Build query with record counts
+    // Build query with record counts (excluding banned players)
     let query = `
       SELECT 
         m.id,
@@ -98,7 +98,9 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
         MIN(r.time) as world_record_time
       FROM kz_maps m
       LEFT JOIN kz_records r ON m.id = r.map_id
+      LEFT JOIN kz_players p ON r.player_id = p.steamid64
       WHERE 1=1
+        AND (p.is_banned IS NULL OR p.is_banned = FALSE OR r.id IS NULL)
     `;
     const params = [];
 
@@ -202,7 +204,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
  */
 router.get(
   "/top/difficulty",
-  cacheMiddleware(300, kzKeyGenerator),
+  cacheMiddleware(3600, kzKeyGenerator),
   async (req, res) => {
     try {
       const { tier, validated } = req.query;
@@ -216,7 +218,9 @@ router.get(
           MIN(r.time) as world_record
         FROM kz_maps m
         LEFT JOIN kz_records r ON m.id = r.map_id
+        LEFT JOIN kz_players p ON r.player_id = p.steamid64
         WHERE m.difficulty IS NOT NULL
+          AND (p.is_banned IS NULL OR p.is_banned = FALSE OR r.id IS NULL)
       `;
       const params = [];
 
@@ -296,7 +300,7 @@ router.get(
 
       const map = maps[0];
 
-      // Get record statistics
+      // Get record statistics (excluding banned players)
       const [stats] = await pool.query(
         `
         SELECT 
@@ -308,43 +312,49 @@ router.get(
           MIN(r.created_on) as first_record,
           MAX(r.created_on) as last_record
         FROM kz_records r
+        LEFT JOIN kz_players p ON r.player_id = p.steamid64
         WHERE r.map_id = ?
+          AND (p.is_banned IS NULL OR p.is_banned = FALSE)
       `,
         [map.id],
       );
 
-      // Get mode breakdown
+      // Get mode breakdown (excluding banned players)
       const [modeStats] = await pool.query(
         `
         SELECT 
-          mode,
+          r.mode,
           COUNT(*) as records,
-          COUNT(DISTINCT player_id) as players,
-          MIN(time) as world_record,
-          AVG(time) as avg_time
-        FROM kz_records
-        WHERE map_id = ?
-        GROUP BY mode
+          COUNT(DISTINCT r.player_id) as players,
+          MIN(r.time) as world_record,
+          AVG(r.time) as avg_time
+        FROM kz_records r
+        LEFT JOIN kz_players p ON r.player_id = p.steamid64
+        WHERE r.map_id = ?
+          AND (p.is_banned IS NULL OR p.is_banned = FALSE)
+        GROUP BY r.mode
       `,
         [map.id],
       );
 
-      // Get stage records count
+      // Get stage records count (excluding banned players)
       const [stageStats] = await pool.query(
         `
         SELECT 
-          stage,
+          r.stage,
           COUNT(*) as records,
-          MIN(time) as world_record
-        FROM kz_records
-        WHERE map_id = ?
-        GROUP BY stage
-        ORDER BY stage
+          MIN(r.time) as world_record
+        FROM kz_records r
+        LEFT JOIN kz_players p ON r.player_id = p.steamid64
+        WHERE r.map_id = ?
+          AND (p.is_banned IS NULL OR p.is_banned = FALSE)
+        GROUP BY r.stage
+        ORDER BY r.stage
       `,
         [map.id],
       );
 
-      // Get recent world records
+      // Get recent world records (excluding banned players)
       const [recentWRs] = await pool.query(
         `
         SELECT 
@@ -365,6 +375,7 @@ router.get(
         WHERE r.map_id = ?
           AND r.stage = 0
           AND r.teleports = 0
+          AND (p.is_banned IS NULL OR p.is_banned = FALSE)
         ORDER BY r.time ASC
         LIMIT 10
       `,
@@ -509,6 +520,7 @@ router.get(
         LEFT JOIN kz_players p ON r.player_id = p.steamid64
         LEFT JOIN kz_servers s ON r.server_id = s.id
         WHERE r.map_id = ?
+          AND (p.is_banned IS NULL OR p.is_banned = FALSE)
       `;
       const params = [mapId];
 

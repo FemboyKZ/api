@@ -18,8 +18,11 @@ function createKzPool() {
     password: process.env.KZ_DB_PASSWORD || "kz_password",
     database: process.env.KZ_DB_NAME || "kz_records",
     waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
+    connectionLimit: 50,    // Increased from 10 - critical for 25M+ records DB
+    queueLimit: 100,        // Limit queue to fail fast
+    acquireTimeout: 30000,  // 30s timeout to acquire connection
+    connectTimeout: 60000,  // 60 seconds
+    timeout: 60000,         // 60 seconds for queries
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
     jsonStrings: false,

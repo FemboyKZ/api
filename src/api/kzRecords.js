@@ -102,6 +102,7 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
       page,
       limit,
       map,
+      map_id,
       player,
       mode,
       stage,
@@ -285,7 +286,7 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
  */
 router.get(
   "/leaderboard/:mapname",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(600, kzKeyGenerator),  // 10 min - leaderboards change slowly
   async (req, res) => {
     try {
       const { mapname } = req.params;
@@ -545,14 +546,14 @@ router.get(
  */
 router.get(
   "/worldrecords",
-  cacheMiddleware(300, kzKeyGenerator),
+  cacheMiddleware(3600, kzKeyGenerator),  // 1 hour - world records change infrequently
   async (req, res) => {
     try {
       const { mode = "kz_timer", stage = 0, teleports = "pro", limit = 100, include_banned } = req.query;
-
       const validLimit = Math.min(parseInt(limit, 10) || 100, 1000);
       const stageNum = parseInt(stage, 10) || 0;
 
+      // Use a more efficient query with proper joins
       let query = `
         SELECT 
           m.map_name,
@@ -566,25 +567,16 @@ router.get(
           r.stage,
           s.server_name,
           r.created_on
-        FROM kz_maps m
-        INNER JOIN kz_records r ON r.map_id = m.id
-        LEFT JOIN kz_players p ON r.player_id = p.steamid64
-        LEFT JOIN kz_servers s ON r.server_id = s.id
-        WHERE r.id IN (
-          SELECT r2.id
+        FROM kz_records r
+        INNER JOIN (
+          -- Get minimum time per map first (much faster)
+          SELECT map_id, MIN(time) as best_time
           FROM kz_records r2
-          LEFT JOIN kz_players p2 ON r2.player_id = p2.steamid64
-          WHERE r2.map_id = m.id
-            AND r2.mode = ?
+          WHERE r2.mode = ?
             AND r2.stage = ?
       `;
 
       const params = [sanitizeString(mode, 32), stageNum];
-
-      // Filter banned players in subquery
-      if (include_banned !== "true" && include_banned !== true) {
-        query += " AND (p2.is_banned IS NULL OR p2.is_banned = FALSE)";
-      }
 
       if (teleports === "pro") {
         query += " AND r2.teleports = 0";
@@ -592,13 +584,34 @@ router.get(
         query += " AND r2.teleports > 0";
       }
 
+      // Add banned filter in subquery if needed
+      if (include_banned !== "true" && include_banned !== true) {
+        query += `
+          AND EXISTS (
+            SELECT 1 FROM kz_players p2 
+            WHERE p2.steamid64 = r2.player_id 
+            AND (p2.is_banned IS NULL OR p2.is_banned = FALSE)
+          )`;
+      }
+
       query += `
-          ORDER BY r2.time ASC
-          LIMIT 1
-        )
+          GROUP BY map_id
+        ) best ON r.map_id = best.map_id AND r.time = best.best_time
+        INNER JOIN kz_maps m ON r.map_id = m.id
+        LEFT JOIN kz_players p ON r.player_id = p.steamid64
+        LEFT JOIN kz_servers s ON r.server_id = s.id
+        WHERE r.mode = ?
+          AND r.stage = ?
       `;
 
-      // Filter banned players in main query
+      params.push(sanitizeString(mode, 32), stageNum);
+
+      if (teleports === "pro") {
+        query += " AND r.teleports = 0";
+      } else if (teleports === "tp") {
+        query += " AND r.teleports > 0";
+      }
+
       if (include_banned !== "true" && include_banned !== true) {
         query += " AND (p.is_banned IS NULL OR p.is_banned = FALSE)";
       }
@@ -648,7 +661,7 @@ router.get(
  *       500:
  *         description: Server error
  */
-router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
+router.get("/:id", cacheMiddleware(1800, kzKeyGenerator), async (req, res) => {  // 30 min - records are immutable
   try {
     const { id } = req.params;
     const recordId = parseInt(id, 10);
