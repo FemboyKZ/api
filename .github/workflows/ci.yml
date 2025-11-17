@@ -12,20 +12,16 @@ jobs:
     name: Lint & Format Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v5
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
-
       - name: Install dependencies
         run: npm ci
-
       - name: Run ESLint
         run: npm run lint
-
       - name: Check formatting
         run: npm run format -- --check
 
@@ -33,23 +29,21 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
-
     services:
-      mysql:
-        image: mysql:8.0
+      mariadb:
+        image: mariadb:latest
         env:
-          MYSQL_ROOT_PASSWORD: testpassword
-          MYSQL_DATABASE: server_api_test
+          MARIADB_ROOT_PASSWORD: testpassword
+          MARIADB_DATABASE: server_api_test
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping"
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
-
       redis:
-        image: redis:7-alpine
+        image: redis:8-alpine
         ports:
           - 6379:6379
         options: >-
@@ -59,28 +53,25 @@ jobs:
           --health-retries=5
 
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v5
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Wait for MySQL
+      - name: Wait for MariaDB
         run: |
-          sudo apt-get install -y mysql-client
-          until mysqladmin ping -h 127.0.0.1 --silent; do
-            echo 'waiting for mysql...'
+          sudo apt-get install -y mariadb-client
+          until mariadb -h 127.0.0.1 -u root -ptestpassword -e "SELECT 1" &> /dev/null; do
+            echo 'waiting for mariadb...'
             sleep 2
           done
 
       - name: Setup database
-        run: mysql -h 127.0.0.1 -u root -ptestpassword server_api_test < db/schema.sql
-
+        run: mariadb -h 127.0.0.1 -u root -ptestpassword server_api_test < db/schema.sql
       - name: Run tests
         run: npm test
         env:
@@ -99,22 +90,19 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint, test]
     if: github.event_name == 'push'
-
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v5
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: false
           tags: server-api:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
       - name: Test Docker image
         run: |
           docker run --rm server-api:${{ github.sha }} node --version
@@ -124,13 +112,11 @@ jobs:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v5
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: "20"
-
+          node-version: "22"
       - name: Run npm audit
         run: npm audit --audit-level=moderate
         continue-on-error: true
