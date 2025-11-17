@@ -533,13 +533,49 @@ async function scrapeBatch(startId, batchSize) {
         }
         stats.recordsProcessed++;
       } catch (error) {
-        logger.error(
-          `[KZ Scraper] Error processing record ${recordId}: ${error.message}`,
-        );
-        logger.error(`[KZ Scraper] Stack trace: ${error.stack}`);
-        logger.error(`[KZ Scraper] Record data: ${JSON.stringify(recordData)}`);
-        stats.errorCount++;
-        skipped++;
+        // Handle deadlock errors with retry
+        if (error.code === "ER_LOCK_DEADLOCK") {
+          logger.warn(
+            `[KZ Scraper] Deadlock detected for record ${recordId}, retrying...`,
+          );
+          try {
+            // Retry once after brief delay
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            const wasInserted = await processRecord(connection, recordData);
+            if (wasInserted) {
+              inserted++;
+              stats.recordsInserted++;
+              stats.lastSuccessfulId = recordId;
+            } else {
+              skipped++;
+              stats.recordsSkipped++;
+            }
+            stats.recordsProcessed++;
+            logger.info(
+              `[KZ Scraper] Record ${recordId} processed successfully after retry`,
+            );
+          } catch (retryError) {
+            logger.error(
+              `[KZ Scraper] Error processing record ${recordId} after retry: ${retryError.message}`,
+            );
+            logger.error(`[KZ Scraper] Stack trace: ${retryError.stack}`);
+            logger.error(
+              `[KZ Scraper] Record data: ${JSON.stringify(recordData)}`,
+            );
+            stats.errorCount++;
+            skipped++;
+          }
+        } else {
+          logger.error(
+            `[KZ Scraper] Error processing record ${recordId}: ${error.message}`,
+          );
+          logger.error(`[KZ Scraper] Stack trace: ${error.stack}`);
+          logger.error(
+            `[KZ Scraper] Record data: ${JSON.stringify(recordData)}`,
+          );
+          stats.errorCount++;
+          skipped++;
+        }
       }
     }
 

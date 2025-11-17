@@ -61,6 +61,17 @@ const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
  */
 router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
   try {
+    // Test pool availability first
+    const pool = getKzPool();
+    if (!pool) {
+      logger.error("KZ database pool not initialized");
+      return res.status(503).json({
+        error: "KZ database service unavailable",
+        message:
+          "The KZ records database is not connected. Please check database configuration.",
+      });
+    }
+
     const {
       page,
       limit,
@@ -76,7 +87,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
     const sortField = validSortFields.includes(sort) ? sort : "name";
     const sortOrder = order === "asc" ? "ASC" : "DESC";
 
-    // Build query with record counts (excluding banned players)
+    // Build query with record counts (excluding banned players) and window function for total
     let query = `
       SELECT 
         m.id,
@@ -92,7 +103,8 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
         m.global_updated_on,
         COUNT(DISTINCT r.id) as records,
         COUNT(DISTINCT r.player_id) as unique_players,
-        MIN(r.time) as world_record_time
+        MIN(r.time) as world_record_time,
+        COUNT(*) OVER() as total_count
       FROM kz_maps m
       LEFT JOIN kz_records r ON m.id = r.map_id
       LEFT JOIN kz_players p ON r.player_id = p.steamid64
@@ -123,25 +135,6 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
     query +=
       " GROUP BY m.id, m.map_id, m.map_name, m.difficulty, m.validated, m.filesize, m.workshop_url, m.download_url, m.approved_by_steamid64, m.global_created_on, m.global_updated_on";
 
-    // Get total count
-    const countQuery = `SELECT COUNT(DISTINCT m.id) as total FROM kz_maps m WHERE 1=1${
-      name ? " AND m.map_name LIKE ?" : ""
-    }${difficulty !== undefined ? " AND m.difficulty = ?" : ""}${
-      validated !== undefined ? " AND m.validated = ?" : ""
-    }`;
-    const countParams = [];
-    if (name) countParams.push(`%${sanitizeString(name, 255)}%`);
-    if (difficulty !== undefined) {
-      const diff = parseInt(difficulty, 10);
-      if (diff >= 1 && diff <= 7) countParams.push(diff);
-    }
-    if (validated !== undefined)
-      countParams.push(validated === "true" || validated === true);
-
-    const pool = getKzPool();
-    const [countResult] = await pool.query(countQuery, countParams);
-    const total = countResult[0].total;
-
     // Map sort field
     const sortColumn =
       sortField === "name"
@@ -158,6 +151,12 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
     const [maps] = await pool.query(query, params);
 
+    // Extract total from first row (same for all rows due to window function)
+    const total = maps.length > 0 ? maps[0].total_count : 0;
+
+    // Remove total_count from each map object
+    maps.forEach((map) => delete map.total_count);
+
     res.json({
       data: maps,
       pagination: {
@@ -168,8 +167,28 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       },
     });
   } catch (e) {
-    logger.error(`Failed to fetch KZ maps: ${e.message}`);
-    res.status(500).json({ error: "Failed to fetch KZ maps" });
+    logger.error(`Failed to fetch KZ maps: ${e.message}`, { stack: e.stack });
+
+    // Provide more specific error messages
+    if (e.code === "ECONNREFUSED") {
+      return res.status(503).json({
+        error: "Database connection refused",
+        message:
+          "Cannot connect to KZ records database. Please ensure the database server is running on the configured port.",
+      });
+    }
+
+    if (e.code === "ETIMEDOUT" || e.code === "PROTOCOL_CONNECTION_LOST") {
+      return res.status(504).json({
+        error: "Database connection timeout",
+        message:
+          "The database query took too long to respond. Please try again.",
+      });
+    }
+
+    res
+      .status(500)
+      .json({ error: "Failed to fetch KZ maps", details: e.message });
   }
 });
 
