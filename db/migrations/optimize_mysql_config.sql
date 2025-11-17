@@ -105,15 +105,9 @@ SET GLOBAL innodb_write_io_threads = 8;  -- Default: 4
 -- Increase optimizer search depth for complex queries
 SET GLOBAL optimizer_search_depth = 10;  -- Default: 62 (auto)
 
--- Enable index condition pushdown
-SET GLOBAL optimizer_switch = 'index_condition_pushdown=on';
-
--- Enable batched key access
-SET GLOBAL optimizer_switch = 'batched_key_access=on';
-
--- Enable multi-range read optimization
-SET GLOBAL optimizer_switch = 'mrr=on';
-SET GLOBAL optimizer_switch = 'mrr_cost_based=on';
+-- Enable optimizer features (set multiple flags in one command)
+-- Note: batched_key_access is not available in MariaDB, only in MySQL 5.6+
+SET GLOBAL optimizer_switch = 'index_condition_pushdown=on,mrr=on,mrr_cost_based=on';
 
 -- ============================================================================
 -- Slow Query Log (for monitoring)

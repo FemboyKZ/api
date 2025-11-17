@@ -1,6 +1,6 @@
--- Migration: Create kz_bans table for storing jump statistics from GlobalKZ API
+-- Migration: Create kz_jumpstats table for storing jump statistics from GlobalKZ API
 
-CREATE TABLE IF NOT EXISTS kz_bans (
+CREATE TABLE IF NOT EXISTS kz_jumpstats (
   id INT PRIMARY KEY,
   server_id INT NULL,
   steamid64 VARCHAR(20) NULL,
