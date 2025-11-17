@@ -174,6 +174,173 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
+ * /kzglobal/bans/active:
+ *   get:
+ *     summary: Get all active bans
+ *     description: Returns currently active bans (not expired)
+ *     tags: [KZ Global]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *           maximum: 100
+ *       - in: query
+ *         name: ban_type
+ *         schema:
+ *           type: string
+ *         description: Filter by ban type
+ *     responses:
+ *       200:
+ *         description: Active bans list
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/active",
+  cacheMiddleware(60, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const { page, limit, ban_type } = req.query;
+      const { limit: validLimit, offset } = validatePagination(
+        page,
+        limit,
+        100,
+      );
+
+      let query = `
+        SELECT 
+          b.id,
+          b.ban_type,
+          b.expires_on,
+          b.steamid64,
+          b.player_name,
+          b.notes,
+          b.server_id,
+          s.server_name,
+          b.created_on,
+          b.updated_on
+        FROM kz_bans b
+        LEFT JOIN kz_servers s ON b.server_id = s.server_id
+        WHERE (b.expires_on IS NULL OR b.expires_on > NOW())
+      `;
+      const params = [];
+
+      if (ban_type) {
+        query += " AND b.ban_type = ?";
+        params.push(sanitizeString(ban_type, 50));
+      }
+
+      // Count total
+      const countQuery = query.replace(
+        /SELECT.*FROM/s,
+        "SELECT COUNT(*) as total FROM",
+      );
+      const pool = getKzPool();
+      const [countResult] = await pool.query(countQuery, params);
+      const total = countResult[0].total;
+
+      query += " ORDER BY b.created_on DESC";
+      query += " LIMIT ? OFFSET ?";
+      params.push(validLimit, offset);
+
+      const [bans] = await pool.query(query, params);
+
+      res.json({
+        data: bans,
+        pagination: {
+          page: parseInt(page, 10) || 1,
+          limit: validLimit,
+          total: total,
+          totalPages: Math.ceil(total / validLimit),
+        },
+      });
+    } catch (e) {
+      logger.error(`Failed to fetch active bans: ${e.message}`);
+      res.status(500).json({ error: "Failed to fetch active bans" });
+    }
+  },
+);
+
+/**
+ * @swagger
+ * /kzglobal/bans/stats:
+ *   get:
+ *     summary: Get ban statistics
+ *     description: Returns overview statistics about bans
+ *     tags: [KZ Global]
+ *     responses:
+ *       200:
+ *         description: Ban statistics
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/stats",
+  cacheMiddleware(300, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const pool = getKzPool();
+
+      // Get overall stats
+      const [overallStats] = await pool.query(`
+        SELECT 
+          COUNT(*) as total_bans,
+          SUM(CASE WHEN expires_on IS NULL OR expires_on > NOW() THEN 1 ELSE 0 END) as active_bans,
+          SUM(CASE WHEN expires_on IS NOT NULL AND expires_on <= NOW() THEN 1 ELSE 0 END) as expired_bans,
+          COUNT(DISTINCT steamid64) as unique_players_banned
+        FROM kz_bans
+      `);
+
+      // Get ban type breakdown
+      const [banTypes] = await pool.query(`
+        SELECT 
+          ban_type,
+          COUNT(*) as count,
+          SUM(CASE WHEN expires_on IS NULL OR expires_on > NOW() THEN 1 ELSE 0 END) as active
+        FROM kz_bans
+        GROUP BY ban_type
+        ORDER BY count DESC
+      `);
+
+      // Get recent bans
+      const [recentBans] = await pool.query(`
+        SELECT 
+          b.id,
+          b.ban_type,
+          b.steamid64,
+          b.player_name,
+          b.created_on,
+          CASE 
+            WHEN b.expires_on IS NULL THEN TRUE
+            WHEN b.expires_on > NOW() THEN TRUE
+            ELSE FALSE
+          END as is_active
+        FROM kz_bans b
+        ORDER BY b.created_on DESC
+        LIMIT 10
+      `);
+
+      res.json({
+        statistics: overallStats[0],
+        ban_type_breakdown: banTypes,
+        recent_bans: recentBans,
+      });
+    } catch (e) {
+      logger.error(`Failed to fetch ban statistics: ${e.message}`);
+      res.status(500).json({ error: "Failed to fetch ban statistics" });
+    }
+  },
+);
+
+/**
+ * @swagger
  * /kzglobal/bans/{id}:
  *   get:
  *     summary: Get ban details
@@ -340,173 +507,6 @@ router.get(
         `Failed to fetch bans for player ${req.params.steamid}: ${e.message}`,
       );
       res.status(500).json({ error: "Failed to fetch player bans" });
-    }
-  },
-);
-
-/**
- * @swagger
- * /kzglobal/bans/active:
- *   get:
- *     summary: Get all active bans
- *     description: Returns currently active bans (not expired)
- *     tags: [KZ Global]
- *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 50
- *           maximum: 100
- *       - in: query
- *         name: ban_type
- *         schema:
- *           type: string
- *         description: Filter by ban type
- *     responses:
- *       200:
- *         description: Active bans list
- *       500:
- *         description: Server error
- */
-router.get(
-  "/active",
-  cacheMiddleware(60, kzKeyGenerator),
-  async (req, res) => {
-    try {
-      const { page, limit, ban_type } = req.query;
-      const { limit: validLimit, offset } = validatePagination(
-        page,
-        limit,
-        100,
-      );
-
-      let query = `
-        SELECT 
-          b.id,
-          b.ban_type,
-          b.expires_on,
-          b.steamid64,
-          b.player_name,
-          b.notes,
-          b.server_id,
-          s.server_name,
-          b.created_on,
-          b.updated_on
-        FROM kz_bans b
-        LEFT JOIN kz_servers s ON b.server_id = s.server_id
-        WHERE (b.expires_on IS NULL OR b.expires_on > NOW())
-      `;
-      const params = [];
-
-      if (ban_type) {
-        query += " AND b.ban_type = ?";
-        params.push(sanitizeString(ban_type, 50));
-      }
-
-      // Count total
-      const countQuery = query.replace(
-        /SELECT.*FROM/s,
-        "SELECT COUNT(*) as total FROM",
-      );
-      const pool = getKzPool();
-      const [countResult] = await pool.query(countQuery, params);
-      const total = countResult[0].total;
-
-      query += " ORDER BY b.created_on DESC";
-      query += " LIMIT ? OFFSET ?";
-      params.push(validLimit, offset);
-
-      const [bans] = await pool.query(query, params);
-
-      res.json({
-        data: bans,
-        pagination: {
-          page: parseInt(page, 10) || 1,
-          limit: validLimit,
-          total: total,
-          totalPages: Math.ceil(total / validLimit),
-        },
-      });
-    } catch (e) {
-      logger.error(`Failed to fetch active bans: ${e.message}`);
-      res.status(500).json({ error: "Failed to fetch active bans" });
-    }
-  },
-);
-
-/**
- * @swagger
- * /kzglobal/bans/stats:
- *   get:
- *     summary: Get ban statistics
- *     description: Returns overview statistics about bans
- *     tags: [KZ Global]
- *     responses:
- *       200:
- *         description: Ban statistics
- *       500:
- *         description: Server error
- */
-router.get(
-  "/stats",
-  cacheMiddleware(300, kzKeyGenerator),
-  async (req, res) => {
-    try {
-      const pool = getKzPool();
-
-      // Get overall stats
-      const [overallStats] = await pool.query(`
-        SELECT 
-          COUNT(*) as total_bans,
-          SUM(CASE WHEN expires_on IS NULL OR expires_on > NOW() THEN 1 ELSE 0 END) as active_bans,
-          SUM(CASE WHEN expires_on IS NOT NULL AND expires_on <= NOW() THEN 1 ELSE 0 END) as expired_bans,
-          COUNT(DISTINCT steamid64) as unique_players_banned
-        FROM kz_bans
-      `);
-
-      // Get ban type breakdown
-      const [banTypes] = await pool.query(`
-        SELECT 
-          ban_type,
-          COUNT(*) as count,
-          SUM(CASE WHEN expires_on IS NULL OR expires_on > NOW() THEN 1 ELSE 0 END) as active
-        FROM kz_bans
-        GROUP BY ban_type
-        ORDER BY count DESC
-      `);
-
-      // Get recent bans
-      const [recentBans] = await pool.query(`
-        SELECT 
-          b.id,
-          b.ban_type,
-          b.steamid64,
-          b.player_name,
-          b.created_on,
-          CASE 
-            WHEN b.expires_on IS NULL THEN TRUE
-            WHEN b.expires_on > NOW() THEN TRUE
-            ELSE FALSE
-          END as is_active
-        FROM kz_bans b
-        ORDER BY b.created_on DESC
-        LIMIT 10
-      `);
-
-      res.json({
-        statistics: overallStats[0],
-        ban_type_breakdown: banTypes,
-        recent_bans: recentBans,
-      });
-    } catch (e) {
-      logger.error(`Failed to fetch ban statistics: ${e.message}`);
-      res.status(500).json({ error: "Failed to fetch ban statistics" });
     }
   },
 );

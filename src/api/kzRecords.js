@@ -231,92 +231,6 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
- * /kzglobal/records/{id}:
- *   get:
- *     summary: Get a specific KZ record
- *     description: Returns detailed information about a specific record
- *     tags: [KZ Global]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Record ID (original_id from GlobalKZ API)
- *     responses:
- *       200:
- *         description: Successful response with record details
- *       404:
- *         description: Record not found
- *       500:
- *         description: Server error
- */
-router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const recordId = parseInt(id, 10);
-
-    if (isNaN(recordId)) {
-      return res.status(400).json({ error: "Invalid record ID" });
-    }
-
-    const pool = getKzPool();
-    const [records] = await pool.query(
-      `
-      SELECT 
-        r.id, 
-        r.original_id, 
-        r.player_id,
-        p.player_name,
-        p.steamid64,
-        p.steam_id,
-        r.map_id,
-        m.map_name,
-        m.difficulty,
-        m.validated,
-        m.workshop_url,
-        r.server_id,
-        s.server_name,
-        s.ip,
-        s.port,
-        r.mode,
-        r.stage,
-        r.time,
-        r.teleports,
-        r.points,
-        r.tickrate,
-        r.record_filter_id,
-        r.replay_id,
-        r.updated_by,
-        r.created_on,
-        r.updated_on,
-        r.inserted_at
-      FROM kz_records r
-      LEFT JOIN kz_players p ON r.player_id = p.steamid64
-      LEFT JOIN kz_maps m ON r.map_id = m.id
-      LEFT JOIN kz_servers s ON r.server_id = s.id
-      WHERE r.original_id = ?
-    `,
-      [recordId],
-    );
-
-    if (records.length === 0) {
-      return res.status(404).json({ error: "Record not found" });
-    }
-
-    res.json({
-      data: records[0],
-    });
-  } catch (e) {
-    logger.error(
-      `Failed to fetch KZ record ${req.params.id}: ${e.message}`,
-    );
-    res.status(500).json({ error: "Failed to fetch KZ record" });
-  }
-});
-
-/**
- * @swagger
  * /kzglobal/records/leaderboard/{mapname}:
  *   get:
  *     summary: Get map leaderboard
@@ -711,5 +625,91 @@ router.get(
     }
   },
 );
+
+/**
+ * @swagger
+ * /kzglobal/records/{id}:
+ *   get:
+ *     summary: Get a specific KZ record
+ *     description: Returns detailed information about a specific record
+ *     tags: [KZ Global]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Record ID (original_id from GlobalKZ API)
+ *     responses:
+ *       200:
+ *         description: Successful response with record details
+ *       404:
+ *         description: Record not found
+ *       500:
+ *         description: Server error
+ */
+router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const recordId = parseInt(id, 10);
+
+    if (isNaN(recordId)) {
+      return res.status(400).json({ error: "Invalid record ID" });
+    }
+
+    const pool = getKzPool();
+    const [records] = await pool.query(
+      `
+      SELECT 
+        r.id, 
+        r.original_id, 
+        r.player_id,
+        p.player_name,
+        p.steamid64,
+        p.steam_id,
+        r.map_id,
+        m.map_name,
+        m.difficulty,
+        m.validated,
+        m.workshop_url,
+        r.server_id,
+        s.server_name,
+        s.ip,
+        s.port,
+        r.mode,
+        r.stage,
+        r.time,
+        r.teleports,
+        r.points,
+        r.tickrate,
+        r.record_filter_id,
+        r.replay_id,
+        r.updated_by,
+        r.created_on,
+        r.updated_on,
+        r.inserted_at
+      FROM kz_records r
+      LEFT JOIN kz_players p ON r.player_id = p.steamid64
+      LEFT JOIN kz_maps m ON r.map_id = m.id
+      LEFT JOIN kz_servers s ON r.server_id = s.id
+      WHERE r.original_id = ?
+    `,
+      [recordId],
+    );
+
+    if (records.length === 0) {
+      return res.status(404).json({ error: "Record not found" });
+    }
+
+    res.json({
+      data: records[0],
+    });
+  } catch (e) {
+    logger.error(
+      `Failed to fetch KZ record ${req.params.id}: ${e.message}`,
+    );
+    res.status(500).json({ error: "Failed to fetch KZ record" });
+  }
+});
 
 module.exports = router;

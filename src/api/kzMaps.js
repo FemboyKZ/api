@@ -176,6 +176,85 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
+ * /kzglobal/maps/top/difficulty:
+ *   get:
+ *     summary: Get maps by difficulty
+ *     description: Returns maps grouped and sorted by difficulty tier
+ *     tags: [KZ Global]
+ *     parameters:
+ *       - in: query
+ *         name: tier
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 7
+ *         description: Filter by specific difficulty tier
+ *       - in: query
+ *         name: validated
+ *         schema:
+ *           type: boolean
+ *         description: Only show validated maps
+ *     responses:
+ *       200:
+ *         description: Maps by difficulty
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/top/difficulty",
+  cacheMiddleware(300, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const { tier, validated } = req.query;
+
+      let query = `
+        SELECT 
+          m.map_name,
+          m.difficulty,
+          m.validated,
+          COUNT(DISTINCT r.id) as total_records,
+          MIN(r.time) as world_record
+        FROM kz_maps m
+        LEFT JOIN kz_records r ON m.id = r.map_id
+        WHERE m.difficulty IS NOT NULL
+      `;
+      const params = [];
+
+      if (tier !== undefined) {
+        const tierNum = parseInt(tier, 10);
+        if (tierNum >= 1 && tierNum <= 7) {
+          query += " AND m.difficulty = ?";
+          params.push(tierNum);
+        }
+      }
+
+      if (validated !== undefined) {
+        const isValidated = validated === "true" || validated === true;
+        query += " AND m.validated = ?";
+        params.push(isValidated);
+      }
+
+      query += `
+        GROUP BY m.id, m.map_name, m.difficulty, m.validated
+        ORDER BY m.difficulty ASC, total_records DESC
+      `;
+
+      const pool = getKzPool();
+      const [maps] = await pool.query(query, params);
+
+      res.json({
+        data: maps,
+        total: maps.length,
+      });
+    } catch (e) {
+      logger.error(`Failed to fetch maps by difficulty: ${e.message}`);
+      res.status(500).json({ error: "Failed to fetch maps by difficulty" });
+    }
+  },
+);
+
+/**
+ * @swagger
  * /kzglobal/maps/{mapname}:
  *   get:
  *     summary: Get map details
@@ -481,85 +560,6 @@ router.get(
         `Failed to fetch records for map ${req.params.mapname}: ${e.message}`,
       );
       res.status(500).json({ error: "Failed to fetch map records" });
-    }
-  },
-);
-
-/**
- * @swagger
- * /kzglobal/maps/top/difficulty:
- *   get:
- *     summary: Get maps by difficulty
- *     description: Returns maps grouped and sorted by difficulty tier
- *     tags: [KZ Global]
- *     parameters:
- *       - in: query
- *         name: tier
- *         schema:
- *           type: integer
- *           minimum: 1
- *           maximum: 7
- *         description: Filter by specific difficulty tier
- *       - in: query
- *         name: validated
- *         schema:
- *           type: boolean
- *         description: Only show validated maps
- *     responses:
- *       200:
- *         description: Maps by difficulty
- *       500:
- *         description: Server error
- */
-router.get(
-  "/top/difficulty",
-  cacheMiddleware(300, kzKeyGenerator),
-  async (req, res) => {
-    try {
-      const { tier, validated } = req.query;
-
-      let query = `
-        SELECT 
-          m.map_name,
-          m.difficulty,
-          m.validated,
-          COUNT(DISTINCT r.id) as total_records,
-          MIN(r.time) as world_record
-        FROM kz_maps m
-        LEFT JOIN kz_records r ON m.id = r.map_id
-        WHERE m.difficulty IS NOT NULL
-      `;
-      const params = [];
-
-      if (tier !== undefined) {
-        const tierNum = parseInt(tier, 10);
-        if (tierNum >= 1 && tierNum <= 7) {
-          query += " AND m.difficulty = ?";
-          params.push(tierNum);
-        }
-      }
-
-      if (validated !== undefined) {
-        const isValidated = validated === "true" || validated === true;
-        query += " AND m.validated = ?";
-        params.push(isValidated);
-      }
-
-      query += `
-        GROUP BY m.id, m.map_name, m.difficulty, m.validated
-        ORDER BY m.difficulty ASC, total_records DESC
-      `;
-
-      const pool = getKzPool();
-      const [maps] = await pool.query(query, params);
-
-      res.json({
-        data: maps,
-        total: maps.length,
-      });
-    } catch (e) {
-      logger.error(`Failed to fetch maps by difficulty: ${e.message}`);
-      res.status(500).json({ error: "Failed to fetch maps by difficulty" });
     }
   },
 );

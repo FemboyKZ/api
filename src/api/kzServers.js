@@ -162,6 +162,70 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
+ * /kzglobal/servers/top/records:
+ *   get:
+ *     summary: Get top servers by record count
+ *     description: Returns servers ranked by number of records
+ *     tags: [KZ Global]
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 100
+ *           maximum: 500
+ *     responses:
+ *       200:
+ *         description: Top servers list
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/top/records",
+  cacheMiddleware(300, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const { limit = 100 } = req.query;
+      const validLimit = Math.min(parseInt(limit, 10) || 100, 500);
+
+      const pool = getKzPool();
+      const [servers] = await pool.query(
+        `
+        SELECT 
+          s.server_id,
+          s.server_name,
+          s.ip,
+          s.port,
+          COUNT(DISTINCT r.id) as total_records,
+          COUNT(DISTINCT r.player_id) as unique_players,
+          COUNT(DISTINCT r.map_id) as unique_maps
+        FROM kz_servers s
+        INNER JOIN kz_records r ON s.id = r.server_id
+        GROUP BY s.id, s.server_id, s.server_name, s.ip, s.port
+        ORDER BY total_records DESC
+        LIMIT ?
+      `,
+        [validLimit],
+      );
+
+      const rankedServers = servers.map((server, index) => ({
+        rank: index + 1,
+        ...server,
+      }));
+
+      res.json({
+        data: rankedServers,
+        total: rankedServers.length,
+      });
+    } catch (e) {
+      logger.error(`Failed to fetch top servers: ${e.message}`);
+      res.status(500).json({ error: "Failed to fetch top servers" });
+    }
+  },
+);
+
+/**
+ * @swagger
  * /kzglobal/servers/{id}:
  *   get:
  *     summary: Get server details
@@ -429,70 +493,6 @@ router.get(
         `Failed to fetch records for server ${req.params.id}: ${e.message}`,
       );
       res.status(500).json({ error: "Failed to fetch server records" });
-    }
-  },
-);
-
-/**
- * @swagger
- * /kzglobal/servers/top/records:
- *   get:
- *     summary: Get top servers by record count
- *     description: Returns servers ranked by number of records
- *     tags: [KZ Global]
- *     parameters:
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 100
- *           maximum: 500
- *     responses:
- *       200:
- *         description: Top servers list
- *       500:
- *         description: Server error
- */
-router.get(
-  "/top/records",
-  cacheMiddleware(300, kzKeyGenerator),
-  async (req, res) => {
-    try {
-      const { limit = 100 } = req.query;
-      const validLimit = Math.min(parseInt(limit, 10) || 100, 500);
-
-      const pool = getKzPool();
-      const [servers] = await pool.query(
-        `
-        SELECT 
-          s.server_id,
-          s.server_name,
-          s.ip,
-          s.port,
-          COUNT(DISTINCT r.id) as total_records,
-          COUNT(DISTINCT r.player_id) as unique_players,
-          COUNT(DISTINCT r.map_id) as unique_maps
-        FROM kz_servers s
-        INNER JOIN kz_records r ON s.id = r.server_id
-        GROUP BY s.id, s.server_id, s.server_name, s.ip, s.port
-        ORDER BY total_records DESC
-        LIMIT ?
-      `,
-        [validLimit],
-      );
-
-      const rankedServers = servers.map((server, index) => ({
-        rank: index + 1,
-        ...server,
-      }));
-
-      res.json({
-        data: rankedServers,
-        total: rankedServers.length,
-      });
-    } catch (e) {
-      logger.error(`Failed to fetch top servers: ${e.message}`);
-      res.status(500).json({ error: "Failed to fetch top servers" });
     }
   },
 );
