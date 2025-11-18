@@ -11,10 +11,12 @@
  * - Persistent state tracking (saves last checked ID)
  * - Handles missing data gracefully
  * - Checks for new bans and updates player ban status
+ * - Dynamic intervals: fast polling when finding records, slow polling when caught up
  *
  * Configuration (via .env):
  *   KZ_SCRAPER_ENABLED=true           # Enable/disable scraper
- *   KZ_SCRAPER_INTERVAL=3750          # How often to run (ms) - default 3.75s
+ *   KZ_SCRAPER_INTERVAL=3750          # How often to run when finding records (ms) - default 3.75s
+ *   KZ_SCRAPER_IDLE_INTERVAL=30000    # How often to run when caught up (ms) - default 30s
  *   KZ_SCRAPER_CONCURRENCY=5          # Records per batch - default 5
  *   KZ_SCRAPER_REQUEST_DELAY=100      # Delay between requests (ms) - default 100ms
  *   KZ_SCRAPER_BANS_INTERVAL=300000   # How often to check bans (ms) - default 5min
@@ -22,17 +24,21 @@
  * Rate Limiting:
  *   The GlobalKZ API has a rate limit of 500 requests per 5 minutes per IP.
  *
- *   Default configuration (80% utilization):
+ *   Default configuration when finding records (80% utilization):
  *   - 5 records per batch with 100ms delay = ~1.5 seconds per batch
  *   - Running every 3.75 seconds = 80 batches per 5 minutes = 400 requests per 5 min
  *   - Speed: ~4,800 records/hour
+ *
+ *   When caught up (13% utilization):
+ *   - Running every 30 seconds = 10 batches per 5 minutes = 50 requests per 5 min
+ *   - Reduces API load by ~87% during idle periods
  *
  *   This is more than sufficient for maintenance mode (catching new records as they appear).
  *   For bulk scraping, use scripts/standalone-scraper.js with proxy support.
  *
  * Usage:
  *   const scraper = require('./services/kzRecordsScraper');
- *   scraper.startScraperJob(3750); // Check every 3.75 seconds
+ *   scraper.startScraperJob(3750, 30000); // Fast polling (3.75s), slow polling (30s)
  */
 
 require("dotenv").config();
@@ -65,6 +71,7 @@ let isRunning = false;
 let isBansRunning = false;
 let currentRecordId = 0;
 let lastBanCheck = 0;
+let scraperTimeout = null;
 const stats = {
   startTime: null,
   recordsProcessed: 0,
@@ -811,7 +818,7 @@ async function processBans() {
 /**
  * Main scraper loop
  */
-async function runScraper() {
+async function runScraper(normalIntervalMs, idleIntervalMs) {
   if (isRunning) {
     logger.debug(
       "[KZ Scraper] Scraper already running, skipping this iteration",
@@ -820,6 +827,7 @@ async function runScraper() {
   }
 
   isRunning = true;
+  let nextInterval = normalIntervalMs;
 
   try {
     // Check bans periodically (non-blocking)
@@ -832,21 +840,26 @@ async function runScraper() {
     // If entire batch was 404s, reset to last successful ID and stay there
     if (batchResult.notFound === CONCURRENCY && batchResult.inserted === 0) {
       // All records in batch were not found - we're caught up
+      // Use idle interval (longer delay)
+      nextInterval = idleIntervalMs;
+      
       if (stats.lastSuccessfulId > 0) {
         // Reset to last successful ID to keep checking from there
         currentRecordId = stats.lastSuccessfulId;
         logger.debug(
           `[KZ Scraper] All records not found (${CONCURRENCY}/${CONCURRENCY}). ` +
-            `Resetting to last successful ID ${currentRecordId} to wait for new records.`,
+            `Resetting to last successful ID ${currentRecordId}. Next check in ${idleIntervalMs / 1000}s.`,
         );
       } else {
         // No successful records yet - don't increment, stay at current position
         logger.debug(
-          `[KZ Scraper] No records found yet at ID ${currentRecordId}, will keep checking from here.`,
+          `[KZ Scraper] No records found yet at ID ${currentRecordId}. Next check in ${idleIntervalMs / 1000}s.`,
         );
       }
     } else {
       // Normal operation - at least one record found, continue forward
+      // Use normal interval (shorter delay)
+      nextInterval = normalIntervalMs;
       currentRecordId = batchResult.lastId;
     }
 
@@ -879,21 +892,29 @@ async function runScraper() {
     logger.error(`[KZ Scraper] Error in scraper loop: ${error.message}`);
     logger.error(`[KZ Scraper] Stack trace: ${error.stack}`);
     stats.errorCount++;
+    // Use normal interval on error to retry sooner
+    nextInterval = normalIntervalMs;
   } finally {
     isRunning = false;
+    // Schedule next run with dynamic interval
+    scraperTimeout = setTimeout(() => runScraper(normalIntervalMs, idleIntervalMs), nextInterval);
   }
 }
 
 /**
  * Start the scraper job
  */
-async function startScraperJob(intervalMs = 3750) {
-  // 3.75 seconds for 80% rate limit utilization
+async function startScraperJob(intervalMs = 3750, idleIntervalMs = 30000) {
+  // Normal interval: 3.75 seconds for 80% rate limit utilization
+  // Idle interval: 30 seconds when no new records found (default)
   logger.info(
-    `[KZ Scraper] Starting KZ Records scraper service (interval: ${intervalMs}ms, concurrency: ${CONCURRENCY}, request delay: ${REQUEST_DELAY}ms)`,
+    `[KZ Scraper] Starting KZ Records scraper service (normal interval: ${intervalMs}ms, idle interval: ${idleIntervalMs}ms, concurrency: ${CONCURRENCY}, request delay: ${REQUEST_DELAY}ms)`,
   );
   logger.info(
-    `[KZ Scraper] Estimated rate: ~${Math.floor((300 / (intervalMs / 1000)) * CONCURRENCY)} requests per 5 minutes (limit: 500)`,
+    `[KZ Scraper] Estimated rate: ~${Math.floor((300 / (intervalMs / 1000)) * CONCURRENCY)} requests per 5 minutes (limit: 500) when actively scraping`,
+  );
+  logger.info(
+    `[KZ Scraper] Idle mode: ~${Math.floor((300 / (idleIntervalMs / 1000)) * CONCURRENCY)} requests per 5 minutes when caught up`,
   );
   logger.info(
     `[KZ Scraper] Bans check enabled (interval: ${BANS_CHECK_INTERVAL / 1000}s)`,
@@ -924,11 +945,10 @@ async function startScraperJob(intervalMs = 3750) {
     logger.info(`[KZ Scraper] Initialization complete, starting scraper`);
   }
 
-  // Run immediately, then on interval
+  // Run immediately after small delay to let server initialize
   setTimeout(() => {
-    runScraper();
-    setInterval(runScraper, intervalMs);
-  }, 2000); // Small delay to let server initialize
+    runScraper(intervalMs, idleIntervalMs);
+  }, 2000);
 }
 
 /**

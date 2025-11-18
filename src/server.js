@@ -76,9 +76,11 @@ async function startServer() {
       if (process.env.KZ_SCRAPER_ENABLED !== "false") {
         const scraperInterval =
           parseInt(process.env.KZ_SCRAPER_INTERVAL) || 3750; // 3.75 seconds for 80% rate limit (400 req/5min)
-        startScraperJob(scraperInterval);
+        const scraperIdleInterval =
+          parseInt(process.env.KZ_SCRAPER_IDLE_INTERVAL) || 30000; // 30 seconds when caught up
+        startScraperJob(scraperInterval, scraperIdleInterval);
         logger.info(
-          `KZ Records scraper enabled (interval: ${scraperInterval}ms)`,
+          `KZ Records scraper enabled (normal: ${scraperInterval}ms, idle: ${scraperIdleInterval}ms)`,
         );
 
         // Step 12: Start ban status cleanup job (runs every hour by default)
