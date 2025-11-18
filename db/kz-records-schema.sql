@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS kz_records (
   
   -- Essential indexes for common queries
   INDEX idx_player_map_mode (player_id, map_id, mode, stage, time),
-  INDEX idx_leaderboard (map_id, mode, stage, teleports, time),
+  INDEX idx_leaderboard (player_id, map_id, mode, stage, teleports, time),
   INDEX idx_recent_records (created_on DESC, mode, map_id),
   INDEX idx_server_records (server_id, created_on DESC),
   INDEX idx_mode_stage (mode, stage, teleports, time),
@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS kz_worldrecords_cache (
   stage INT NOT NULL,
   teleports INT NOT NULL,
   player_id VARCHAR(20) NOT NULL,
-  time FLOAT NOT NULL,
+  time DECIMAL(10,3) NOT NULL,
   points INT NOT NULL DEFAULT 0,
   server_id INT UNSIGNED NOT NULL,
   created_on DATETIME NOT NULL,
