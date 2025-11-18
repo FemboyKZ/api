@@ -97,9 +97,7 @@ describe("KZ Servers Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app)
-        .get("/kzglobal/servers?approval_status=1")
-        .expect(200);
+      await request(app).get("/kzglobal/servers?approval_status=1").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("approval_status =");

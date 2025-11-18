@@ -842,7 +842,7 @@ async function runScraper(normalIntervalMs, idleIntervalMs) {
       // All records in batch were not found - we're caught up
       // Use idle interval (longer delay)
       nextInterval = idleIntervalMs;
-      
+
       if (stats.lastSuccessfulId > 0) {
         // Reset to last successful ID to keep checking from there
         currentRecordId = stats.lastSuccessfulId;
@@ -897,7 +897,10 @@ async function runScraper(normalIntervalMs, idleIntervalMs) {
   } finally {
     isRunning = false;
     // Schedule next run with dynamic interval
-    scraperTimeout = setTimeout(() => runScraper(normalIntervalMs, idleIntervalMs), nextInterval);
+    scraperTimeout = setTimeout(
+      () => runScraper(normalIntervalMs, idleIntervalMs),
+      nextInterval,
+    );
   }
 }
 

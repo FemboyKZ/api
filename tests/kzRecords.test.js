@@ -91,9 +91,7 @@ describe("KZ Records Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app)
-        .get("/kzglobal/records?mode=kz_timer")
-        .expect(200);
+      await request(app).get("/kzglobal/records?mode=kz_timer").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("mode =");
@@ -129,7 +127,9 @@ describe("KZ Records Endpoints", () => {
       await request(app).get("/kzglobal/records").expect(200);
 
       const call = mockPool.query.mock.calls[1];
-      expect(call[0]).toMatch(/\(p\.is_banned IS NULL OR p\.is_banned = FALSE\)/);
+      expect(call[0]).toMatch(
+        /\(p\.is_banned IS NULL OR p\.is_banned = FALSE\)/,
+      );
     });
 
     it("should include banned players when requested", async () => {
@@ -205,7 +205,9 @@ describe("KZ Records Endpoints", () => {
       expect(response.body).toHaveProperty("data");
       expect(response.body.data).toHaveLength(2);
       expect(response.body.data[0].rank).toBe(1);
-      expect(response.body.data[0].time).toBeLessThan(response.body.data[1].time);
+      expect(response.body.data[0].time).toBeLessThan(
+        response.body.data[1].time,
+      );
     });
 
     it("should filter by mode", async () => {

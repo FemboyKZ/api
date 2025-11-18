@@ -91,7 +91,9 @@ describe("KZ Bans Endpoints", () => {
       await request(app).get("/kzglobal/bans?active=true").expect(200);
 
       const call = mockPool.query.mock.calls[0];
-      expect(call[0]).toMatch(/\(b\.expires_on IS NULL OR b\.expires_on > NOW\(\)\)/);
+      expect(call[0]).toMatch(
+        /\(b\.expires_on IS NULL OR b\.expires_on > NOW\(\)\)/,
+      );
     });
 
     it("should sort by created_on desc by default", async () => {
@@ -115,7 +117,9 @@ describe("KZ Bans Endpoints", () => {
       await request(app).get("/kzglobal/bans/active").expect(200);
 
       const call = mockPool.query.mock.calls[0];
-      expect(call[0]).toMatch(/\(b\.expires_on IS NULL OR b\.expires_on > NOW\(\)\)/);
+      expect(call[0]).toMatch(
+        /\(b\.expires_on IS NULL OR b\.expires_on > NOW\(\)\)/,
+      );
     });
   });
 
@@ -177,9 +181,7 @@ describe("KZ Bans Endpoints", () => {
 
       mockPool.query.mockResolvedValueOnce([[banData]]);
 
-      const response = await request(app)
-        .get("/kzglobal/bans/1")
-        .expect(200);
+      const response = await request(app).get("/kzglobal/bans/1").expect(200);
 
       expect(response.body).toHaveProperty("data");
       expect(response.body.data).toHaveProperty("id", 1);
@@ -189,7 +191,9 @@ describe("KZ Bans Endpoints", () => {
     it("should return 404 for non-existent ban", async () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
-      const response = await request(app).get("/kzglobal/bans/999999").expect(404);
+      const response = await request(app)
+        .get("/kzglobal/bans/999999")
+        .expect(404);
       expect(response.body).toHaveProperty("error");
     });
 
@@ -247,13 +251,13 @@ describe("KZ Bans Endpoints", () => {
         .expect(200);
 
       const call = mockPool.query.mock.calls[0];
-      expect(call[0]).toMatch(/\(b\.expires_on IS NULL OR b\.expires_on > NOW\(\)\)/);
+      expect(call[0]).toMatch(
+        /\(b\.expires_on IS NULL OR b\.expires_on > NOW\(\)\)/,
+      );
     });
 
     it("should return 400 for invalid steamid", async () => {
-      await request(app)
-        .get("/kzglobal/bans/player/invalid")
-        .expect(400);
+      await request(app).get("/kzglobal/bans/player/invalid").expect(400);
     });
   });
 });

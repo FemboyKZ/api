@@ -278,9 +278,7 @@ describe("KZ Maps Endpoints", () => {
     it("should return 404 for non-existent map", async () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
-      await request(app)
-        .get("/kzglobal/maps/nonexistent/records")
-        .expect(404);
+      await request(app).get("/kzglobal/maps/nonexistent/records").expect(404);
     });
   });
 });
