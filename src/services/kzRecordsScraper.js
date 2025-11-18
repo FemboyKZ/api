@@ -540,14 +540,23 @@ async function scrapeBatch(startId, batchSize) {
         }
         stats.recordsProcessed++;
       } catch (error) {
-        // Handle deadlock errors with retry
-        if (error.code === "ER_LOCK_DEADLOCK") {
+        // Handle deadlock and lock timeout errors with retry
+        if (
+          error.code === "ER_LOCK_DEADLOCK" ||
+          error.code === "ER_LOCK_WAIT_TIMEOUT"
+        ) {
+          const errorType =
+            error.code === "ER_LOCK_DEADLOCK"
+              ? "Deadlock"
+              : "Lock wait timeout";
           logger.warn(
-            `[KZ Scraper] Deadlock detected for record ${recordId}, retrying...`,
+            `[KZ Scraper] ${errorType} detected for record ${recordId}, retrying...`,
           );
           try {
-            // Retry once after brief delay
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            // Retry once after brief delay (longer for lock timeouts)
+            const retryDelay =
+              error.code === "ER_LOCK_WAIT_TIMEOUT" ? 500 : 100;
+            await new Promise((resolve) => setTimeout(resolve, retryDelay));
             const wasInserted = await processRecord(connection, recordData);
             if (wasInserted) {
               inserted++;
@@ -559,7 +568,7 @@ async function scrapeBatch(startId, batchSize) {
             }
             stats.recordsProcessed++;
             logger.info(
-              `[KZ Scraper] Record ${recordId} processed successfully after retry`,
+              `[KZ Scraper] Record ${recordId} processed successfully after ${errorType.toLowerCase()} retry`,
             );
           } catch (retryError) {
             logger.error(
