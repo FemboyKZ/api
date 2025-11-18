@@ -62,6 +62,11 @@ services:
         reservations:
           cpus: '2'
           memory: 14G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
     user: mysql
     tty: true
     stdin_open: true
@@ -128,6 +133,11 @@ services:
         reservations:
           cpus: '2'
           memory: 14G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
     user: mysql
     tty: true
     stdin_open: true
@@ -145,6 +155,11 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     tty: true
     stdin_open: true
   # API Server
@@ -215,6 +230,11 @@ services:
       timeout: 3s
       retries: 3
       start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
     tty: true
     stdin_open: true
 
