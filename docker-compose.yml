@@ -15,25 +15,56 @@ services:
       - mariadb_data:/var/lib/mysql
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     command: >
-      --innodb-buffer-pool-size=4G
-      --max-connections=200
-      --join-buffer-size=8M
-      --sort-buffer-size=8M
-      --tmp-table-size=256M
-      --max-heap-table-size=256M
-      --innodb-flush-log-at-trx-commit=2
-      --innodb-io-capacity=2000
-      --slow-query-log=1
-      --long-query-time=1
+     --character-set-server=utf8mb4
+     --collation-server=utf8mb4_unicode_ci
+     --innodb-adaptive-hash-index=1
+     --innodb-buffer-pool-instances=8
+     --innodb-buffer-pool-size=12G
+     --innodb-change-buffering=all
+     --innodb-file-per-table=1
+     --innodb-flush-log-at-trx-commit=2
+     --innodb-flush-method=O_DIRECT
+     --innodb-io-capacity-max=4000
+     --innodb-io-capacity=2000
+     --innodb-log-buffer-size=16M
+     --innodb-log-file-size=512M
+     --innodb-log-files-in-group=2
+     --innodb-read-io-threads=8
+     --innodb-stats-on-metadata=0
+     --innodb-write-io-threads=8
+     --join-buffer-size=8M
+     --local-infile=0
+     --log-queries-not-using-indexes=1
+     --log-slow-admin-statements=1
+     --long-query-time=1
+     --max-connections=200
+     --max-heap-table-size=256M
+     --read-buffer-size=4M
+     --read-rnd-buffer-size=8M
+     --skip-log-bin
+     --slow-query-log-file=/var/log/mysql/slow-query.log
+     --slow-query-log=1
+     --sort-buffer-size=8M
+     --table-definition-cache=2000
+     --table-open-cache=4000
+     --thread-cache-size=50
+     --tmp-table-size=256M
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 16G
+        reservations:
+          cpus: '2'
+          memory: 14G
     user: mysql
     tty: true
     stdin_open: true
-
   # MariaDB Database - KZ Records
   mariadb-kz:
     image: mariadb:latest
@@ -50,21 +81,53 @@ services:
       - mariadb_kz_data:/var/lib/mysql
       - ./db/kz-records-schema.sql:/docker-entrypoint-initdb.d/01-kz-schema.sql:ro
     command: >
-      --innodb-buffer-pool-size=4G
-      --max-connections=200
-      --join-buffer-size=8M
-      --sort-buffer-size=8M
-      --tmp-table-size=256M
-      --max-heap-table-size=256M
-      --innodb-flush-log-at-trx-commit=2
-      --innodb-io-capacity=2000
-      --slow-query-log=1
-      --long-query-time=1
+     --character-set-server=utf8mb4
+     --collation-server=utf8mb4_unicode_ci
+     --innodb-adaptive-hash-index=1
+     --innodb-buffer-pool-instances=8
+     --innodb-buffer-pool-size=12G
+     --innodb-change-buffering=all
+     --innodb-file-per-table=1
+     --innodb-flush-log-at-trx-commit=2
+     --innodb-flush-method=O_DIRECT
+     --innodb-io-capacity-max=4000
+     --innodb-io-capacity=2000
+     --innodb-log-buffer-size=16M
+     --innodb-log-file-size=512M
+     --innodb-log-files-in-group=2
+     --innodb-read-io-threads=8
+     --innodb-stats-on-metadata=0
+     --innodb-write-io-threads=8
+     --join-buffer-size=8M
+     --local-infile=0
+     --log-queries-not-using-indexes=1
+     --log-slow-admin-statements=1
+     --long-query-time=1
+     --max-connections=200
+     --max-heap-table-size=256M
+     --read-buffer-size=4M
+     --read-rnd-buffer-size=8M
+     --skip-log-bin
+     --slow-query-log-file=/var/log/mysql/slow-query.log
+     --slow-query-log=1
+     --sort-buffer-size=8M
+     --table-definition-cache=2000
+     --table-open-cache=4000
+     --thread-cache-size=50
+     --tmp-table-size=256M
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 16G
+        reservations:
+          cpus: '2'
+          memory: 14G
     user: mysql
     tty: true
     stdin_open: true
@@ -84,7 +147,6 @@ services:
       retries: 5
     tty: true
     stdin_open: true
-
   # API Server
   api:
     build:
