@@ -221,7 +221,8 @@ function convertTimestamp(isoString) {
 }
 
 /**
- * Get or create player ID
+ * Get or create player ID (returns auto-increment ID from kz_players table)
+ * Also returns steamid64 for denormalized storage in kz_records
  */
 async function getOrCreatePlayer(connection, record) {
   // Keep steamid64 as string to preserve precision (no parseInt)
@@ -239,13 +240,14 @@ async function getOrCreatePlayer(connection, record) {
   }
 
   const [rows] = await connection.query(
-    "SELECT id FROM kz_players WHERE steamid64 = ?",
+    "SELECT id, steamid64 FROM kz_players WHERE steamid64 = ?",
     [steamid64],
   );
 
   if (rows.length > 0) {
-    playerCache.set(cacheKey, rows[0].id);
-    return rows[0].id;
+    const playerData = { id: rows[0].id, steamid64: rows[0].steamid64 };
+    playerCache.set(cacheKey, playerData);
+    return playerData;
   }
 
   const steamId = sanitizeString(
@@ -264,8 +266,9 @@ async function getOrCreatePlayer(connection, record) {
     [steamid64, steamId, playerName],
   );
 
-  playerCache.set(cacheKey, result.insertId);
-  return result.insertId;
+  const playerData = { id: result.insertId, steamid64 };
+  playerCache.set(cacheKey, playerData);
+  return playerData;
 }
 
 /**
@@ -461,12 +464,13 @@ async function processRecord(connection, record) {
   // Insert record (use INSERT IGNORE to skip duplicates silently)
   const [result] = await connection.query(
     `INSERT IGNORE INTO kz_records 
-        (original_id, player_id, map_id, server_id, mode, stage, time, teleports, points, 
+        (original_id, player_id, steamid64, map_id, server_id, mode, stage, time, teleports, points, 
          tickrate, record_filter_id, replay_id, updated_by, created_on, updated_on)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       record.id,
-      playerId,
+      playerId.id,
+      playerId.steamid64,
       mapId,
       serverId,
       mode,
