@@ -1,5 +1,7 @@
 const { Server } = require("socket.io");
 const logger = require("../utils/logger");
+require("dotenv").config();
+const VALID_CHANNELS = process.env.WS_VALID_CHANNELS || "";
 
 let io = null;
 
