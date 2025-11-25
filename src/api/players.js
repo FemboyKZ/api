@@ -178,18 +178,14 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
         steamid,
         MAX(latest_name) as name,
         MAX(avatar) as avatar,
-        MAX(CASE WHEN game = 'csgo' THEN 
-          JSON_OBJECT(
-            'total_playtime', SUM(playtime),
-            'last_seen', MAX(last_seen)
-          )
-        END) as csgo,
-        MAX(CASE WHEN game = 'counterstrike2' THEN 
-          JSON_OBJECT(
-            'total_playtime', SUM(playtime),
-            'last_seen', MAX(last_seen)
-          )
-        END) as counterstrike2,
+        JSON_OBJECT(
+          'total_playtime', SUM(CASE WHEN game = 'csgo' THEN playtime ELSE 0 END),
+          'last_seen', MAX(CASE WHEN game = 'csgo' THEN last_seen END)
+        ) as csgo,
+        JSON_OBJECT(
+          'total_playtime', SUM(CASE WHEN game = 'counterstrike2' THEN playtime ELSE 0 END),
+          'last_seen', MAX(CASE WHEN game = 'counterstrike2' THEN last_seen END)
+        ) as counterstrike2,
         SUM(playtime) as _total_playtime,
         MAX(last_seen) as _last_seen
       FROM players 
@@ -224,21 +220,21 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
 
     const [rawPlayers] = await pool.query(query, params);
 
-    // Parse JSON fields from SQL (MariaDB returns JSON as strings)
+    // Parse JSON fields from SQL (MariaDB/MySQL returns JSON as strings or buffers)
     const players = rawPlayers.map((row) => {
       const { _total_playtime, _last_seen, ...player } = row;
 
-      // Parse JSON objects or set to empty objects
-      player.csgo = row.csgo
-        ? typeof row.csgo === "string"
-          ? JSON.parse(row.csgo)
-          : row.csgo
-        : {};
-      player.counterstrike2 = row.counterstrike2
-        ? typeof row.counterstrike2 === "string"
-          ? JSON.parse(row.counterstrike2)
-          : row.counterstrike2
-        : {};
+      // Helper to parse JSON from various formats
+      const parseJson = (value) => {
+        if (!value) return {};
+        if (typeof value === "string") return JSON.parse(value);
+        if (Buffer.isBuffer(value)) return JSON.parse(value.toString("utf8"));
+        if (typeof value === "object") return value;
+        return {};
+      };
+
+      player.csgo = parseJson(row.csgo);
+      player.counterstrike2 = parseJson(row.counterstrike2);
 
       return player;
     });
