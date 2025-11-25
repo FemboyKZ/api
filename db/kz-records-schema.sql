@@ -90,12 +90,13 @@ CREATE TABLE IF NOT EXISTS kz_records (
   inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   
   -- Essential indexes for common queries
-  INDEX idx_player_map_mode (steamid64, map_id, mode, stage, time),
-  INDEX idx_leaderboard (steamid64, map_id, mode, stage, teleports, time),
+  INDEX idx_player_map_mode (player_id, map_id, mode, stage, time),
+  INDEX idx_leaderboard (player_id, map_id, mode, stage, teleports, time),
   INDEX idx_recent_records (created_on DESC, mode, map_id),
   INDEX idx_server_records (server_id, created_on DESC),
   INDEX idx_mode_stage (mode, stage, teleports, time),
   INDEX idx_original_id (original_id),
+  INDEX idx_steamid64 (steamid64),
   
   -- Foreign key constraints
   CONSTRAINT fk_player FOREIGN KEY (player_id) REFERENCES kz_players(id) ON DELETE CASCADE,
@@ -136,12 +137,13 @@ CREATE TABLE IF NOT EXISTS kz_records_partitioned (
   UNIQUE KEY idx_original_id (original_id, created_on),
   
   -- Optimized indexes
-  KEY idx_player_map_mode (steamid64, map_id, mode, stage, time),
+  KEY idx_player_map_mode (player_id, map_id, mode, stage, time),
   KEY idx_leaderboard (map_id, mode, stage, teleports, time),
   KEY idx_recent_records (created_on DESC, mode, map_id),
   KEY idx_server_records (server_id, created_on DESC),
   KEY idx_mode_stage (mode, stage, teleports, time),
-  KEY idx_player_id (steamid64),
+  KEY idx_player_id (player_id),
+  KEY idx_steamid64 (steamid64),
   KEY idx_map_id (map_id),
   KEY idx_server_id (server_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
