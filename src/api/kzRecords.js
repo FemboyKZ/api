@@ -344,8 +344,10 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
     });
   } catch (e) {
     logger.error(`Failed to fetch KZ records: ${e.message}`);
-    logger.error(`Query params: ${JSON.stringify({ page, limit, sort, order, map, map_id, player, mode, stage, server, teleports, date_from, date_to, include_banned })}`);
-    logger.error(`Partition hint: ${partitionHint || 'none'}`);
+    logger.error(
+      `Query params: ${JSON.stringify({ page, limit, sort, order, map, map_id, player, mode, stage, server, teleports, date_from, date_to, include_banned })}`,
+    );
+    logger.error(`Partition hint: ${partitionHint || "none"}`);
     res.status(500).json({ error: "Failed to fetch KZ records" });
   }
 });

@@ -257,7 +257,9 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
     });
   } catch (e) {
     logger.error(`Failed to fetch players: ${e.message}`);
-    logger.error(`Query params: ${JSON.stringify({ page, limit, name, sort, order, banned, active_since })}`);
+    logger.error(
+      `Query params: ${JSON.stringify({ page, limit, name, sort, order, banned, active_since })}`,
+    );
     res.status(500).json({ error: "Failed to fetch players" });
   }
 });
