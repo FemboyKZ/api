@@ -219,6 +219,7 @@ CREATE TABLE IF NOT EXISTS kz_worldrecords_cache (
   mode VARCHAR(32) NOT NULL,
   stage INT NOT NULL,
   teleports INT NOT NULL,
+  player_id INT UNSIGNED NOT NULL,
   steamid64 VARCHAR(20) NOT NULL,
   time DECIMAL(10,3) NOT NULL,
   points INT NOT NULL DEFAULT 0,
@@ -227,10 +228,10 @@ CREATE TABLE IF NOT EXISTS kz_worldrecords_cache (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   
   PRIMARY KEY (map_id, mode, stage, teleports),
-  INDEX idx_player_records (steamid64, created_on DESC),
+  INDEX idx_player_records (player_id, created_on DESC),
   
   CONSTRAINT fk_wr_map FOREIGN KEY (map_id) REFERENCES kz_maps(id) ON DELETE CASCADE,
-  CONSTRAINT fk_wr_player FOREIGN KEY (steamid64) REFERENCES kz_players(steamid64) ON DELETE CASCADE,
+  CONSTRAINT fk_wr_player FOREIGN KEY (player_id) REFERENCES kz_players(id) ON DELETE CASCADE,
   CONSTRAINT fk_wr_server FOREIGN KEY (server_id) REFERENCES kz_servers(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -380,12 +381,13 @@ BEGIN
 
   -- Use REPLACE INTO instead of TRUNCATE+INSERT to handle duplicates
   -- This avoids race conditions when multiple processes call the procedure
-  REPLACE INTO kz_worldrecords_cache (map_id, mode, stage, teleports, steamid64, time, points, server_id, created_on)
+  REPLACE INTO kz_worldrecords_cache (map_id, mode, stage, teleports, player_id, steamid64, time, points, server_id, created_on)
   SELECT 
   r.map_id,
   r.mode,
   r.stage,
   CASE WHEN r.teleports = 0 THEN 0 ELSE 1 END as teleports,
+  r.player_id,
   r.steamid64,
   r.time,
   r.points,
@@ -410,7 +412,7 @@ BEGIN
   -- Exclude banned players
   WHERE NOT EXISTS (
   SELECT 1 FROM kz_players p 
-  WHERE p.steamid64 = r.steamid64
+  WHERE p.id = r.player_id
   AND p.is_banned = TRUE
   );
 
