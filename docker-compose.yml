@@ -56,6 +56,8 @@ services:
         reservations:
           cpus: "2"
           memory: 14G
+    security_opt:
+      - seccomp=./docker/seccomp-default-modified.json
     logging:
       driver: "json-file"
       options:
@@ -121,6 +123,8 @@ services:
         reservations:
           cpus: "2"
           memory: 14G
+    security_opt:
+      - seccomp=./docker/seccomp-default-modified.json
     logging:
       driver: "json-file"
       options:
