@@ -6,6 +6,55 @@ const logger = require("../utils/logger");
 const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
 
 /**
+ * Helper function to get partition hints for kz_records_partitioned
+ * Partitions: p_old (before 2018), p2018-p2027, pfuture
+ * @param {string} dateFrom - Optional start date filter
+ * @param {string} dateTo - Optional end date filter
+ * @returns {string} Partition hint clause or empty string
+ */
+const getPartitionHint = (dateFrom, dateTo) => {
+  const partitions = [];
+  const currentYear = new Date().getFullYear();
+
+  if (!dateFrom && !dateTo) {
+    // No date filter - scan all partitions (let MySQL optimize)
+    return "";
+  }
+
+  const fromYear = dateFrom ? new Date(dateFrom).getFullYear() : 2014;
+  const toYear = dateTo ? new Date(dateTo).getFullYear() : currentYear;
+
+  if (fromYear < 2018) {
+    partitions.push("p_old");
+  }
+
+  for (
+    let year = Math.max(fromYear, 2018);
+    year <= Math.min(toYear, 2027);
+    year++
+  ) {
+    partitions.push(`p${year}`);
+  }
+
+  if (toYear >= currentYear) {
+    partitions.push("pfuture");
+  }
+
+  if (partitions.length === 0) return "";
+  return `PARTITION (${partitions.join(",")})`;
+};
+
+/**
+ * Get default partition hint for queries without date filters
+ * Uses all partitions for complete data coverage
+ */
+const getDefaultPartitionHint = () => {
+  // For aggregate queries across all data, don't use partition hints
+  // Let MySQL's partition pruning work naturally with map_id filters
+  return "";
+};
+
+/**
  * @swagger
  * /kzglobal/maps:
  *   get:
@@ -87,8 +136,53 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
     const sortField = validSortFields.includes(sort) ? sort : "name";
     const sortOrder = order === "asc" ? "ASC" : "DESC";
 
-    // Build query with record counts (excluding banned players) and window function for total
-    let query = `
+    // Build WHERE conditions for maps
+    const whereConditions = ["1=1"];
+    const params = [];
+
+    if (name) {
+      whereConditions.push("m.map_name LIKE ?");
+      params.push(`%${sanitizeString(name, 255)}%`);
+    }
+
+    if (difficulty !== undefined) {
+      const diff = parseInt(difficulty, 10);
+      if (diff >= 1 && diff <= 7) {
+        whereConditions.push("m.difficulty = ?");
+        params.push(diff);
+      }
+    }
+
+    if (validated !== undefined) {
+      const isValidated = validated === "true" || validated === true;
+      whereConditions.push("m.validated = ?");
+      params.push(isValidated);
+    }
+
+    const whereClause = whereConditions.join(" AND ");
+
+    // Get total count first (fast query on maps table only)
+    const [countResult] = await pool.query(
+      `SELECT COUNT(*) as total FROM kz_maps m WHERE ${whereClause}`,
+      params,
+    );
+    const total = countResult[0].total;
+
+    // Map sort field - for 'records' sort, we need a different approach
+    let sortColumn;
+    if (sortField === "name") {
+      sortColumn = "m.map_name";
+    } else if (sortField === "difficulty") {
+      sortColumn = "m.difficulty";
+    } else if (sortField === "updated_on") {
+      sortColumn = "m.global_updated_on";
+    } else {
+      // For records sort, use subquery
+      sortColumn = "record_stats.records";
+    }
+
+    // Optimized query using subquery for record stats instead of full JOIN
+    const query = `
       SELECT 
         m.id,
         m.map_id,
@@ -101,61 +195,28 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
         m.approved_by_steamid64,
         m.global_created_on,
         m.global_updated_on,
-        COUNT(DISTINCT r.id) as records,
-        COUNT(DISTINCT r.player_id) as unique_players,
-        MIN(r.time) as world_record_time,
-        COUNT(*) OVER() as total_count
+        COALESCE(record_stats.records, 0) as records,
+        COALESCE(record_stats.unique_players, 0) as unique_players,
+        record_stats.world_record_time
       FROM kz_maps m
-      LEFT JOIN kz_records r ON m.id = r.map_id
-      LEFT JOIN kz_players p ON r.player_id = p.steamid64
-      WHERE 1=1
-        AND (p.is_banned IS NULL OR p.is_banned = FALSE OR r.id IS NULL)
+      LEFT JOIN (
+        SELECT 
+          r.map_id,
+          COUNT(*) as records,
+          COUNT(DISTINCT r.player_id) as unique_players,
+          MIN(r.time) as world_record_time
+        FROM kz_records_partitioned r
+        INNER JOIN kz_players p ON r.player_id = p.id
+        WHERE (p.is_banned IS NULL OR p.is_banned = FALSE)
+        GROUP BY r.map_id
+      ) record_stats ON m.id = record_stats.map_id
+      WHERE ${whereClause}
+      ORDER BY ${sortColumn} ${sortOrder}
+      LIMIT ? OFFSET ?
     `;
-    const params = [];
 
-    if (name) {
-      query += " AND m.map_name LIKE ?";
-      params.push(`%${sanitizeString(name, 255)}%`);
-    }
-
-    if (difficulty !== undefined) {
-      const diff = parseInt(difficulty, 10);
-      if (diff >= 1 && diff <= 7) {
-        query += " AND m.difficulty = ?";
-        params.push(diff);
-      }
-    }
-
-    if (validated !== undefined) {
-      const isValidated = validated === "true" || validated === true;
-      query += " AND m.validated = ?";
-      params.push(isValidated);
-    }
-
-    query +=
-      " GROUP BY m.id, m.map_id, m.map_name, m.difficulty, m.validated, m.filesize, m.workshop_url, m.download_url, m.approved_by_steamid64, m.global_created_on, m.global_updated_on";
-
-    // Map sort field
-    const sortColumn =
-      sortField === "name"
-        ? "m.map_name"
-        : sortField === "difficulty"
-          ? "m.difficulty"
-          : sortField === "updated_on"
-            ? "m.global_updated_on"
-            : "records";
-
-    query += ` ORDER BY ${sortColumn} ${sortOrder}`;
-    query += ` LIMIT ? OFFSET ?`;
-    params.push(validLimit, offset);
-
-    const [maps] = await pool.query(query, params);
-
-    // Extract total from first row (same for all rows due to window function)
-    const total = maps.length > 0 ? maps[0].total_count : 0;
-
-    // Remove total_count from each map object
-    maps.forEach((map) => delete map.total_count);
+    const queryParams = [...params, validLimit, offset];
+    const [maps] = await pool.query(query, queryParams);
 
     res.json({
       data: maps,
@@ -224,42 +285,51 @@ router.get(
   async (req, res) => {
     try {
       const { tier, validated } = req.query;
+      const pool = getKzPool();
 
-      let query = `
-        SELECT 
-          m.map_name,
-          m.difficulty,
-          m.validated,
-          COUNT(DISTINCT r.id) as total_records,
-          MIN(r.time) as world_record
-        FROM kz_maps m
-        LEFT JOIN kz_records r ON m.id = r.map_id
-        LEFT JOIN kz_players p ON r.player_id = p.steamid64
-        WHERE m.difficulty IS NOT NULL
-          AND (p.is_banned IS NULL OR p.is_banned = FALSE OR r.id IS NULL)
-      `;
+      // Build WHERE conditions for maps
+      const whereConditions = ["m.difficulty IS NOT NULL"];
       const params = [];
 
       if (tier !== undefined) {
         const tierNum = parseInt(tier, 10);
         if (tierNum >= 1 && tierNum <= 7) {
-          query += " AND m.difficulty = ?";
+          whereConditions.push("m.difficulty = ?");
           params.push(tierNum);
         }
       }
 
       if (validated !== undefined) {
         const isValidated = validated === "true" || validated === true;
-        query += " AND m.validated = ?";
+        whereConditions.push("m.validated = ?");
         params.push(isValidated);
       }
 
-      query += `
-        GROUP BY m.id, m.map_name, m.difficulty, m.validated
+      const whereClause = whereConditions.join(" AND ");
+
+      // Optimized query using subquery for record stats
+      const query = `
+        SELECT 
+          m.map_name,
+          m.difficulty,
+          m.validated,
+          COALESCE(record_stats.total_records, 0) as total_records,
+          record_stats.world_record
+        FROM kz_maps m
+        LEFT JOIN (
+          SELECT 
+            r.map_id,
+            COUNT(*) as total_records,
+            MIN(r.time) as world_record
+          FROM kz_records_partitioned r
+          INNER JOIN kz_players p ON r.player_id = p.id
+          WHERE (p.is_banned IS NULL OR p.is_banned = FALSE)
+          GROUP BY r.map_id
+        ) record_stats ON m.id = record_stats.map_id
+        WHERE ${whereClause}
         ORDER BY m.difficulty ASC, total_records DESC
       `;
 
-      const pool = getKzPool();
       const [maps] = await pool.query(query, params);
 
       res.json({
@@ -327,8 +397,8 @@ router.get(
           MAX(r.time) as worst_time,
           MIN(r.created_on) as first_record,
           MAX(r.created_on) as last_record
-        FROM kz_records r
-        LEFT JOIN kz_players p ON r.player_id = p.steamid64
+        FROM kz_records_partitioned r
+        LEFT JOIN kz_players p ON r.player_id = p.id
         WHERE r.map_id = ?
           AND (p.is_banned IS NULL OR p.is_banned = FALSE)
       `,
@@ -344,8 +414,8 @@ router.get(
           COUNT(DISTINCT r.player_id) as players,
           MIN(r.time) as world_record,
           AVG(r.time) as avg_time
-        FROM kz_records r
-        LEFT JOIN kz_players p ON r.player_id = p.steamid64
+        FROM kz_records_partitioned r
+        LEFT JOIN kz_players p ON r.player_id = p.id
         WHERE r.map_id = ?
           AND (p.is_banned IS NULL OR p.is_banned = FALSE)
         GROUP BY r.mode
@@ -360,8 +430,8 @@ router.get(
           r.stage,
           COUNT(*) as records,
           MIN(r.time) as world_record
-        FROM kz_records r
-        LEFT JOIN kz_players p ON r.player_id = p.steamid64
+        FROM kz_records_partitioned r
+        LEFT JOIN kz_players p ON r.player_id = p.id
         WHERE r.map_id = ?
           AND (p.is_banned IS NULL OR p.is_banned = FALSE)
         GROUP BY r.stage
@@ -385,8 +455,8 @@ router.get(
           r.points,
           s.server_name,
           r.created_on
-        FROM kz_records r
-        LEFT JOIN kz_players p ON r.player_id = p.steamid64
+        FROM kz_records_partitioned r
+        LEFT JOIN kz_players p ON r.player_id = p.id
         LEFT JOIN kz_servers s ON r.server_id = s.id
         WHERE r.map_id = ?
           AND r.stage = 0
@@ -532,8 +602,8 @@ router.get(
           r.tickrate,
           s.server_name,
           r.created_on
-        FROM kz_records r
-        LEFT JOIN kz_players p ON r.player_id = p.steamid64
+        FROM kz_records_partitioned r
+        LEFT JOIN kz_players p ON r.player_id = p.id
         LEFT JOIN kz_servers s ON r.server_id = s.id
         WHERE r.map_id = ?
           AND (p.is_banned IS NULL OR p.is_banned = FALSE)
