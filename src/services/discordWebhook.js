@@ -157,11 +157,15 @@ function buildEmbeds(servers, game) {
     const gameLower = game === "csgo" ? "csgo" : "cs2";
 
     // Group servers by region and sort by port
-    const euServers = servers.filter((s) => s.region === "eu").sort((a, b) => a.port - b.port);
-    const naServers = servers.filter((s) => s.region === "na").sort((a, b) => a.port - b.port);
-    const otherServers = servers.filter(
-      (s) => s.region !== "eu" && s.region !== "na",
-    ).sort((a, b) => a.region - b.region);
+    const euServers = servers
+      .filter((s) => s.region === "eu")
+      .sort((a, b) => a.port - b.port);
+    const naServers = servers
+      .filter((s) => s.region === "na")
+      .sort((a, b) => a.port - b.port);
+    const otherServers = servers
+      .filter((s) => s.region !== "eu" && s.region !== "na")
+      .sort((a, b) => a.region - b.region);
 
     const embeds = [];
 
@@ -218,7 +222,7 @@ function buildEmbeds(servers, game) {
 
         if (server.status === 1) {
           fieldValue += ` - Map: \`${server.map || "Unknown"}\``;
-          
+
           if (server.domain) {
             fieldValue += `\n[connect ${server.domain}:${server.port}](<https://${gameLower}.femboy.kz/connect?ip=${server.ip}:${server.port}>)`;
           }

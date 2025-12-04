@@ -53,6 +53,7 @@ This is a game server tracking API built with Express that polls game servers vi
 ### Server Query Strategy (Priority Order)
 
 **Primary: Steam Master Server API** (`steamMasterQuery.js`)
+
 - Official Valve API, most reliable and accurate
 - Provides: server status, map, player count, hostname, version, secure status
 - No direct connection needed (bypasses firewall/network issues)
@@ -60,12 +61,14 @@ This is a game server tracking API built with Express that polls game servers vi
 - 5-second timeout
 
 **Fallback: GameDig** (`serverQuery.js`)
+
 - Direct server query when Steam API unavailable
 - Provides: status, map, player names (no Steam IDs), player count
 - 3-second socket timeout
 - GameDig type mapping: `counterstrike2` → `csgo`
 
 **Enhancement: RCON** (`rconQuery.js` - always attempted if configured)
+
 - **CS:GO servers**: Execute `status` command to get Steam IDs (SteamID2 format → converted to SteamID64)
 - **CS2 servers**: Execute both `status` (metadata + connection times) and `css_status` (custom CounterStrike Sharp plugin for Steam IDs)
   - Players matched between commands using normalized names for time correlation

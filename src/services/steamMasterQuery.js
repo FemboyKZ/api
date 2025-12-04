@@ -3,13 +3,13 @@ const logger = require("../utils/logger");
 
 /**
  * Query Steam Master Server API for server information
- * 
+ *
  * This is the most reliable method for getting CS:GO/CS2 server data:
  * - Official Valve API
  * - Real-time accurate data
  * - Includes all server metadata (players, map, secure status, etc.)
  * - No need for direct server connection
- * 
+ *
  * @param {string} ip - Server IP address
  * @param {number} port - Server game port
  * @param {string} game - Game type ('csgo' or 'counterstrike2')
@@ -19,24 +19,23 @@ async function querySteamMaster(ip, port, game) {
   const STEAM_API_KEY = process.env.STEAM_API_KEY;
 
   if (!STEAM_API_KEY) {
-    logger.debug("STEAM_API_KEY not configured - cannot query Steam Master Server");
+    logger.debug(
+      "STEAM_API_KEY not configured - cannot query Steam Master Server",
+    );
     return null;
   }
 
   try {
     // Map game type to Steam AppID
     const appIds = {
-      csgo: "730",           // CS:GO
+      csgo: "730", // CS:GO
       counterstrike2: "730", // CS2 uses same AppID
     };
 
     const appId = appIds[game] || "730";
 
     // Build filter for specific server
-    const filters = [
-      `appid\\${appId}`,
-      `addr\\${ip}:${port}`
-    ];
+    const filters = [`appid\\${appId}`, `addr\\${ip}:${port}`];
 
     const filterString = filters.join("\\");
 
@@ -51,10 +50,13 @@ async function querySteamMaster(ip, port, game) {
           filter: filterString,
         },
         timeout: 5000, // 5 second timeout
-      }
+      },
     );
 
-    if (!response.data?.response?.servers || response.data.response.servers.length === 0) {
+    if (
+      !response.data?.response?.servers ||
+      response.data.response.servers.length === 0
+    ) {
       logger.debug(`Steam Master Server returned no results for ${ip}:${port}`);
       return null;
     }
@@ -85,14 +87,16 @@ async function querySteamMaster(ip, port, game) {
     return result;
   } catch (error) {
     // Don't log errors as warnings - this is expected to fail sometimes
-    logger.debug(`Steam Master Server query failed for ${ip}:${port}: ${error.message}`);
+    logger.debug(
+      `Steam Master Server query failed for ${ip}:${port}: ${error.message}`,
+    );
     return null;
   }
 }
 
 /**
  * Query multiple servers from Steam Master Server in parallel
- * 
+ *
  * @param {Array} servers - Array of {ip, port, game} objects
  * @returns {Map} Map of 'ip:port' => server data
  */

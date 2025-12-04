@@ -42,7 +42,9 @@ async function queryServer(ip, port, game, rconPort, rconPassword) {
 
     // STRATEGY 2: Fallback to GameDig if Steam fails
     if (!result) {
-      logger.debug(`Steam Master Server failed, trying GameDig for ${ip}:${port}`);
+      logger.debug(
+        `Steam Master Server failed, trying GameDig for ${ip}:${port}`,
+      );
       try {
         const state = await GameDig.query({
           type: game,
@@ -66,9 +68,13 @@ async function queryServer(ip, port, game, rconPort, rconPassword) {
           ping: state.ping || 0,
         };
         dataSource = "gamedig";
-        logger.info(`GameDig query successful: ${ip}:${port} - ${result.playerCount} players`);
+        logger.info(
+          `GameDig query successful: ${ip}:${port} - ${result.playerCount} players`,
+        );
       } catch (gamedigError) {
-        logger.error(`GameDig also failed for ${ip}:${port}: ${gamedigError.message}`);
+        logger.error(
+          `GameDig also failed for ${ip}:${port}: ${gamedigError.message}`,
+        );
         return { status: 0 };
       }
     }
@@ -104,9 +110,10 @@ async function queryServer(ip, port, game, rconPort, rconPassword) {
     if (rconData?.serverInfo) {
       result.hostname = rconData.serverInfo.hostname || result.hostname || null;
       result.os = rconData.serverInfo.os || null;
-      result.secure = rconData.serverInfo.secure !== undefined 
-        ? rconData.serverInfo.secure 
-        : result.secure;
+      result.secure =
+        rconData.serverInfo.secure !== undefined
+          ? rconData.serverInfo.secure
+          : result.secure;
       result.bots = rconData.serverInfo.botCount || 0;
     }
 
