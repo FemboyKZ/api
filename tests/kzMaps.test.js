@@ -23,23 +23,24 @@ describe("KZ Maps Endpoints", () => {
 
   describe("GET /kzglobal/maps", () => {
     it("should return paginated list of maps", async () => {
-      mockPool.query.mockResolvedValueOnce([
-        [
-          {
-            id: 1,
-            map_id: 100,
-            map_name: "kz_synergy_x",
-            difficulty: 5,
-            validated: true,
-            filesize: 45000000,
-            workshop_url: "https://steamcommunity.com/sharedfiles/123",
-            records: 1500,
-            unique_players: 850,
-            world_record_time: 125.456,
-            total_count: 1,
-          },
-        ],
-      ]);
+      mockPool.query
+        .mockResolvedValueOnce([[{ total: 1 }]]) // COUNT query
+        .mockResolvedValueOnce([
+          [
+            {
+              id: 1,
+              map_id: 100,
+              map_name: "kz_synergy_x",
+              difficulty: 5,
+              validated: true,
+              filesize: 45000000,
+              workshop_url: "https://steamcommunity.com/sharedfiles/123",
+              records: 1500,
+              unique_players: 850,
+              world_record_time: 125.456,
+            },
+          ],
+        ]);
 
       const response = await request(app)
         .get("/kzglobal/maps")
@@ -55,42 +56,50 @@ describe("KZ Maps Endpoints", () => {
     });
 
     it("should filter by map name", async () => {
-      mockPool.query.mockResolvedValueOnce([[]]);
+      mockPool.query
+        .mockResolvedValueOnce([[{ total: 0 }]]) // COUNT query
+        .mockResolvedValueOnce([[]]);
 
       await request(app).get("/kzglobal/maps?name=synergy").expect(200);
 
-      const call = mockPool.query.mock.calls[0];
+      const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("map_name LIKE");
       expect(call[1]).toContain("%synergy%");
     });
 
     it("should filter by difficulty tier", async () => {
-      mockPool.query.mockResolvedValueOnce([[]]);
+      mockPool.query
+        .mockResolvedValueOnce([[{ total: 0 }]]) // COUNT query
+        .mockResolvedValueOnce([[]]);
 
       await request(app).get("/kzglobal/maps?difficulty=5").expect(200);
 
-      const call = mockPool.query.mock.calls[0];
+      const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("difficulty =");
       expect(call[1]).toContain(5);
     });
 
     it("should filter by validation status", async () => {
-      mockPool.query.mockResolvedValueOnce([[]]);
+      mockPool.query
+        .mockResolvedValueOnce([[{ total: 0 }]]) // COUNT query
+        .mockResolvedValueOnce([[]]);
 
       await request(app).get("/kzglobal/maps?validated=true").expect(200);
 
-      const call = mockPool.query.mock.calls[0];
+      const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("validated =");
     });
 
     it("should sort by difficulty", async () => {
-      mockPool.query.mockResolvedValueOnce([[]]);
+      mockPool.query
+        .mockResolvedValueOnce([[{ total: 0 }]]) // COUNT query
+        .mockResolvedValueOnce([[]]);
 
       await request(app)
         .get("/kzglobal/maps?sort=difficulty&order=asc")
         .expect(200);
 
-      const call = mockPool.query.mock.calls[0];
+      const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("ORDER BY m.difficulty ASC");
     });
 

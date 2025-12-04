@@ -24,6 +24,9 @@ describe("KZ Players Endpoints", () => {
   describe("GET /kzglobal/players", () => {
     it("should return paginated list of players with stats", async () => {
       mockPool.query
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query 1
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query 2
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query 3
         .mockResolvedValueOnce([[{ total: 2 }]])
         .mockResolvedValueOnce([
           [
@@ -69,40 +72,52 @@ describe("KZ Players Endpoints", () => {
 
     it("should filter by player name", async () => {
       mockPool.query
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query 1
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query 2
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query 3
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
       await request(app).get("/kzglobal/players?name=remulian").expect(200);
 
-      const call = mockPool.query.mock.calls[1];
+      const call = mockPool.query.mock.calls[4]; // Index 4 after 3x tableExists + total
       expect(call[0]).toContain("player_name LIKE");
       expect(call[1]).toContain("%remulian%");
     });
 
     it("should filter by banned status", async () => {
       mockPool.query
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query 1
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query 2
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query 3
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
       await request(app).get("/kzglobal/players?banned=true").expect(200);
 
-      const call = mockPool.query.mock.calls[1];
+      const call = mockPool.query.mock.calls[4]; // Index 4 after 3x tableExists + total
       expect(call[0]).toContain("is_banned =");
     });
 
     it("should sort by records desc by default", async () => {
       mockPool.query
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query 1
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query 2
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query 3
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
       await request(app).get("/kzglobal/players").expect(200);
 
-      const call = mockPool.query.mock.calls[1];
+      const call = mockPool.query.mock.calls[4]; // Index 4 after 3x tableExists + total
       expect(call[0]).toContain("ORDER BY records DESC");
     });
 
     it("should sort by player name", async () => {
       mockPool.query
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query 1
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query 2
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query 3
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
@@ -110,7 +125,7 @@ describe("KZ Players Endpoints", () => {
         .get("/kzglobal/players?sort=name&order=asc")
         .expect(200);
 
-      const call = mockPool.query.mock.calls[1];
+      const call = mockPool.query.mock.calls[4]; // Index 4 after 3x tableExists + total
       expect(call[0]).toContain("ORDER BY p.player_name ASC");
     });
   });
@@ -129,6 +144,7 @@ describe("KZ Players Endpoints", () => {
             },
           ],
         ])
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query for kz_player_statistics
         .mockResolvedValueOnce([
           [
             {
@@ -145,6 +161,7 @@ describe("KZ Players Endpoints", () => {
             },
           ],
         ])
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query for kz_worldrecords_cache
         .mockResolvedValueOnce([[{ world_records: 5 }]])
         .mockResolvedValueOnce([
           [
@@ -214,6 +231,7 @@ describe("KZ Players Endpoints", () => {
       };
 
       mockPool.query
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query for kz_player_statistics
         .mockResolvedValueOnce([[{ total: 1 }]])
         .mockResolvedValueOnce([[recordData]]);
 
@@ -257,6 +275,7 @@ describe("KZ Players Endpoints", () => {
 
     it("should sort by time ascending", async () => {
       mockPool.query
+        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query for kz_player_statistics
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
@@ -265,7 +284,7 @@ describe("KZ Players Endpoints", () => {
         .expect(200);
 
       expect(response.body).toHaveProperty("data");
-      const call = mockPool.query.mock.calls[1];
+      const call = mockPool.query.mock.calls[2];
       expect(call[0]).toMatch(/ORDER BY r\.time ASC/);
     });
 

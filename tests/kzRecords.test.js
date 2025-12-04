@@ -365,7 +365,8 @@ describe("KZ Records Endpoints", () => {
       await request(app).get("/kzglobal/records/worldrecords").expect(200);
 
       const call = mockPool.query.mock.calls[0];
-      expect(call[0]).toContain("teleports = 0");
+      expect(call[0]).toContain("wrc.teleports = ?");
+      expect(call[1]).toContain(0); // Default teleports filter is 0 for pro runs
     });
   });
 
