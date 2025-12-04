@@ -89,7 +89,6 @@ app.use(
 );
 
 app.use("/servers", serversRouter);
-// app.use("/servers-steam", serversSteamRouter);
 app.use("/players", playersRouter);
 app.use("/maps", mapsRouter);
 app.use("/health", healthRouter);
