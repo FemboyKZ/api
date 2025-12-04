@@ -105,7 +105,7 @@ function parseWebhookUrl(url) {
 async function getServersByGame(game) {
   try {
     const [rows] = await pool.query(
-      "SELECT * FROM servers WHERE game = ? ORDER BY status DESC, player_count DESC",
+      "SELECT * FROM servers WHERE game = ? ORDER BY port ASC",
       [game],
     );
 
@@ -156,12 +156,12 @@ function buildEmbeds(servers, game) {
     const gameTitle = game === "csgo" ? "CS:GO" : "CS2";
     const gameLower = game === "csgo" ? "csgo" : "cs2";
 
-    // Group servers by region
-    const euServers = servers.filter((s) => s.region === "eu");
-    const naServers = servers.filter((s) => s.region === "na");
+    // Group servers by region and sort by port
+    const euServers = servers.filter((s) => s.region === "eu").sort((a, b) => a.port - b.port);
+    const naServers = servers.filter((s) => s.region === "na").sort((a, b) => a.port - b.port);
     const otherServers = servers.filter(
       (s) => s.region !== "eu" && s.region !== "na",
-    );
+    ).sort((a, b) => a.region - b.region);
 
     const embeds = [];
 
@@ -218,6 +218,11 @@ function buildEmbeds(servers, game) {
 
         if (server.status === 1) {
           fieldValue += ` - Map: \`${server.map || "Unknown"}\``;
+          
+          if (server.domain) {
+            fieldValue += `\n[connect ${server.domain}:${server.port}](<https://${gameLower}.femboy.kz/connect?ip=${server.ip}:${server.port}>)`;
+          }
+
           if (server.playersList.length > 0) {
             const playerLinks = server.playersList
               .slice(0, 15)
@@ -237,14 +242,10 @@ function buildEmbeds(servers, game) {
                 ? `\n... +${server.playersList.length - 15} more`
                 : "";
 
-            fieldValue += `\n\nPlayers:\n${playerLinks}${remaining}`;
+            fieldValue += `\nPlayers:\n${playerLinks}${remaining}`;
           }
         } else {
-          fieldValue += `\n\n\`Offline!\``;
-        }
-
-        if (server.domain) {
-          fieldValue += `\n\n[connect ${server.domain}:${server.port}](<https://${gameLower}.femboy.kz/connect?ip=${server.ip}:${server.port}>)`;
+          fieldValue += `\n\`OFFLINE!\``;
         }
 
         // Add spacing after field, except for the last server

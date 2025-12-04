@@ -2,7 +2,7 @@
 
 ## Architecture Overview
 
-This is a game server tracking API built with Express that polls game servers via GameDig and RCON, storing status/player/map data in MySQL/MariaDB with optional Redis caching.
+This is a game server tracking API built with Express that polls game servers via Steam Master Server API (primary), with GameDig and RCON as fallbacks, storing status/player/map data in MySQL/MariaDB with optional Redis caching.
 
 **Data Flow:**
 
@@ -10,7 +10,7 @@ This is a game server tracking API built with Express that polls game servers vi
    - Server polling (30s interval) via `updater.js` - queries all servers **in parallel**
    - Steam avatar fetching (1hr interval) via `steamAvatars.js`
    - Map metadata fetching (6hr interval) via `mapsQuery.js`
-2. `src/services/updater.js` reads `config/servers.json`, queries each server via `serverQuery.js` + `rconQuery.js`, and upserts status to MySQL
+2. `src/services/updater.js` reads `config/servers.json`, queries each server via `steamMasterQuery.js` (primary), `serverQuery.js` (fallback), and `rconQuery.js` (player details), then upserts status to MySQL
 3. REST API endpoints (`src/api/*`) expose aggregated server/player/map statistics with optional Redis caching
 4. WebSocket server broadcasts real-time server status updates to connected clients
 5. RCON integration provides Steam IDs, player IPs (private), and extended server metadata
@@ -20,7 +20,8 @@ This is a game server tracking API built with Express that polls game servers vi
 - `src/app.js` - Express app with routes: `/servers`, `/players`, `/maps`, `/records`, `/history`, `/health`, `/admin`, `/docs` (Swagger)
 - `src/server.js` - HTTP server initialization, background job startup, graceful shutdown handling with signals (SIGTERM, SIGINT)
 - `src/services/updater.js` - Background polling loop that reloads `config/servers.json` on each iteration, invalidates cache after **all** updates complete
-- `src/services/serverQuery.js` - GameDig wrapper with CS2 → CSGO type mapping
+- `src/services/steamMasterQuery.js` - Steam Master Server API client (primary query method, most reliable)
+- `src/services/serverQuery.js` - Orchestrates fallback strategy: Steam Master → GameDig → RCON with CS2 → CSGO type mapping
 - `src/services/rconQuery.js` - RCON client for Steam IDs, player IPs, extended server metadata (hostname, OS, secure status)
 - `src/services/steamAvatars.js` - Fetches Steam profile avatars via Steam Web API, processes 100 players per hour
 - `src/services/mapsQuery.js` - Fetches map metadata from GlobalKZ API (CS:GO) and CS2KZ API (CS2)
@@ -49,16 +50,30 @@ This is a game server tracking API built with Express that polls game servers vi
 - Server metadata includes: `region`, `domain`, `maxplayers`, `players_list` JSON array, `apiId` (CS2), `kztId` (CS:GO), `tickrate` (CS:GO)
 - API identifiers: `apiId` for CS2KZ API server identification, `kztId` for GlobalKZ API server identification
 
-### RCON Integration Patterns
+### Server Query Strategy (Priority Order)
 
+**Primary: Steam Master Server API** (`steamMasterQuery.js`)
+- Official Valve API, most reliable and accurate
+- Provides: server status, map, player count, hostname, version, secure status
+- No direct connection needed (bypasses firewall/network issues)
+- Limitations: No individual player names or Steam IDs
+- 5-second timeout
+
+**Fallback: GameDig** (`serverQuery.js`)
+- Direct server query when Steam API unavailable
+- Provides: status, map, player names (no Steam IDs), player count
+- 3-second socket timeout
+- GameDig type mapping: `counterstrike2` → `csgo`
+
+**Enhancement: RCON** (`rconQuery.js` - always attempted if configured)
 - **CS:GO servers**: Execute `status` command to get Steam IDs (SteamID2 format → converted to SteamID64)
 - **CS2 servers**: Execute both `status` (metadata + connection times) and `css_status` (custom CounterStrike Sharp plugin for Steam IDs)
   - Players matched between commands using normalized names for time correlation
   - `css_status` format: `slot playername steamid64 ip ping`
-- RCON failures gracefully fallback to GameDig basic data (map, player count only)
+- Provides: Steam IDs for all players, connection times, ping, loss, player IPs (private)
+- Extended server data: `hostname`, `os`, `secure` (VAC status), `bot_count`
 - Player IPs collected via RCON but stripped from API responses for privacy (stored in `player_ips` table)
-- RCON timeout: 5 seconds (configured in `rconQuery.js`)
-- Extended server data from RCON: `hostname`, `os`, `secure` (VAC status), `bot_count`
+- RCON timeout: 5 seconds
 
 ### Response Formats
 
@@ -181,8 +196,9 @@ mysql -u root -p csmonitor < db/seed.sql
 
 - Update loop runs immediately on startup, then every 30 seconds
 - Server status uses ON DUPLICATE KEY UPDATE (requires unique index on ip+port)
-- GameDig queries timeout at 3s; failed queries mark server status=0
+- Steam Master Server queries timeout at 5s; GameDig fallback queries timeout at 3s; failed queries mark server status=0
 - Redis caching reduces database load for frequently accessed data
+- WebSocket broadcasts limited to status changes only (prevents spam)
 - WebSocket broadcasts limited to status changes only (prevents spam)
 
 ### Data Integrity
