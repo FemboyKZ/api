@@ -7,7 +7,6 @@ const compression = require("compression");
 const app = express();
 
 const serversRouter = require("./api/servers");
-const serversSteamRouter = require("./api/servers-steam");
 const playersRouter = require("./api/players");
 const mapsRouter = require("./api/maps");
 const healthRouter = require("./api/health");
