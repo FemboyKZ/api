@@ -162,37 +162,6 @@ PARTITION BY RANGE (TO_DAYS(created_on)) (
   PARTITION pfuture VALUES LESS THAN MAXVALUE
 );
 
--- Create player statistics table if it doesn't exist
-CREATE TABLE IF NOT EXISTS kz_player_statistics (
-  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  player_id INT UNSIGNED NOT NULL,
-  steamid64 VARCHAR(20) NULL,
-  
-  total_records INT UNSIGNED NOT NULL DEFAULT 0,
-  total_maps INT UNSIGNED NOT NULL DEFAULT 0,
-  total_points BIGINT UNSIGNED NOT NULL DEFAULT 0,
-  total_playtime DECIMAL(12,3) NOT NULL DEFAULT 0,
-  avg_teleports DECIMAL(6,2) NOT NULL DEFAULT 0,
-  world_records INT UNSIGNED NOT NULL DEFAULT 0,
-  
-  pro_records INT UNSIGNED NOT NULL DEFAULT 0,
-  tp_records INT UNSIGNED NOT NULL DEFAULT 0,
-  
-  best_time DECIMAL(10,3) NULL,
-  first_record_date DATETIME NULL,
-  last_record_date DATETIME NULL,
-  
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  
-  UNIQUE KEY unique_player (player_id),
-  KEY idx_total_records (total_records DESC),
-  KEY idx_total_points (total_points DESC),
-  KEY idx_world_records (world_records DESC),
-  KEY idx_updated (updated_at),
-  
-  FOREIGN KEY (player_id) REFERENCES kz_players(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 -- Statistics table for aggregated data (speeds up common queries)
 CREATE TABLE IF NOT EXISTS kz_map_statistics (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
