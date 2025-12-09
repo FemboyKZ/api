@@ -65,13 +65,14 @@ app.use(
   }),
 );
 
-// Rate limiting - 100 requests per 15 minutes per IP
+// Rate limiting - 500 requests per 5 minutes per IP
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 100,
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 500,
   message: { error: "Too many requests, please try again later." },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  validate: {trustProxy: false},
   // Skip rate limiting in test environment
   skip: () => process.env.NODE_ENV === "test",
 });
