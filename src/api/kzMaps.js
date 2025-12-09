@@ -168,7 +168,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
     );
     const total = countResult[0].total;
 
-    // Map sort field - for 'records' sort, we need a different approach
+    // Map sort field
     let sortColumn;
     if (sortField === "name") {
       sortColumn = "m.map_name";
@@ -177,11 +177,11 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
     } else if (sortField === "updated_on") {
       sortColumn = "m.global_updated_on";
     } else {
-      // For records sort, use subquery
-      sortColumn = "record_stats.records";
+      // For records sort, use statistics table
+      sortColumn = "COALESCE(ms.total_records, 0)";
     }
 
-    // Optimized query using subquery for record stats instead of full JOIN
+    // Use pre-calculated statistics table for better performance
     const query = `
       SELECT 
         m.id,
@@ -195,21 +195,11 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
         m.approved_by_steamid64,
         m.global_created_on,
         m.global_updated_on,
-        COALESCE(record_stats.records, 0) as records,
-        COALESCE(record_stats.unique_players, 0) as unique_players,
-        record_stats.world_record_time
+        COALESCE(ms.total_records, 0) as records,
+        COALESCE(ms.unique_players, 0) as unique_players,
+        ms.world_record_time
       FROM kz_maps m
-      LEFT JOIN (
-        SELECT 
-          r.map_id,
-          COUNT(*) as records,
-          COUNT(DISTINCT r.player_id) as unique_players,
-          MIN(r.time) as world_record_time
-        FROM kz_records_partitioned r
-        INNER JOIN kz_players p ON r.player_id = p.id
-        WHERE (p.is_banned IS NULL OR p.is_banned = FALSE)
-        GROUP BY r.map_id
-      ) record_stats ON m.id = record_stats.map_id
+      LEFT JOIN kz_map_statistics ms ON m.id = ms.map_id
       WHERE ${whereClause}
       ORDER BY ${sortColumn} ${sortOrder}
       LIMIT ? OFFSET ?
@@ -374,9 +364,21 @@ router.get(
 
       const pool = getKzPool();
 
-      // Get map info
+      // Get map info with pre-calculated statistics
       const [maps] = await pool.query(
-        "SELECT * FROM kz_maps WHERE map_name = ?",
+        `SELECT 
+          m.*,
+          COALESCE(ms.total_records, 0) as total_records,
+          COALESCE(ms.unique_players, 0) as unique_players,
+          ms.world_record_time as world_record,
+          ms.avg_time as average_time,
+          ms.pro_records,
+          ms.tp_records,
+          ms.first_record_date as first_record,
+          ms.last_record_date as last_record
+        FROM kz_maps m
+        LEFT JOIN kz_map_statistics ms ON m.id = ms.map_id
+        WHERE m.map_name = ?`,
         [sanitizeString(mapname, 255)],
       );
 
@@ -386,17 +388,10 @@ router.get(
 
       const map = maps[0];
 
-      // Get record statistics (excluding banned players)
-      const [stats] = await pool.query(
+      // Get worst time separately (not in statistics table)
+      const [worstTime] = await pool.query(
         `
-        SELECT 
-          COUNT(DISTINCT r.id) as total_records,
-          COUNT(DISTINCT r.player_id) as unique_players,
-          MIN(r.time) as world_record,
-          AVG(r.time) as average_time,
-          MAX(r.time) as worst_time,
-          MIN(r.created_on) as first_record,
-          MAX(r.created_on) as last_record
+        SELECT MAX(r.time) as worst_time
         FROM kz_records_partitioned r
         LEFT JOIN kz_players p ON r.player_id = p.id
         WHERE r.map_id = ?
@@ -404,6 +399,16 @@ router.get(
       `,
         [map.id],
       );
+
+      const stats = [{
+        total_records: map.total_records,
+        unique_players: map.unique_players,
+        world_record: map.world_record,
+        average_time: map.average_time,
+        worst_time: worstTime[0]?.worst_time,
+        first_record: map.first_record,
+        last_record: map.last_record
+      }];
 
       // Get mode breakdown (excluding banned players)
       const [modeStats] = await pool.query(

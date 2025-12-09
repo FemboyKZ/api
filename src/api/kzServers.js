@@ -86,10 +86,11 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
         s.updated_on,
         s.approval_status,
         s.approved_by_steamid64,
-        COUNT(DISTINCT r.id) as total_records,
-        COUNT(DISTINCT r.player_id) as unique_players
+        COALESCE(ss.total_records, 0) as total_records,
+        COALESCE(ss.unique_players, 0) as unique_players,
+        COALESCE(ss.unique_maps, 0) as unique_maps
       FROM kz_servers s
-      LEFT JOIN kz_records r ON s.id = r.server_id
+      LEFT JOIN kz_server_statistics ss ON s.id = ss.server_id
       WHERE 1=1
     `;
     const params = [];
@@ -108,9 +109,6 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       query += " AND s.approval_status = ?";
       params.push(parseInt(approval_status, 10));
     }
-
-    query +=
-      " GROUP BY s.id, s.server_id, s.server_name, s.ip, s.port, s.owner_steamid64, s.created_on, s.updated_on, s.approval_status, s.approved_by_steamid64";
 
     // Get total count
     const countQuery = `SELECT COUNT(DISTINCT s.id) as total FROM kz_servers s WHERE 1=1${
@@ -134,7 +132,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
         ? "s.server_name"
         : sortField === "created_on"
           ? "s.created_on"
-          : "total_records";
+          : "COALESCE(ss.total_records, 0)";
 
     query += ` ORDER BY ${sortColumn} ${sortOrder}`;
     query += ` LIMIT ? OFFSET ?`;
@@ -193,13 +191,13 @@ router.get(
           s.server_name,
           s.ip,
           s.port,
-          COUNT(DISTINCT r.id) as total_records,
-          COUNT(DISTINCT r.player_id) as unique_players,
-          COUNT(DISTINCT r.map_id) as unique_maps
+          COALESCE(ss.total_records, 0) as total_records,
+          COALESCE(ss.unique_players, 0) as unique_players,
+          COALESCE(ss.unique_maps, 0) as unique_maps,
+          ss.world_records_hosted
         FROM kz_servers s
-        INNER JOIN kz_records r ON s.id = r.server_id
-        GROUP BY s.id, s.server_id, s.server_name, s.ip, s.port
-        ORDER BY total_records DESC
+        INNER JOIN kz_server_statistics ss ON s.id = ss.server_id
+        ORDER BY ss.total_records DESC
         LIMIT ?
       `,
         [validLimit],
@@ -254,9 +252,22 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
     const pool = getKzPool();
 
-    // Get server info
+    // Get server info with pre-calculated statistics
     const [servers] = await pool.query(
-      "SELECT * FROM kz_servers WHERE server_id = ?",
+      `SELECT 
+        s.*,
+        COALESCE(ss.total_records, 0) as total_records,
+        COALESCE(ss.unique_players, 0) as unique_players,
+        COALESCE(ss.unique_maps, 0) as unique_maps,
+        ss.pro_records,
+        ss.tp_records,
+        ss.first_record_date as first_record,
+        ss.last_record_date as last_record,
+        ss.avg_records_per_day,
+        ss.world_records_hosted
+      FROM kz_servers s
+      LEFT JOIN kz_server_statistics ss ON s.id = ss.server_id
+      WHERE s.server_id = ?`,
       [serverId],
     );
 
@@ -266,20 +277,14 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
     const server = servers[0];
 
-    // Get record statistics
-    const [stats] = await pool.query(
-      `
-      SELECT 
-        COUNT(DISTINCT r.id) as total_records,
-        COUNT(DISTINCT r.player_id) as unique_players,
-        COUNT(DISTINCT r.map_id) as unique_maps,
-        MIN(r.created_on) as first_record,
-        MAX(r.created_on) as last_record
-      FROM kz_records r
-      WHERE r.server_id = ?
-    `,
-      [server.id],
-    );
+    // Stats are already in the server object from the statistics table
+    const stats = [{
+      total_records: server.total_records,
+      unique_players: server.unique_players,
+      unique_maps: server.unique_maps,
+      first_record: server.first_record,
+      last_record: server.last_record
+    }];
 
     // Get mode breakdown
     const [modeStats] = await pool.query(
