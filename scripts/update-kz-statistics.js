@@ -2,7 +2,15 @@
  * Update KZ Records Statistics Tables
  * Rebuilds aggregated statistics for faster queries
  *
- * Usage: node scripts/update-kz-statistics.js
+ * Usage: 
+ *   node scripts/update-kz-statistics.js              # Update all statistics
+ *   node scripts/update-kz-statistics.js --players    # Update only player stats
+ *   node scripts/update-kz-statistics.js --maps       # Update only map stats
+ *   node scripts/update-kz-statistics.js --servers    # Update only server stats
+ *   node scripts/update-kz-statistics.js --populate   # Initial population (all)
+ *   node scripts/update-kz-statistics.js --populate --players  # Populate only players
+ *   node scripts/update-kz-statistics.js --populate --maps     # Populate only maps
+ *   node scripts/update-kz-statistics.js --populate --servers  # Populate only servers
  */
 
 require("dotenv").config();
@@ -18,110 +26,118 @@ const DB_CONFIG = {
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+  multipleStatements: true,
 };
 
 async function updateMapStatistics(connection) {
   console.log("Updating map statistics...");
 
-  // Clear existing statistics
-  await connection.query("TRUNCATE TABLE kz_map_statistics");
+  try {
+    // Call stored procedure to refresh map statistics
+    await connection.query("CALL refresh_all_map_statistics()");
+    console.log("✓ Map statistics updated successfully");
+  } catch (error) {
+    console.error("✗ Error updating map statistics:", error.message);
+    throw error;
+  }
+}
 
-  // Build new statistics
-  const [result] = await connection.query(`
-        INSERT INTO kz_map_statistics 
-        (map_id, mode, stage, total_records, unique_players, world_record_time, avg_time)
-        SELECT 
-            r.map_id,
-            r.mode,
-            r.stage,
-            COUNT(*) as total_records,
-            COUNT(DISTINCT r.player_id) as unique_players,
-            MIN(r.time) as world_record_time,
-            AVG(r.time) as avg_time
-        FROM kz_records r
-        GROUP BY r.map_id, r.mode, r.stage
-    `);
+async function updateServerStatistics(connection) {
+  console.log("Updating server statistics...");
 
-  console.log(`✓ Updated ${result.affectedRows} map statistics entries`);
+  try {
+    // Call stored procedure to refresh server statistics
+    await connection.query("CALL refresh_all_server_statistics()");
+    console.log("✓ Server statistics updated successfully");
+  } catch (error) {
+    console.error("✗ Error updating server statistics:", error.message);
+    throw error;
+  }
 }
 
 async function updatePlayerStatistics(connection) {
   console.log("Updating player statistics...");
 
-  // Clear existing statistics
-  await connection.query("TRUNCATE TABLE kz_player_statistics");
-
-  // Build new statistics
-  const [result] = await connection.query(`
-        INSERT INTO kz_player_statistics 
-        (player_id, total_records, total_maps, total_playtime, avg_teleports)
-        SELECT 
-            r.player_id,
-            COUNT(*) as total_records,
-            COUNT(DISTINCT r.map_id) as total_maps,
-            SUM(r.time) as total_playtime,
-            LEAST(ROUND(AVG(r.teleports), 2), 9999.99) as avg_teleports
-        FROM kz_records r
-        GROUP BY r.player_id
-    `);
-
-  console.log(`✓ Updated ${result.affectedRows} player statistics entries`);
+  try {
+    // Call stored procedure to refresh player statistics
+    await connection.query("CALL refresh_all_player_statistics()");
+    console.log("✓ Player statistics updated successfully");
+  } catch (error) {
+    console.error("✗ Error updating player statistics:", error.message);
+    throw error;
+  }
 }
 
-async function updateWorldRecords(connection) {
-  console.log("Updating world record holders in map statistics...");
-
-  // Update world record player_id for each map/mode/stage combination
-  const [result] = await connection.query(`
-        UPDATE kz_map_statistics ms
-        JOIN (
-            SELECT 
-                map_id,
-                mode,
-                stage,
-                player_id,
-                time,
-                ROW_NUMBER() OVER (PARTITION BY map_id, mode, stage ORDER BY time ASC) as rn
-            FROM kz_records
-        ) wr ON ms.map_id = wr.map_id 
-            AND ms.mode = wr.mode 
-            AND ms.stage = wr.stage
-            AND wr.rn = 1
-        SET ms.world_record_player_id = wr.player_id,
-            ms.world_record_time = wr.time
-    `);
-
-  console.log(`✓ Updated world record holders`);
+async function populatePlayerStatistics(connection) {
+  console.log("Populating player statistics...");
+  try {
+    await connection.query("CALL populate_player_statistics()");
+    console.log("✓ Player statistics populated");
+  } catch (error) {
+    console.error("✗ Error populating player statistics:", error.message);
+    throw error;
+  }
 }
 
-async function countWorldRecords(connection) {
-  console.log("Counting world records per player...");
+async function populateMapStatistics(connection) {
+  console.log("Populating map statistics...");
+  try {
+    await connection.query("CALL populate_map_statistics()");
+    console.log("✓ Map statistics populated");
+  } catch (error) {
+    console.error("✗ Error populating map statistics:", error.message);
+    throw error;
+  }
+}
 
-  // Count WRs per player
-  const [result] = await connection.query(`
-        UPDATE kz_player_statistics ps
-        JOIN (
-            SELECT 
-                world_record_player_id,
-                COUNT(*) as wr_count
-            FROM kz_map_statistics
-            WHERE world_record_player_id IS NOT NULL
-            GROUP BY world_record_player_id
-        ) wr ON ps.player_id = wr.world_record_player_id
-        SET ps.world_records = wr.wr_count
-    `);
+async function populateServerStatistics(connection) {
+  console.log("Populating server statistics...");
+  try {
+    await connection.query("CALL populate_server_statistics()");
+    console.log("✓ Server statistics populated");
+  } catch (error) {
+    console.error("✗ Error populating server statistics:", error.message);
+    throw error;
+  }
+}
 
-  console.log(`✓ Updated world record counts`);
+async function populateAllStatistics(connection) {
+  console.log("\n" + "=".repeat(60));
+  console.log("INITIAL POPULATION OF ALL STATISTICS TABLES");
+  console.log("=".repeat(60) + "\n");
+  console.log("This may take several minutes depending on data size...\n");
+
+  try {
+    console.log("1/3 Player statistics...");
+    await populatePlayerStatistics(connection);
+    console.log("");
+
+    console.log("2/3 Map statistics...");
+    await populateMapStatistics(connection);
+    console.log("");
+
+    console.log("3/3 Server statistics...");
+    await populateServerStatistics(connection);
+    console.log("");
+
+    console.log("=".repeat(60));
+    console.log("Initial population complete!");
+    console.log("=".repeat(60));
+  } catch (error) {
+    console.error("✗ Error during initial population:", error.message);
+    throw error;
+  }
 }
 
 async function analyzeTables(connection) {
   console.log("Analyzing tables for query optimization...");
 
-  await connection.query("ANALYZE TABLE kz_records");
+  await connection.query("ANALYZE TABLE kz_records_partitioned");
   await connection.query("ANALYZE TABLE kz_players");
   await connection.query("ANALYZE TABLE kz_maps");
   await connection.query("ANALYZE TABLE kz_servers");
   await connection.query("ANALYZE TABLE kz_map_statistics");
+  await connection.query("ANALYZE TABLE kz_server_statistics");
   await connection.query("ANALYZE TABLE kz_player_statistics");
 
   console.log("✓ Table analysis complete");
@@ -172,10 +188,11 @@ async function showStatistics(connection) {
   console.log("\nTable Sizes:");
   let totalSize = 0;
   sizes.forEach(({ table_name, size_mb }) => {
+    const sizeMb = size_mb || 0;
     console.log(
-      `  ${table_name.padEnd(30)} ${size_mb.toLocaleString().padStart(10)} MB`,
+      `  ${(table_name || 'unknown').padEnd(30)} ${sizeMb.toLocaleString().padStart(10)} MB`,
     );
-    totalSize += parseFloat(size_mb);
+    totalSize += parseFloat(sizeMb);
   });
   console.log(
     `  ${"TOTAL".padEnd(30)} ${totalSize.toFixed(2).padStart(10)} MB`,
@@ -197,10 +214,10 @@ async function showStatistics(connection) {
 
   topPlayers.forEach((player, index) => {
     console.log(
-      `  ${(index + 1).toString().padStart(2)}. ${player.player_name.padEnd(25)} ` +
-        `Records: ${player.total_records.toLocaleString().padStart(7)} | ` +
-        `WRs: ${player.world_records.toString().padStart(4)} | ` +
-        `Hours: ${player.total_hours.toLocaleString()}`,
+      `  ${(index + 1).toString().padStart(2)}. ${(player.player_name || 'Unknown').padEnd(25)} ` +
+        `Records: ${(player.total_records || 0).toLocaleString().padStart(7)} | ` +
+        `WRs: ${(player.world_records || 0).toString().padStart(4)} | ` +
+        `Hours: ${(player.total_hours || 0).toLocaleString()}`,
     );
   });
 
@@ -214,17 +231,39 @@ async function showStatistics(connection) {
             ms.world_record_time
         FROM kz_map_statistics ms
         JOIN kz_maps m ON ms.map_id = m.id
-        WHERE ms.mode = 'kz_timer' AND ms.stage = 0
         ORDER BY ms.total_records DESC
         LIMIT 10
     `);
 
   topMaps.forEach((map, index) => {
     console.log(
-      `  ${(index + 1).toString().padStart(2)}. ${map.map_name.padEnd(30)} ` +
-        `Records: ${map.total_records.toLocaleString().padStart(6)} | ` +
-        `Players: ${map.unique_players.toLocaleString().padStart(5)} | ` +
-        `WR: ${map.world_record_time.toFixed(3)}s`,
+      `  ${(index + 1).toString().padStart(2)}. ${(map.map_name || 'Unknown').padEnd(30)} ` +
+        `Records: ${(map.total_records || 0).toLocaleString().padStart(6)} | ` +
+        `Players: ${(map.unique_players || 0).toLocaleString().padStart(5)} | ` +
+        `WR: ${map.world_record_time ? map.world_record_time.toFixed(3) + "s" : "N/A"}`,
+    );
+  });
+
+  // Top servers by records
+  console.log("\nTop 10 Servers by Record Count:");
+  const [topServers] = await connection.query(`
+        SELECT 
+            s.server_name,
+            ss.total_records,
+            ss.unique_players,
+            ss.unique_maps
+        FROM kz_server_statistics ss
+        JOIN kz_servers s ON ss.server_id = s.id
+        ORDER BY ss.total_records DESC
+        LIMIT 10
+    `);
+
+  topServers.forEach((server, index) => {
+    console.log(
+      `  ${(index + 1).toString().padStart(2)}. ${(server.server_name || 'Unknown').padEnd(30)} ` +
+        `Records: ${(server.total_records || 0).toLocaleString().padStart(6)} | ` +
+        `Players: ${(server.unique_players || 0).toLocaleString().padStart(5)} | ` +
+        `Maps: ${(server.unique_maps || 0).toLocaleString()}`,
     );
   });
 
@@ -232,6 +271,12 @@ async function showStatistics(connection) {
 }
 
 async function main() {
+  const args = process.argv.slice(2);
+  const isPopulate = args.includes("--populate");
+  const isPlayersOnly = args.includes("--players");
+  const isMapsOnly = args.includes("--maps");
+  const isServersOnly = args.includes("--servers");
+
   console.log("KZ Records Statistics Update");
   console.log(`Database: ${DB_CONFIG.host}/${DB_CONFIG.database}\n`);
 
@@ -241,14 +286,39 @@ async function main() {
   try {
     const startTime = Date.now();
 
-    await updateMapStatistics(connection);
-    await updatePlayerStatistics(connection);
-    await updateWorldRecords(connection);
-    await countWorldRecords(connection);
+    if (isPopulate) {
+      // Initial population mode
+      if (isPlayersOnly || isMapsOnly || isServersOnly) {
+        // Selective population
+        console.log("Selective initial population...\n");
+        if (isPlayersOnly) await populatePlayerStatistics(connection);
+        if (isMapsOnly) await populateMapStatistics(connection);
+        if (isServersOnly) await populateServerStatistics(connection);
+      } else {
+        // Populate all
+        await populateAllStatistics(connection);
+      }
+    } else if (isPlayersOnly) {
+      // Update only players
+      await updatePlayerStatistics(connection);
+    } else if (isMapsOnly) {
+      // Update only maps
+      await updateMapStatistics(connection);
+    } else if (isServersOnly) {
+      // Update only servers
+      await updateServerStatistics(connection);
+    } else {
+      // Update all
+      console.log("Updating all statistics tables...\n");
+      await updatePlayerStatistics(connection);
+      await updateMapStatistics(connection);
+      await updateServerStatistics(connection);
+    }
+
     await analyzeTables(connection);
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`\n✓ All statistics updated successfully in ${elapsed}s`);
+    console.log(`\n✓ Statistics updated successfully in ${elapsed}s`);
 
     await showStatistics(connection);
   } catch (error) {
@@ -272,8 +342,11 @@ if (require.main === module) {
 
 module.exports = {
   updateMapStatistics,
+  updateServerStatistics,
   updatePlayerStatistics,
-  updateWorldRecords,
-  countWorldRecords,
+  populateAllStatistics,
+  populateMapStatistics,
+  populateServerStatistics,
+  populatePlayerStatistics,
   showStatistics,
 };
