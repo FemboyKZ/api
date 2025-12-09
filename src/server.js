@@ -5,7 +5,7 @@ const logger = require("./utils/logger");
 const { validateEnvironment } = require("./utils/envValidator");
 const { initDatabase, closeDatabase } = require("./db");
 const { initKzDatabase, closeKzDatabase } = require("./db/kzRecords");
-const { initKzLocalDatabase, closeKzLocalDatabase } = require("./db/kzLocal");
+const { initAllKzLocalDatabases, closeAllKzLocalDatabases } = require("./db/kzLocal");
 const { startUpdateLoop } = require("./services/updater");
 const { startAvatarUpdateJob } = require("./services/steamQuery");
 const { startScraperJob } = require("./services/kzRecordsScraper");
@@ -35,9 +35,9 @@ async function startServer() {
     logger.info("Initializing KZ Records database connection...");
     await initKzDatabase();
 
-    // Step 2b: Initialize FKZ Local Records database (if scraper enabled)
-    logger.info("Initializing FKZ Local Records database connection...");
-    await initKzLocalDatabase();
+    // Step 2b: Initialize FKZ Local Records database
+    logger.info("Initializing FKZ Local Records database connections...");
+    await initAllKzLocalDatabases();
 
     // Step 3: Initialize Redis (optional)
     logger.info("Initializing Redis...");
@@ -124,7 +124,7 @@ async function gracefulShutdown(signal) {
     logger.info("Closing database connections...");
     await closeDatabase();
     await closeKzDatabase();
-    await closeKzLocalDatabase();
+    await closeAllKzLocalDatabases();
 
     // Step 3: Close HTTP server
     logger.info("Closing HTTP server...");

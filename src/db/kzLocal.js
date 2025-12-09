@@ -226,6 +226,15 @@ async function initKzLocalCSGO64Database() {
 }
 
 /**
+ *  Initialize all KZ local database connections
+ */
+async function initAllKzLocalDatabases() {
+  await initKzLocalCS2Database();
+  await initKzLocalCSGO128Database();
+  await initKzLocalCSGO64Database();
+}
+
+/**
  * Close KZ local database pool gracefully
  */
 async function closeKzLocalCS2Database() {
@@ -253,6 +262,15 @@ async function closeKzLocalCSGO64Database() {
     await kzLocalCSGO64Pool.end();
     logger.info("KZ Local CSGO64 database connection pool closed");
   }
+}
+
+/** 
+ * Close all KZ local database pools gracefully
+ */
+async function closeAllKzLocalDatabases() {
+  await closeKzLocalCS2Database();
+  await closeKzLocalCSGO128Database();
+  await closeKzLocalCSGO64Database();
 }
 
 /**
@@ -285,13 +303,25 @@ function getKzLocalCSGO64Pool() {
   return kzLocalCSGO64Pool;
 }
 
+function getAllKzLocalPools() {
+  return {
+    cs2: getKzLocalCS2Pool(),
+    csgo128: getKzLocalCSGO128Pool(),
+    csgo64: getKzLocalCSGO64Pool(),
+  };
+}
+
+
 module.exports = {
+  getAllKzLocalPools,
   getKzLocalCS2Pool,
   getKzLocalCSGO128Pool,
   getKzLocalCSGO64Pool,
+  initAllKzLocalDatabases,
   initKzLocalCS2Database,
   initKzLocalCSGO128Database,
   initKzLocalCSGO64Database,
+  closeAllKzLocalDatabases,
   closeKzLocalCS2Database,
   closeKzLocalCSGO128Database,
   closeKzLocalCSGO64Database,
