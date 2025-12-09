@@ -34,7 +34,7 @@ const { sanitizePlayerName } = require("../utils/validators");
  */
 async function queryRcon(ip, port, password, game) {
   if (!password) {
-    logger.debug(`No RCON password configured for ${ip}:${port}`);
+    logger.warn(`No RCON password configured for ${ip}:${port}`);
     return null;
   }
 

@@ -19,7 +19,7 @@ async function querySteamMaster(ip, port, game) {
   const STEAM_API_KEY = process.env.STEAM_API_KEY;
 
   if (!STEAM_API_KEY) {
-    logger.debug(
+    logger.warn(
       "STEAM_API_KEY not configured - cannot query Steam Master Server",
     );
     return null;
@@ -80,7 +80,7 @@ async function querySteamMaster(ip, port, game) {
       players: [], // Steam Master Server doesn't provide player list with names/IDs
     };
 
-    logger.info(
+    logger.debug(
       `Steam Master Server query successful: ${ip}:${port} - ${result.playerCount}/${result.maxplayers} players on ${result.map}`,
     );
 

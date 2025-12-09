@@ -34,7 +34,7 @@ const { querySteamMaster } = require("./steamMasterQuery");
  */
 async function queryServer(ip, port, game, rconPort, rconPassword) {
   try {
-    logger.info(`Querying ${ip}:${port} (${game})`);
+    logger.debug(`Querying ${ip}:${port} (${game})`);
 
     // STRATEGY 1: Try Steam Master Server first (most reliable)
     let result = await querySteamMaster(ip, port, game);
@@ -68,7 +68,7 @@ async function queryServer(ip, port, game, rconPort, rconPassword) {
           ping: state.ping || 0,
         };
         dataSource = "gamedig";
-        logger.info(
+        logger.debug(
           `GameDig query successful: ${ip}:${port} - ${result.playerCount} players`,
         );
       } catch (gamedigError) {
@@ -117,7 +117,7 @@ async function queryServer(ip, port, game, rconPort, rconPassword) {
       result.bots = rconData.serverInfo.botCount || 0;
     }
 
-    logger.info(
+    logger.debug(
       `Server query successful [${dataSource}]: ${ip}:${port} - ${result.playerCount}/${result.maxplayers} players on ${result.map}`,
     );
 
