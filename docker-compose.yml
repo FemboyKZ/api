@@ -66,6 +66,7 @@ services:
     user: mysql
     tty: true
     stdin_open: true
+
   # MariaDB Database - KZ Records
   mariadb-kz:
     image: mariadb:latest
@@ -133,6 +134,7 @@ services:
     user: mysql
     tty: true
     stdin_open: true
+
   # Redis Cache (Optional)
   redis:
     image: redis:8-alpine
@@ -154,6 +156,7 @@ services:
         max-file: "3"
     tty: true
     stdin_open: true
+
   # API Server
   api:
     build:
@@ -163,25 +166,39 @@ services:
     restart: unless-stopped
     network_mode: host
     environment:
+      # server config
       NODE_ENV: production
       DEBUG: ${DEBUG:-false}
       PORT: 3000
       HOST: ${HOST:-127.0.0.1}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+
+      # redis config
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: ${REDIS_PORT:-6379}
+
+      # api keys and urls
+      STEAM_API_KEY: ${STEAM_API_KEY}
+      CS2KZ_API_URL: ${CS2KZ_API_URL:-https://api.cs2kz.org}
+      GOKZ_API_URL: ${GOKZ_API_URL:-https://kztimerglobal.com/api/v2}
+
+      # database config
       DB_HOST: 127.0.0.1
       DB_PORT: 3307
       DB_USER: ${DB_USER:-apiuser}
       DB_PASSWORD: ${DB_PASSWORD:-apipassword}
       DB_NAME: ${DB_NAME:-server_api}
+
+      # kz records database config
       KZ_DB_HOST: 127.0.0.1
       KZ_DB_PORT: 3308
       KZ_DB_USER: ${KZ_DB_USER:-kz_user}
       KZ_DB_PASSWORD: ${KZ_DB_PASSWORD:-kz_password}
       KZ_DB_NAME: ${KZ_DB_NAME:-kz_records}
-      KZ_LOCAL_DB_HOST: ${KZ_LOCAL_DB_HOST:-127.0.0.1}
-      KZ_LOCAL_DB_PORT: ${KZ_LOCAL_DB_PORT:-3306}
-      KZ_LOCAL_DB_USER: ${KZ_LOCAL_DB_USER}
-      KZ_LOCAL_DB_PASSWORD: ${KZ_LOCAL_DB_PASSWORD}
-      KZ_LOCAL_DB_NAME: ${KZ_LOCAL_DB_NAME}
+
+      # kz records scraper config
       KZ_SCRAPER_ENABLED: ${KZ_SCRAPER_ENABLED:-false}
       KZ_SCRAPER_CONCURRENCY: ${KZ_SCRAPER_CONCURRENCY:-5}
       KZ_SCRAPER_INTERVAL: ${KZ_SCRAPER_INTERVAL:-3600}
@@ -191,17 +208,28 @@ services:
       KZ_SCRAPER_PROXIES: ${KZ_SCRAPER_PROXIES}
       KZ_BAN_CLEANUP_ENABLED: ${KZ_BAN_CLEANUP_ENABLED:-true}
       KZ_BAN_CLEANUP_INTERVAL: ${KZ_BAN_CLEANUP_INTERVAL:-3600000}
-      REDIS_ENABLED: ${REDIS_ENABLED:-true}
-      REDIS_HOST: 127.0.0.1
-      REDIS_PORT: ${REDIS_PORT:-6379}
-      STEAM_API_KEY: ${STEAM_API_KEY}
-      CS2KZ_API_URL: ${CS2KZ_API_URL:-https://api.cs2kz.org}
-      GOKZ_API_URL: ${GOKZ_API_URL:-https://kztimerglobal.com/api/v2}
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
-      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+
+      # discord webhook config
       DISCORD_WEBHOOK_ENABLED: ${DISCORD_WEBHOOK_ENABLED:-false}
       DISCORD_WEBHOOK_CSGO: ${DISCORD_WEBHOOK_CSGO}
       DISCORD_WEBHOOK_CS2: ${DISCORD_WEBHOOK_CS2}
+
+      # local kz records databases config
+      KZ_LOCAL_CS2_DB_HOST: ${KZ_LOCAL_CS2_DB_HOST:-127.0.0.1}
+      KZ_LOCAL_CS2_DB_PORT: ${KZ_LOCAL_CS2_DB_PORT:-3306}
+      KZ_LOCAL_CS2_DB_USER: ${KZ_LOCAL_CS2_DB_USER}
+      KZ_LOCAL_CS2_DB_PASSWORD: ${KZ_LOCAL_CS2_DB_PASSWORD}
+      KZ_LOCAL_CS2_DB_NAME: ${KZ_LOCAL_CS2_DB_NAME}
+      KZ_LOCAL_CSGO128_DB_HOST: ${KZ_LOCAL_CSGO128_DB_HOST:-127.0.0.1}
+      KZ_LOCAL_CSGO128_DB_PORT: ${KZ_LOCAL_CSGO128_DB_PORT:-3306}
+      KZ_LOCAL_CSGO128_DB_USER: ${KZ_LOCAL_CSGO128_DB_USER}
+      KZ_LOCAL_CSGO128_DB_PASSWORD: ${KZ_LOCAL_CSGO128_DB_PASSWORD}
+      KZ_LOCAL_CSGO128_DB_NAME: ${KZ_LOCAL_CSGO128_DB_NAME}
+      KZ_LOCAL_CSGO64_DB_HOST: ${KZ_LOCAL_CSGO64_DB_HOST:-127.0.0.1}
+      KZ_LOCAL_CSGO64_DB_PORT: ${KZ_LOCAL_CSGO64_DB_PORT:-3306}
+      KZ_LOCAL_CSGO64_DB_USER: ${KZ_LOCAL_CSGO64_DB_USER}
+      KZ_LOCAL_CSGO64_DB_PASSWORD: ${KZ_LOCAL_CSGO64_DB_PASSWORD}
+      KZ_LOCAL_CSGO64_DB_NAME: ${KZ_LOCAL_CSGO64_DB_NAME}
     depends_on:
       mariadb:
         condition: service_healthy
