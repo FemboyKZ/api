@@ -35,11 +35,11 @@ function createKzLocalCS2Pool() {
  */
 function createKzLocalCSGO128Pool() {
   return mysql.createPool({
-    host: process.env.KZ_LOCAL_CSGO_128_DB_HOST || "localhost",
-    port: process.env.KZ_LOCAL_CSGO_128_DB_PORT || 3306,
-    user: process.env.KZ_LOCAL_CSGO_128_DB_USER || "kz_user",
-    password: process.env.KZ_LOCAL_CSGO_128_DB_PASSWORD || "kz_password",
-    database: process.env.KZ_LOCAL_CSGO_128_DB_NAME || "kz_records",
+    host: process.env.KZ_LOCAL_CSGO128_DB_HOST || "localhost",
+    port: process.env.KZ_LOCAL_CSGO128_DB_PORT || 3306,
+    user: process.env.KZ_LOCAL_CSGO128_DB_USER || "kz_user",
+    password: process.env.KZ_LOCAL_CSGO128_DB_PASSWORD || "kz_password",
+    database: process.env.KZ_LOCAL_CSGO128_DB_NAME || "kz_records",
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
@@ -56,11 +56,11 @@ function createKzLocalCSGO128Pool() {
  */
 function createKzLocalCSGO64Pool() {
   return mysql.createPool({
-    host: process.env.KZ_LOCAL_CSGO_64_DB_HOST || "localhost",
-    port: process.env.KZ_LOCAL_CSGO_64_DB_PORT || 3306,
-    user: process.env.KZ_LOCAL_CSGO_64_DB_USER || "kz_user",
-    password: process.env.KZ_LOCAL_CSGO_64_DB_PASSWORD || "kz_password",
-    database: process.env.KZ_LOCAL_CSGO_64_DB_NAME || "kz_records",
+    host: process.env.KZ_LOCAL_CSGO64_DB_HOST || "localhost",
+    port: process.env.KZ_LOCAL_CSGO64_DB_PORT || 3306,
+    user: process.env.KZ_LOCAL_CSGO64_DB_USER || "kz_user",
+    password: process.env.KZ_LOCAL_CSGO64_DB_PASSWORD || "kz_password",
+    database: process.env.KZ_LOCAL_CSGO64_DB_NAME || "kz_records",
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,

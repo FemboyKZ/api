@@ -104,12 +104,17 @@ describe("Admin Endpoints", () => {
   });
 
   describe("POST /admin/cleanup-history", () => {
+    beforeEach(() => {
+      // Explicitly reset pool.query mock before each cleanup-history test
+      pool.query.mockReset();
+    });
+
     it("should cleanup old history records", async () => {
-      // Mock all three DELETE queries - pool.query returns [[result], fields]
+      // Mock all three DELETE queries - pool.query returns [result, fields] and code destructures [result]
       pool.query
-        .mockResolvedValueOnce([{ affectedRows: 100 }])
-        .mockResolvedValueOnce([{ affectedRows: 50 }])
-        .mockResolvedValueOnce([{ affectedRows: 25 }]);
+        .mockResolvedValueOnce([{ affectedRows: 100 }, null])
+        .mockResolvedValueOnce([{ affectedRows: 50 }, null])
+        .mockResolvedValueOnce([{ affectedRows: 25 }, null]);
 
       const response = await request(app)
         .post("/admin/cleanup-history")
@@ -125,9 +130,9 @@ describe("Admin Endpoints", () => {
 
     it("should handle custom retention days", async () => {
       pool.query
-        .mockResolvedValueOnce([{ affectedRows: 200 }])
-        .mockResolvedValueOnce([{ affectedRows: 100 }])
-        .mockResolvedValueOnce([{ affectedRows: 50 }]);
+        .mockResolvedValueOnce([{ affectedRows: 200 }, null])
+        .mockResolvedValueOnce([{ affectedRows: 100 }, null])
+        .mockResolvedValueOnce([{ affectedRows: 50 }, null]);
 
       const response = await request(app)
         .post("/admin/cleanup-history?days=60")

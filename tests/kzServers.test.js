@@ -119,14 +119,14 @@ describe("KZ Servers Endpoints", () => {
     it("should sort by total records", async () => {
       mockPool.query
         .mockResolvedValueOnce([[{ total: 0 }]])
-        .mockResolvedValueOnce([[]]);
+        .mockResolvedValueOnce([[]]);          
 
       await request(app)
         .get("/kzglobal/servers?sort=records&order=desc")
         .expect(200);
 
       const call = mockPool.query.mock.calls[1];
-      expect(call[0]).toContain("ORDER BY total_records DESC");
+      expect(call[0]).toContain("COALESCE(ss.total_records, 0) DESC");
     });
   });
 
@@ -179,6 +179,7 @@ describe("KZ Servers Endpoints", () => {
 
   describe("GET /kzglobal/servers/:id", () => {
     it("should return server details with statistics", async () => {
+      // First query returns server with joined statistics
       mockPool.query
         .mockResolvedValueOnce([
           [
@@ -191,12 +192,6 @@ describe("KZ Servers Endpoints", () => {
               owner_steamid64: "76561198000000001",
               created_on: "2024-01-01T00:00:00Z",
               approval_status: 1,
-            },
-          ],
-        ])
-        .mockResolvedValueOnce([
-          [
-            {
               total_records: 5000,
               unique_players: 500,
               unique_maps: 150,
@@ -205,6 +200,7 @@ describe("KZ Servers Endpoints", () => {
             },
           ],
         ])
+        // Second query returns mode breakdown
         .mockResolvedValueOnce([
           [
             {
@@ -221,6 +217,7 @@ describe("KZ Servers Endpoints", () => {
             },
           ],
         ])
+        // Third query returns recent records
         .mockResolvedValueOnce([[]]);
 
       const response = await request(app)
@@ -247,9 +244,12 @@ describe("KZ Servers Endpoints", () => {
 
   describe("GET /kzglobal/servers/:id/records", () => {
     it("should return paginated records from a server", async () => {
+      // First query checks if server exists (by server_id)
       mockPool.query
         .mockResolvedValueOnce([[{ id: 1 }]])
+        // Second query counts total records
         .mockResolvedValueOnce([[{ total: 100 }]])
+        // Third query returns the records
         .mockResolvedValueOnce([
           [
             {
@@ -319,7 +319,8 @@ describe("KZ Servers Endpoints", () => {
     });
 
     it("should return 404 for non-existent server", async () => {
-      mockPool.query.mockResolvedValueOnce([[]]);
+      // Server check returns empty array (no server found)
+      mockPool.query.mockResolvedValueOnce([[]]);          
 
       await request(app).get("/kzglobal/servers/999999/records").expect(404);
     });
