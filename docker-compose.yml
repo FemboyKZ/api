@@ -184,6 +184,11 @@ services:
       CS2KZ_API_URL: ${CS2KZ_API_URL:-https://api.cs2kz.org}
       GOKZ_API_URL: ${GOKZ_API_URL:-https://kztimerglobal.com/api/v2}
 
+      # admin auth config
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      ADMIN_IP_WHITELIST: ${ADMIN_IP_WHITELIST}
+      ADMIN_LOCALHOST_ALLOWED: ${ADMIN_LOCALHOST_ALLOWED:-false}
+
       # database config
       DB_HOST: 127.0.0.1
       DB_PORT: 3307
@@ -197,6 +202,9 @@ services:
       KZ_DB_USER: ${KZ_DB_USER:-kz_user}
       KZ_DB_PASSWORD: ${KZ_DB_PASSWORD:-kz_password}
       KZ_DB_NAME: ${KZ_DB_NAME:-kz_records}
+
+      # kz stats update interval
+      KZ_STATS_INTERVAL: ${KZ_STATS_INTERVAL:-21600000} # 6 hours (in milliseconds)
 
       # kz records scraper config
       KZ_SCRAPER_ENABLED: ${KZ_SCRAPER_ENABLED:-false}
