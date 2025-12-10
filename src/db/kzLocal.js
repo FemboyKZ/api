@@ -114,7 +114,9 @@ async function testKzLocalCSGO128Connection() {
     retryCount = 0; // Reset retry count on success
     return true;
   } catch (error) {
-    logger.error(`KZ Local CSGO128 database connection failed: ${error.message}`);
+    logger.error(
+      `KZ Local CSGO128 database connection failed: ${error.message}`,
+    );
     if (retryCount < MAX_RETRIES) {
       retryCount++;
       logger.info(
@@ -144,7 +146,9 @@ async function testKzLocalCSGO64Connection() {
     retryCount = 0; // Reset retry count on success
     return true;
   } catch (error) {
-    logger.error(`KZ Local CSGO64 database connection failed: ${error.message}`);
+    logger.error(
+      `KZ Local CSGO64 database connection failed: ${error.message}`,
+    );
     if (retryCount < MAX_RETRIES) {
       retryCount++;
       logger.info(
@@ -264,7 +268,7 @@ async function closeKzLocalCSGO64Database() {
   }
 }
 
-/** 
+/**
  * Close all KZ local database pools gracefully
  */
 async function closeAllKzLocalDatabases() {
@@ -310,7 +314,6 @@ function getAllKzLocalPools() {
     csgo64: getKzLocalCSGO64Pool(),
   };
 }
-
 
 module.exports = {
   getAllKzLocalPools,

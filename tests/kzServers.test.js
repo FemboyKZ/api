@@ -119,7 +119,7 @@ describe("KZ Servers Endpoints", () => {
     it("should sort by total records", async () => {
       mockPool.query
         .mockResolvedValueOnce([[{ total: 0 }]])
-        .mockResolvedValueOnce([[]]);          
+        .mockResolvedValueOnce([[]]);
 
       await request(app)
         .get("/kzglobal/servers?sort=records&order=desc")
@@ -320,7 +320,7 @@ describe("KZ Servers Endpoints", () => {
 
     it("should return 404 for non-existent server", async () => {
       // Server check returns empty array (no server found)
-      mockPool.query.mockResolvedValueOnce([[]]);          
+      mockPool.query.mockResolvedValueOnce([[]]);
 
       await request(app).get("/kzglobal/servers/999999/records").expect(404);
     });

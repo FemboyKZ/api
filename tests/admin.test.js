@@ -41,7 +41,7 @@ jest.mock("../src/services/kzStatistics", () => ({
 describe("Admin Endpoints", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     // Reset kzStatistics mocks with default implementations
     kzStatistics.refreshAllStatistics.mockResolvedValue({
       players: true,

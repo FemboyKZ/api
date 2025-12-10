@@ -5,7 +5,10 @@ const logger = require("./utils/logger");
 const { validateEnvironment } = require("./utils/envValidator");
 const { initDatabase, closeDatabase } = require("./db");
 const { initKzDatabase, closeKzDatabase } = require("./db/kzRecords");
-const { initAllKzLocalDatabases, closeAllKzLocalDatabases } = require("./db/kzLocal");
+const {
+  initAllKzLocalDatabases,
+  closeAllKzLocalDatabases,
+} = require("./db/kzLocal");
 const { startUpdateLoop } = require("./services/updater");
 const { startAvatarUpdateJob } = require("./services/steamQuery");
 const { startScraperJob } = require("./services/kzRecordsScraper");

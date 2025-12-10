@@ -73,7 +73,7 @@ const limiter = rateLimit({
   message: { error: "Too many requests, please try again later." },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  validate: {trustProxy: false},
+  validate: { trustProxy: false },
   // Skip rate limiting in test environment
   skip: () => process.env.NODE_ENV === "test",
 });

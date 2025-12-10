@@ -278,13 +278,15 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
     const server = servers[0];
 
     // Stats are already in the server object from the statistics table
-    const stats = [{
-      total_records: server.total_records,
-      unique_players: server.unique_players,
-      unique_maps: server.unique_maps,
-      first_record: server.first_record,
-      last_record: server.last_record
-    }];
+    const stats = [
+      {
+        total_records: server.total_records,
+        unique_players: server.unique_players,
+        unique_maps: server.unique_maps,
+        first_record: server.first_record,
+        last_record: server.last_record,
+      },
+    ];
 
     // Get mode breakdown
     const [modeStats] = await pool.query(

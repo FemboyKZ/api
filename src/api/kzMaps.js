@@ -400,15 +400,17 @@ router.get(
         [map.id],
       );
 
-      const stats = [{
-        total_records: map.total_records,
-        unique_players: map.unique_players,
-        world_record: map.world_record,
-        average_time: map.average_time,
-        worst_time: worstTime[0]?.worst_time,
-        first_record: map.first_record,
-        last_record: map.last_record
-      }];
+      const stats = [
+        {
+          total_records: map.total_records,
+          unique_players: map.unique_players,
+          world_record: map.world_record,
+          average_time: map.average_time,
+          worst_time: worstTime[0]?.worst_time,
+          first_record: map.first_record,
+          last_record: map.last_record,
+        },
+      ];
 
       // Get mode breakdown (excluding banned players)
       const [modeStats] = await pool.query(

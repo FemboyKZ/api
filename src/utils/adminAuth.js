@@ -203,13 +203,15 @@ function adminAuth(req, res, next) {
   // Different message based on whether API key is configured
   if (!ADMIN_API_KEY) {
     return res.status(403).json({
-      error: "Admin access not configured. Set ADMIN_API_KEY environment variable.",
+      error:
+        "Admin access not configured. Set ADMIN_API_KEY environment variable.",
       code: "ADMIN_NOT_CONFIGURED",
     });
   }
 
   return res.status(401).json({
-    error: "Authentication required. Provide API key via Authorization header or X-API-Key.",
+    error:
+      "Authentication required. Provide API key via Authorization header or X-API-Key.",
     code: "AUTH_REQUIRED",
   });
 }

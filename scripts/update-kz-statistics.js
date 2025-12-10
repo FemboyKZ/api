@@ -2,7 +2,7 @@
  * Update KZ Records Statistics Tables
  * Rebuilds aggregated statistics for faster queries
  *
- * Usage: 
+ * Usage:
  *   node scripts/update-kz-statistics.js              # Update all statistics
  *   node scripts/update-kz-statistics.js --players    # Update only player stats
  *   node scripts/update-kz-statistics.js --maps       # Update only map stats
@@ -190,7 +190,7 @@ async function showStatistics(connection) {
   sizes.forEach(({ table_name, size_mb }) => {
     const sizeMb = size_mb || 0;
     console.log(
-      `  ${(table_name || 'unknown').padEnd(30)} ${sizeMb.toLocaleString().padStart(10)} MB`,
+      `  ${(table_name || "unknown").padEnd(30)} ${sizeMb.toLocaleString().padStart(10)} MB`,
     );
     totalSize += parseFloat(sizeMb);
   });
@@ -215,11 +215,12 @@ async function showStatistics(connection) {
 
   topPlayers.forEach((player, index) => {
     // Show steamid64 if name is unknown
-    const displayName = player.player_name && !player.player_name.startsWith('Unknown Player') 
-      ? player.player_name 
-      : player.steamid64;
+    const displayName =
+      player.player_name && !player.player_name.startsWith("Unknown Player")
+        ? player.player_name
+        : player.steamid64;
     console.log(
-      `  ${(index + 1).toString().padStart(2)}. ${(displayName || 'Unknown').padEnd(25)} ` +
+      `  ${(index + 1).toString().padStart(2)}. ${(displayName || "Unknown").padEnd(25)} ` +
         `Records: ${(player.total_records || 0).toLocaleString().padStart(7)} | ` +
         `WRs: ${(player.world_records || 0).toString().padStart(4)} | ` +
         `Hours: ${(player.total_hours || 0).toLocaleString()}`,
@@ -241,9 +242,11 @@ async function showStatistics(connection) {
     `);
 
   topMaps.forEach((map, index) => {
-    const wrTime = map.world_record_time ? parseFloat(map.world_record_time).toFixed(3) + "s" : "N/A";
+    const wrTime = map.world_record_time
+      ? parseFloat(map.world_record_time).toFixed(3) + "s"
+      : "N/A";
     console.log(
-      `  ${(index + 1).toString().padStart(2)}. ${(map.map_name || 'Unknown').padEnd(30)} ` +
+      `  ${(index + 1).toString().padStart(2)}. ${(map.map_name || "Unknown").padEnd(30)} ` +
         `Records: ${(map.total_records || 0).toLocaleString().padStart(6)} | ` +
         `Players: ${(map.unique_players || 0).toLocaleString().padStart(5)} | ` +
         `WR: ${wrTime}`,
@@ -266,7 +269,7 @@ async function showStatistics(connection) {
 
   topServers.forEach((server, index) => {
     console.log(
-      `  ${(index + 1).toString().padStart(2)}. ${(server.server_name || 'Unknown').padEnd(30)} ` +
+      `  ${(index + 1).toString().padStart(2)}. ${(server.server_name || "Unknown").padEnd(30)} ` +
         `Records: ${(server.total_records || 0).toLocaleString().padStart(6)} | ` +
         `Players: ${(server.unique_players || 0).toLocaleString().padStart(5)} | ` +
         `Maps: ${(server.unique_maps || 0).toLocaleString()}`,

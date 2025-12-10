@@ -27,7 +27,9 @@ describe("Admin Auth Utilities", () => {
   describe("getClientIP", () => {
     it("should extract IP from X-Forwarded-For header", () => {
       const req = {
-        headers: { "x-forwarded-for": "203.0.113.195, 70.41.3.18, 150.172.238.178" },
+        headers: {
+          "x-forwarded-for": "203.0.113.195, 70.41.3.18, 150.172.238.178",
+        },
         socket: { remoteAddress: "127.0.0.1" },
       };
       expect(getClientIP(req)).toBe("203.0.113.195");
@@ -122,7 +124,7 @@ describe("Admin Auth Middleware", () => {
     it("should reject requests when no API key is configured and not localhost", () => {
       // Force production mode to disable localhost access
       process.env.NODE_ENV = "production";
-      
+
       // Re-require the module to pick up new env vars
       jest.resetModules();
       const { adminAuth: freshAdminAuth } = require("../src/utils/adminAuth");
@@ -131,7 +133,7 @@ describe("Admin Auth Middleware", () => {
 
       expect(mockRes.status).toHaveBeenCalledWith(403);
       expect(mockRes.json).toHaveBeenCalledWith(
-        expect.objectContaining({ code: "ADMIN_NOT_CONFIGURED" })
+        expect.objectContaining({ code: "ADMIN_NOT_CONFIGURED" }),
       );
       expect(mockNext).not.toHaveBeenCalled();
     });
@@ -147,7 +149,7 @@ describe("Admin Auth Middleware", () => {
 
       expect(mockNext).toHaveBeenCalled();
       expect(mockReq.adminAuth).toEqual(
-        expect.objectContaining({ method: "api_key" })
+        expect.objectContaining({ method: "api_key" }),
       );
     });
 
@@ -187,7 +189,7 @@ describe("Admin Auth Middleware", () => {
 
       expect(mockRes.status).toHaveBeenCalledWith(401);
       expect(mockRes.json).toHaveBeenCalledWith(
-        expect.objectContaining({ code: "INVALID_API_KEY" })
+        expect.objectContaining({ code: "INVALID_API_KEY" }),
       );
     });
 
@@ -202,7 +204,7 @@ describe("Admin Auth Middleware", () => {
 
       expect(mockNext).toHaveBeenCalled();
       expect(mockReq.adminAuth).toEqual(
-        expect.objectContaining({ method: "localhost" })
+        expect.objectContaining({ method: "localhost" }),
       );
     });
   });
@@ -211,7 +213,9 @@ describe("Admin Auth Middleware", () => {
     it("should set isAdmin to false when not authenticated", () => {
       process.env.NODE_ENV = "production";
       jest.resetModules();
-      const { optionalAdminAuth: freshOptionalAdminAuth } = require("../src/utils/adminAuth");
+      const {
+        optionalAdminAuth: freshOptionalAdminAuth,
+      } = require("../src/utils/adminAuth");
 
       freshOptionalAdminAuth(mockReq, mockRes, mockNext);
 
@@ -222,7 +226,9 @@ describe("Admin Auth Middleware", () => {
     it("should set isAdmin to true when API key is valid", () => {
       process.env.ADMIN_API_KEY = "test-secret-key-12345";
       jest.resetModules();
-      const { optionalAdminAuth: freshOptionalAdminAuth } = require("../src/utils/adminAuth");
+      const {
+        optionalAdminAuth: freshOptionalAdminAuth,
+      } = require("../src/utils/adminAuth");
 
       mockReq.headers.authorization = "Bearer test-secret-key-12345";
 
