@@ -1,0 +1,63 @@
+{
+  "name": "server-api",
+  "version": "1.0.0",
+  "description": "Game server tracking API with real-time updates",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "test:ci": "jest --ci --coverage --maxWorkers=2",
+    "lint": "eslint src/**/*.js",
+    "lint:fix": "eslint src/**/*.js --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "docker:build": "docker build -t server-api .",
+    "docker:run": "docker run -p 3000:3000 --env-file .env server-api",
+    "docker:compose": "docker compose up -d",
+    "docker:compose:down": "docker compose down",
+    "docker:compose:logs": "docker compose logs -f api",
+    "admin:aggregate": "curl -X POST http://localhost:3000/admin/aggregate-daily",
+    "admin:cleanup": "curl -X POST http://localhost:3000/admin/cleanup-history?days=30"
+  },
+  "dependencies": {
+    "axios": "^1.13.2",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
+    "gamedig": "^5.3.2",
+    "http-proxy-agent": "^7.0.2",
+    "https-proxy-agent": "^7.0.6",
+    "mysql2": "^3.15.3",
+    "rcon-srcds": "^2.1.0",
+    "redis": "^5.10.0",
+    "socket.io": "^4.8.1",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "winston": "^3.19.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.1",
+    "jest": "^30.2.0",
+    "jsdom": "^27.3.0",
+    "nodemon": "^3.1.11",
+    "prettier": "^3.7.4",
+    "supertest": "^7.1.4"
+  },
+  "keywords": [
+    "game-server",
+    "api",
+    "tracking",
+    "websocket",
+    "realtime"
+  ],
+  "author": "jvnipers",
+  "license": "MIT"
+}
