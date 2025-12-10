@@ -20,9 +20,7 @@ function createPool() {
     waitForConnections: true,
     connectionLimit: 50, // Increased from 10 for better concurrency
     queueLimit: 100, // Limit queue to fail fast vs. waiting indefinitely
-    acquireTimeout: 30000, // 30s timeout to acquire connection from pool
     connectTimeout: 60000, // 60 seconds
-    timeout: 60000, // 60 seconds for queries
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
     jsonStrings: false, // Automatically parse JSON columns to objects
