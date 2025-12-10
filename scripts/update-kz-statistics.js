@@ -203,6 +203,7 @@ async function showStatistics(connection) {
   const [topPlayers] = await connection.query(`
         SELECT 
             p.player_name,
+            p.steamid64,
             ps.total_records,
             ps.world_records,
             ROUND(ps.total_playtime / 3600, 2) as total_hours
@@ -213,8 +214,12 @@ async function showStatistics(connection) {
     `);
 
   topPlayers.forEach((player, index) => {
+    // Show steamid64 if name is unknown
+    const displayName = player.player_name && !player.player_name.startsWith('Unknown Player') 
+      ? player.player_name 
+      : player.steamid64;
     console.log(
-      `  ${(index + 1).toString().padStart(2)}. ${(player.player_name || 'Unknown').padEnd(25)} ` +
+      `  ${(index + 1).toString().padStart(2)}. ${(displayName || 'Unknown').padEnd(25)} ` +
         `Records: ${(player.total_records || 0).toLocaleString().padStart(7)} | ` +
         `WRs: ${(player.world_records || 0).toString().padStart(4)} | ` +
         `Hours: ${(player.total_hours || 0).toLocaleString()}`,
@@ -236,11 +241,12 @@ async function showStatistics(connection) {
     `);
 
   topMaps.forEach((map, index) => {
+    const wrTime = map.world_record_time ? parseFloat(map.world_record_time).toFixed(3) + "s" : "N/A";
     console.log(
       `  ${(index + 1).toString().padStart(2)}. ${(map.map_name || 'Unknown').padEnd(30)} ` +
         `Records: ${(map.total_records || 0).toLocaleString().padStart(6)} | ` +
         `Players: ${(map.unique_players || 0).toLocaleString().padStart(5)} | ` +
-        `WR: ${map.world_record_time ? map.world_record_time.toFixed(3) + "s" : "N/A"}`,
+        `WR: ${wrTime}`,
     );
   });
 
