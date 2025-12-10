@@ -222,7 +222,26 @@ mysql -u root -p csmonitor < db/seed.sql
 - Input validation via `validators.js` (sanitizeString, isValidIP, isValidPort)
 - Environment validation on startup via `envValidator.js`
 - Graceful shutdown handling (closes Redis, DB, HTTP server in order)
-- No authentication/authorization implemented - add before production use
+- Admin authentication via `adminAuth.js` middleware (API key, IP whitelist, or localhost)
+
+### Admin Authentication
+
+Admin endpoints (`/admin/*`) are protected by the `adminAuth` middleware with multiple authentication methods:
+
+1. **API Key** (most secure):
+   - Set `ADMIN_API_KEY` in `.env`
+   - Pass via `Authorization: Bearer <key>` header, `X-API-Key` header, or `?api_key=` query param
+   - Use constant-time comparison to prevent timing attacks
+
+2. **IP Whitelist**:
+   - Set `ADMIN_IP_WHITELIST=192.168.1.*,10.0.0.0/24` (comma-separated)
+   - Supports wildcards (`192.168.1.*`) and CIDR notation (`10.0.0.0/24`)
+
+3. **Localhost Access** (development only):
+   - Enabled by default when `NODE_ENV !== 'production'`
+   - Disable with `ADMIN_LOCALHOST_ALLOWED=false`
+
+Generate API key: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 
 ### External API Integration
 

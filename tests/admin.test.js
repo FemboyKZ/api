@@ -15,6 +15,19 @@ jest.mock("../src/db/redis", () => ({
   setCachedData: jest.fn(),
 }));
 
+// Mock adminAuth to allow all requests in tests
+jest.mock("../src/utils/adminAuth", () => ({
+  adminAuth: (req, res, next) => {
+    req.adminAuth = { method: "test", ip: "127.0.0.1" };
+    next();
+  },
+  optionalAdminAuth: (req, res, next) => {
+    req.isAdmin = true;
+    req.adminAuth = { method: "test", ip: "127.0.0.1" };
+    next();
+  },
+}));
+
 // Mock kzStatistics service
 jest.mock("../src/services/kzStatistics", () => ({
   refreshAllStatistics: jest.fn(),

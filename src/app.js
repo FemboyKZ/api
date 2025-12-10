@@ -19,6 +19,7 @@ const kzServersRouter = require("./api/kzServers");
 const kzBansRouter = require("./api/kzBans");
 const errorHandler = require("./utils/errorHandler");
 const logger = require("./utils/logger");
+const { adminAuth } = require("./utils/adminAuth");
 
 // Trust proxy - only when binding to localhost (behind reverse proxy like Apache, Nginx, etc.)
 // This allows Express to read the real client IP from X-Forwarded-For header
@@ -94,7 +95,7 @@ app.use("/players", playersRouter);
 app.use("/maps", mapsRouter);
 app.use("/health", healthRouter);
 app.use("/history", historyRouter);
-app.use("/admin", adminRouter);
+app.use("/admin", adminAuth, adminRouter);
 
 // KZ Global endpoints
 app.use("/kzglobal/records", kzRecordsRouter);
