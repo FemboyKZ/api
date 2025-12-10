@@ -68,7 +68,7 @@ async function startServer() {
       startUpdateLoop(30 * 1000);
 
       // Step 9: Start avatar update job (runs every hour)
-      startAvatarUpdateJob(60 * 60 * 1000);
+      // startAvatarUpdateJob(60 * 60 * 1000);
 
       // Step 10: Start world records cache refresh job (runs every 5 minutes)
       startWorldRecordsCacheJob(5 * 60 * 1000);
