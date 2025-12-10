@@ -10,4 +10,6 @@ module.exports = {
   setupFiles: ["<rootDir>/tests/setup.js"],
   testTimeout: 10000,
   verbose: true,
+  // Force exit to handle db pool created on module require before mock takes effect
+  forceExit: true,
 };
