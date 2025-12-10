@@ -243,15 +243,9 @@ BEGIN
   SELECT CONCAT('Completed refreshing ', v_count, ' player statistics') AS result;
 END$$
 
--- Create an event to refresh statistics daily
-DROP EVENT IF EXISTS refresh_player_stats_event$$
-CREATE EVENT IF NOT EXISTS refresh_player_stats_event
-ON SCHEDULE EVERY 1 DAY
-STARTS DATE_ADD(DATE(NOW()), INTERVAL 1 DAY) + INTERVAL 3 HOUR
-DO
-BEGIN
-  CALL refresh_all_player_statistics();
-END$$
+-- Statistics events are now handled by Node.js kzStatistics service
+-- See: src/services/kzStatistics.js
+-- To remove existing events, run: db/migrations/remove_statistics_events.sql
 
 DELIMITER ;
 
@@ -477,14 +471,7 @@ BEGIN
     updated_at = CURRENT_TIMESTAMP;
 END$$
 
-DROP EVENT IF EXISTS refresh_map_stats_event$$
-CREATE EVENT IF NOT EXISTS refresh_map_stats_event
-ON SCHEDULE EVERY 1 DAY
-STARTS DATE_ADD(DATE(NOW()), INTERVAL 1 DAY) + INTERVAL 4 HOUR
-DO
-BEGIN
-  CALL refresh_all_map_statistics();
-END$$
+-- Map statistics event now handled by Node.js kzStatistics service
 
 DELIMITER ;
 
@@ -736,14 +723,7 @@ BEGIN
     updated_at = CURRENT_TIMESTAMP;
 END$$
 
-DROP EVENT IF EXISTS refresh_server_stats_event$$
-CREATE EVENT IF NOT EXISTS refresh_server_stats_event
-ON SCHEDULE EVERY 1 DAY
-STARTS DATE_ADD(DATE(NOW()), INTERVAL 1 DAY) + INTERVAL 5 HOUR
-DO
-BEGIN
-  CALL refresh_all_server_statistics();
-END$$
+-- Server statistics event now handled by Node.js kzStatistics service
 
 DELIMITER ;
 

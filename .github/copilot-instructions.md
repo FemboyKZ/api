@@ -26,6 +26,7 @@ This is a game server tracking API built with Express that polls game servers vi
 - `src/services/steamAvatars.js` - Fetches Steam profile avatars via Steam Web API, processes 100 players per hour
 - `src/services/mapsQuery.js` - Fetches map metadata from GlobalKZ API (CS:GO) and CS2KZ API (CS2)
 - `src/services/websocket.js` - Socket.IO server for real-time updates (broadcasts status changes only)
+- `src/services/kzStatistics.js` - Background job for refreshing pre-calculated KZ statistics tables
 - `src/db/index.js` - MySQL2 connection pool (promise-based, 10 max connections)
 - `src/db/redis.js` - Optional Redis client for response caching and pattern-based cache invalidation
 - `src/utils/validators.js` - Input validation and map name sanitization (strips workshop paths)
@@ -101,6 +102,7 @@ This is a game server tracking API built with Express that polls game servers vi
 - Map metadata: Processes ALL maps needing updates (no limit), 7-day cache duration
 - Server updates: Queries servers **in parallel** via `Promise.all()`, invalidates cache once after **all** updates complete
 - Update loop interval stored in `UPDATE_INTERVAL_SECONDS` global for playtime calculations
+- KZ Statistics: Refreshes pre-calculated statistics every 6 hours (player, map, server leaderboards)
 
 ## Environment & Dependencies
 
@@ -120,6 +122,7 @@ This is a game server tracking API built with Express that polls game servers vi
 - `CORS_ORIGIN` - Comma-separated allowed origins or `*`
 - `RATE_LIMIT_MAX` - Max requests per 15-min window (default: 100)
 - `NODE_ENV` - `production` or `development` (affects logging verbosity)
+- `KZ_STATS_INTERVAL` - KZ statistics refresh interval in ms (default: 6 hours)
 
 **External Dependencies:**
 

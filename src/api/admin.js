@@ -8,6 +8,14 @@ const {
   manualBanStatusUpdate,
   cleanupExpiredBans,
 } = require("../services/kzBanStatus");
+const {
+  refreshAllStatistics,
+  refreshPlayerStatistics,
+  refreshMapStatistics,
+  refreshServerStatistics,
+  populateAllStatistics,
+  getStatisticsSummary,
+} = require("../services/kzStatistics");
 
 /**
  * GET /admin/scraper-status
@@ -242,6 +250,98 @@ router.post("/cleanup-expired-bans", async (req, res) => {
   } catch (error) {
     logger.error("Failed to cleanup expired bans", { error: error.message });
     res.status(500).json({ error: "Failed to cleanup expired bans" });
+  }
+});
+
+/**
+ * GET /admin/kz-statistics
+ * Get current KZ statistics status and summary
+ */
+router.get("/kz-statistics", async (req, res) => {
+  try {
+    const summary = await getStatisticsSummary();
+    res.json({
+      success: true,
+      statistics: summary,
+    });
+  } catch (error) {
+    logger.error("Failed to get KZ statistics", { error: error.message });
+    res.status(500).json({ error: "Failed to get KZ statistics" });
+  }
+});
+
+/**
+ * POST /admin/refresh-kz-statistics
+ * Manually trigger KZ statistics refresh
+ * Query params: type=all|players|maps|servers (default: all)
+ */
+router.post("/refresh-kz-statistics", async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const { type = "all" } = req.query;
+
+    logger.info("Manual KZ statistics refresh triggered", { type });
+
+    let result;
+    switch (type) {
+      case "players":
+        result = { players: await refreshPlayerStatistics() };
+        break;
+      case "maps":
+        result = { maps: await refreshMapStatistics() };
+        break;
+      case "servers":
+        result = { servers: await refreshServerStatistics() };
+        break;
+      case "all":
+      default:
+        result = await refreshAllStatistics();
+        break;
+    }
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    logger.info("KZ statistics refresh complete", { type, elapsed });
+    logger.logRequest(req, res, Date.now() - startTime);
+
+    res.json({
+      success: true,
+      type,
+      result,
+      elapsed: `${elapsed}s`,
+      message: "KZ statistics refreshed successfully",
+    });
+  } catch (error) {
+    logger.error("Failed to refresh KZ statistics", { error: error.message });
+    res.status(500).json({ error: "Failed to refresh KZ statistics" });
+  }
+});
+
+/**
+ * POST /admin/populate-kz-statistics
+ * Trigger initial population of KZ statistics tables
+ * WARNING: This may take a long time for large databases
+ */
+router.post("/populate-kz-statistics", async (req, res) => {
+  const startTime = Date.now();
+  try {
+    logger.info("Manual KZ statistics population triggered");
+
+    const result = await populateAllStatistics();
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    logger.info("KZ statistics population complete", { elapsed });
+    logger.logRequest(req, res, Date.now() - startTime);
+
+    res.json({
+      success: result,
+      elapsed: `${elapsed}s`,
+      message: result
+        ? "KZ statistics populated successfully"
+        : "KZ statistics population failed",
+    });
+  } catch (error) {
+    logger.error("Failed to populate KZ statistics", { error: error.message });
+    res.status(500).json({ error: "Failed to populate KZ statistics" });
   }
 });
 

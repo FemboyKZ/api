@@ -14,6 +14,7 @@ const { initWebSocket } = require("./services/websocket");
 const { initRedis, closeRedis } = require("./db/redis");
 const { loadMessageIds } = require("./services/discordWebhook");
 const { startWorldRecordsCacheJob } = require("./services/worldRecordsCache");
+const { startStatisticsJob } = require("./services/kzStatistics");
 
 const port = process.env.PORT || 3000;
 const host = process.env.HOST || "0.0.0.0"; // Use 127.0.0.1 in production with reverse proxy
@@ -89,6 +90,14 @@ async function startServer() {
         startBanCleanupJob(banCleanupInterval);
         logger.info(
           `KZ Ban cleanup job enabled (interval: ${banCleanupInterval / 1000}s)`,
+        );
+
+        // Step 13: Start KZ statistics refresh job (runs every 6 hours by default)
+        const statsInterval =
+          parseInt(process.env.KZ_STATS_INTERVAL) || 6 * 60 * 60 * 1000; // 6 hours
+        startStatisticsJob(statsInterval);
+        logger.info(
+          `KZ Statistics refresh job enabled (interval: ${statsInterval / 1000 / 60} minutes)`,
         );
       }
     });

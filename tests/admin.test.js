@@ -1,6 +1,7 @@
 const request = require("supertest");
 const app = require("../src/app");
 const pool = require("../src/db");
+const kzStatistics = require("../src/services/kzStatistics");
 
 // Mock database pool
 jest.mock("../src/db", () => ({
@@ -14,9 +15,35 @@ jest.mock("../src/db/redis", () => ({
   setCachedData: jest.fn(),
 }));
 
+// Mock kzStatistics service
+jest.mock("../src/services/kzStatistics", () => ({
+  refreshAllStatistics: jest.fn(),
+  refreshPlayerStatistics: jest.fn(),
+  refreshMapStatistics: jest.fn(),
+  refreshServerStatistics: jest.fn(),
+  populateAllStatistics: jest.fn(),
+  getStatisticsSummary: jest.fn(),
+}));
+
 describe("Admin Endpoints", () => {
   beforeEach(() => {
-    jest.resetAllMocks();
+    jest.clearAllMocks();
+    
+    // Reset kzStatistics mocks with default implementations
+    kzStatistics.refreshAllStatistics.mockResolvedValue({
+      players: true,
+      maps: true,
+      servers: true,
+    });
+    kzStatistics.refreshPlayerStatistics.mockResolvedValue(true);
+    kzStatistics.refreshMapStatistics.mockResolvedValue(true);
+    kzStatistics.refreshServerStatistics.mockResolvedValue(true);
+    kzStatistics.populateAllStatistics.mockResolvedValue(true);
+    kzStatistics.getStatisticsSummary.mockResolvedValue({
+      players: { count: 1000, lastUpdate: new Date() },
+      maps: { count: 500, lastUpdate: new Date() },
+      servers: { count: 50, lastUpdate: new Date() },
+    });
   });
 
   describe("POST /admin/aggregate-daily", () => {
@@ -65,7 +92,7 @@ describe("Admin Endpoints", () => {
 
   describe("POST /admin/cleanup-history", () => {
     it("should cleanup old history records", async () => {
-      // Mock all three DELETE queries
+      // Mock all three DELETE queries - pool.query returns [[result], fields]
       pool.query
         .mockResolvedValueOnce([{ affectedRows: 100 }])
         .mockResolvedValueOnce([{ affectedRows: 50 }])
@@ -99,7 +126,8 @@ describe("Admin Endpoints", () => {
     });
 
     it("should handle database errors", async () => {
-      pool.query.mockRejectedValue(new Error("Database error"));
+      // First call throws
+      pool.query.mockRejectedValueOnce(new Error("Database error"));
 
       const response = await request(app)
         .post("/admin/cleanup-history")
@@ -107,6 +135,82 @@ describe("Admin Endpoints", () => {
         .expect(500);
 
       expect(response.body).toHaveProperty("error");
+    });
+  });
+
+  describe("GET /admin/kz-statistics", () => {
+    it("should return statistics summary", async () => {
+      const response = await request(app)
+        .get("/admin/kz-statistics")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      expect(response.body).toHaveProperty("success", true);
+      expect(response.body).toHaveProperty("statistics");
+      expect(response.body.statistics).toHaveProperty("players");
+      expect(response.body.statistics).toHaveProperty("maps");
+      expect(response.body.statistics).toHaveProperty("servers");
+    });
+  });
+
+  describe("POST /admin/refresh-kz-statistics", () => {
+    it("should refresh all statistics by default", async () => {
+      const response = await request(app)
+        .post("/admin/refresh-kz-statistics")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      expect(response.body).toHaveProperty("success", true);
+      expect(response.body).toHaveProperty("type", "all");
+      expect(response.body.result).toHaveProperty("players", true);
+      expect(response.body.result).toHaveProperty("maps", true);
+      expect(response.body.result).toHaveProperty("servers", true);
+    });
+
+    it("should refresh only player statistics when type=players", async () => {
+      const response = await request(app)
+        .post("/admin/refresh-kz-statistics?type=players")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      expect(response.body).toHaveProperty("success", true);
+      expect(response.body).toHaveProperty("type", "players");
+      expect(response.body.result).toHaveProperty("players", true);
+    });
+
+    it("should refresh only map statistics when type=maps", async () => {
+      const response = await request(app)
+        .post("/admin/refresh-kz-statistics?type=maps")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      expect(response.body).toHaveProperty("success", true);
+      expect(response.body).toHaveProperty("type", "maps");
+      expect(response.body.result).toHaveProperty("maps", true);
+    });
+
+    it("should refresh only server statistics when type=servers", async () => {
+      const response = await request(app)
+        .post("/admin/refresh-kz-statistics?type=servers")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      expect(response.body).toHaveProperty("success", true);
+      expect(response.body).toHaveProperty("type", "servers");
+      expect(response.body.result).toHaveProperty("servers", true);
+    });
+  });
+
+  describe("POST /admin/populate-kz-statistics", () => {
+    it("should populate all statistics tables", async () => {
+      const response = await request(app)
+        .post("/admin/populate-kz-statistics")
+        .expect("Content-Type", /json/)
+        .expect(200);
+
+      expect(response.body).toHaveProperty("success", true);
+      expect(response.body).toHaveProperty("message");
+      expect(response.body.message).toContain("populated successfully");
     });
   });
 });
