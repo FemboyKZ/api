@@ -13,24 +13,29 @@ The documentation is automatically generated from JSDoc comments in the code usi
 ## Prerequisites
 
 - Node.js (v20 or higher)
-- MySQL/MariaDB database
+- MySQL/MariaDB database(s)
 - Game servers to monitor (CS:GO, CS2, etc.)
 - RCON access to servers (optional, for Steam IDs and extended data)
+- Steam API Key
 - Docker is recommended
 
 ## Project Structure
 
 ```txt
-server-api/
+api/
 ├── config/          # Server configuration files
 ├── db/              # Database schemas and migrations
+├── docker/          # Custom Docker configuration
+├── scripts/         # Data management scripts
 ├── src/
 │   ├── api/         # API route handlers
+│   ├── config/      # API Internal configuration
 │   ├── db/          # Database connection
-│   ├── services/    # Business logic (updater, queries)
-│   ├── utils/       # Utilities (logger, validators, error handling)
+│   ├── services/    # Service logic (updaters, queries)
+│   ├── utils/       # Utilities (logger, validators, auth, error handling)
 │   ├── app.js       # Express app configuration
 │   └── server.js    # Server entry point
+├── tests/           # Tests for server endpoints
 └── package.json
 ```
 
