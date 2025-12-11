@@ -189,6 +189,10 @@ services:
       ADMIN_IP_WHITELIST: ${ADMIN_IP_WHITELIST}
       ADMIN_LOCALHOST_ALLOWED: ${ADMIN_LOCALHOST_ALLOWED:-false}
 
+      # api general auth config
+      API_KEY: ${API_KEY}
+      API_IP_WHITELIST: ${API_IP_WHITELIST}
+
       # database config
       DB_HOST: 127.0.0.1
       DB_PORT: 3307

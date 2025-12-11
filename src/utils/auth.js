@@ -1,19 +1,22 @@
 /**
- * Admin Authentication Middleware
+ * Authentication Middleware
  *
- * Provides multiple authentication methods for admin endpoints:
- * 1. API Key (Bearer token) - For automated scripts and services
- * 2. IP Whitelist - For internal services and localhost access
+ * Provides multiple authentication methods:
  *
- * Configuration via environment variables:
- * - ADMIN_API_KEY: Required API key for admin access
- * - ADMIN_IP_WHITELIST: Comma-separated list of allowed IPs (optional)
- * - ADMIN_LOCALHOST_ALLOWED: Allow localhost access without API key (default: true in dev)
+ * 1. ADMIN AUTH (for /admin endpoints):
+ *    - ADMIN_API_KEY: Required API key for admin access
+ *    - ADMIN_IP_WHITELIST: Comma-separated list of allowed IPs (optional)
+ *    - ADMIN_LOCALHOST_ALLOWED: Allow localhost access without API key (default: true in dev)
+ *
+ * 2. API AUTH (for rate limit bypass):
+ *    - API_KEY: API key that bypasses rate limits (separate from admin)
+ *    - API_IP_WHITELIST: Comma-separated list of IPs that bypass rate limits
+ *    - Uses same key extraction methods (Bearer, X-API-Key, query param)
  */
 
 const logger = require("./logger");
 
-// Configuration
+// Admin Configuration
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 const ADMIN_IP_WHITELIST = process.env.ADMIN_IP_WHITELIST
   ? process.env.ADMIN_IP_WHITELIST.split(",").map((ip) => ip.trim())
@@ -21,6 +24,12 @@ const ADMIN_IP_WHITELIST = process.env.ADMIN_IP_WHITELIST
 const ADMIN_LOCALHOST_ALLOWED =
   process.env.ADMIN_LOCALHOST_ALLOWED !== "false" &&
   process.env.NODE_ENV !== "production";
+
+// API Key Configuration (for rate limit bypass)
+const API_KEY = process.env.API_KEY;
+const API_IP_WHITELIST = process.env.API_IP_WHITELIST
+  ? process.env.API_IP_WHITELIST.split(",").map((ip) => ip.trim())
+  : [];
 
 // Localhost IP patterns
 const LOCALHOST_IPS = ["127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"];
@@ -56,14 +65,28 @@ function isLocalhost(ip) {
 }
 
 /**
- * Check if IP is in whitelist
+ * Check if IP is in admin whitelist
  */
 function isWhitelisted(ip) {
-  if (ADMIN_IP_WHITELIST.length === 0) {
+  return isIpInWhitelist(ip, ADMIN_IP_WHITELIST);
+}
+
+/**
+ * Check if IP is in API whitelist (for rate limit bypass)
+ */
+function isApiWhitelisted(ip) {
+  return isIpInWhitelist(ip, API_IP_WHITELIST);
+}
+
+/**
+ * Check if IP is in a given whitelist
+ */
+function isIpInWhitelist(ip, whitelist) {
+  if (whitelist.length === 0) {
     return false;
   }
 
-  return ADMIN_IP_WHITELIST.some((allowedIp) => {
+  return whitelist.some((allowedIp) => {
     // Support CIDR notation (basic /24 and /16 support)
     if (allowedIp.includes("/")) {
       return matchCIDR(ip, allowedIp);
@@ -129,24 +152,93 @@ function extractAPIKey(req) {
 }
 
 /**
- * Validate API key
+ * Validate admin API key
  * Uses timing-safe comparison to prevent timing attacks
  */
 function validateAPIKey(providedKey) {
-  if (!ADMIN_API_KEY || !providedKey) {
+  return validateKeyAgainst(providedKey, ADMIN_API_KEY);
+}
+
+/**
+ * Validate general API key (for rate limit bypass)
+ * Uses timing-safe comparison to prevent timing attacks
+ */
+function validateApiKey(providedKey) {
+  return validateKeyAgainst(providedKey, API_KEY);
+}
+
+/**
+ * Timing-safe key comparison
+ */
+function validateKeyAgainst(providedKey, expectedKey) {
+  if (!expectedKey || !providedKey) {
     return false;
   }
 
   // Simple constant-time comparison
-  if (providedKey.length !== ADMIN_API_KEY.length) {
+  if (providedKey.length !== expectedKey.length) {
     return false;
   }
 
   let result = 0;
   for (let i = 0; i < providedKey.length; i++) {
-    result |= providedKey.charCodeAt(i) ^ ADMIN_API_KEY.charCodeAt(i);
+    result |= providedKey.charCodeAt(i) ^ expectedKey.charCodeAt(i);
   }
   return result === 0;
+}
+
+/**
+ * Check if request should skip rate limiting
+ * Returns true if:
+ * 1. Valid API key is provided (API_KEY or ADMIN_API_KEY)
+ * 2. IP is in API whitelist
+ * 3. Request is from localhost (in development)
+ */
+function shouldSkipRateLimit(req) {
+  const clientIP = getClientIP(req);
+  const apiKey = extractAPIKey(req);
+
+  // Check API key (either general API_KEY or ADMIN_API_KEY)
+  if (apiKey && (validateApiKey(apiKey) || validateAPIKey(apiKey))) {
+    logger.debug(`Rate limit bypass: Valid API key from ${clientIP}`);
+    req.apiAuth = { method: "api_key", ip: clientIP };
+    return true;
+  }
+
+  // Check API IP whitelist
+  if (isApiWhitelisted(clientIP)) {
+    logger.debug(`Rate limit bypass: IP whitelist for ${clientIP}`);
+    req.apiAuth = { method: "ip_whitelist", ip: clientIP };
+    return true;
+  }
+
+  // Check localhost in development
+  if (process.env.NODE_ENV !== "production" && isLocalhost(clientIP)) {
+    logger.debug(`Rate limit bypass: Localhost access from ${clientIP}`);
+    req.apiAuth = { method: "localhost", ip: clientIP };
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Middleware to set API authentication info on request
+ * Does NOT block requests - only sets req.apiAuth for authenticated requests
+ */
+function apiKeyMiddleware(req, res, next) {
+  const clientIP = getClientIP(req);
+  const apiKey = extractAPIKey(req);
+
+  if (apiKey && (validateApiKey(apiKey) || validateAPIKey(apiKey))) {
+    req.apiAuth = { method: "api_key", ip: clientIP };
+  } else if (isApiWhitelisted(clientIP)) {
+    req.apiAuth = { method: "ip_whitelist", ip: clientIP };
+  } else if (process.env.NODE_ENV !== "production" && isLocalhost(clientIP)) {
+    req.apiAuth = { method: "localhost", ip: clientIP };
+  }
+
+  next();
 }
 
 /**
@@ -250,10 +342,16 @@ function generateAPIKey(length = 32) {
 }
 
 module.exports = {
+  // Admin authentication
   adminAuth,
   optionalAdminAuth,
   generateAPIKey,
+  // API key authentication (rate limit bypass)
+  shouldSkipRateLimit,
+  apiKeyMiddleware,
+  // Utility functions
   getClientIP,
   isLocalhost,
   isWhitelisted,
+  isApiWhitelisted,
 };

@@ -20,7 +20,7 @@ const kzBansRouter = require("./api/kzBans");
 const kzLocalRouter = require("./api/kzLocal");
 const errorHandler = require("./utils/errorHandler");
 const logger = require("./utils/logger");
-const { adminAuth } = require("./utils/adminAuth");
+const { adminAuth, shouldSkipRateLimit, apiKeyMiddleware } = require("./utils/auth");
 
 // Trust proxy - only when binding to localhost (behind reverse proxy like Apache, Nginx, etc.)
 // This allows Express to read the real client IP from X-Forwarded-For header
@@ -68,6 +68,7 @@ app.use(
 );
 
 // Rate limiting - 500 requests per 5 minutes per IP
+// Skips rate limiting for authenticated requests (API key, IP whitelist, localhost in dev)
 const limiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutes
   max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 500,
@@ -75,11 +76,14 @@ const limiter = rateLimit({
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   validate: { trustProxy: false },
-  // Skip rate limiting in test environment
-  skip: () => process.env.NODE_ENV === "test",
+  // Skip rate limiting in test environment or for authenticated requests
+  skip: (req) => process.env.NODE_ENV === "test" || shouldSkipRateLimit(req),
 });
 
 app.use("/", limiter);
+
+// API Key middleware - sets req.apiAuth for authenticated requests
+app.use(apiKeyMiddleware);
 
 // API Documentation
 app.use(
