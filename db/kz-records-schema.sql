@@ -65,16 +65,17 @@ BEGIN
   DECLARE v_batch_size INT DEFAULT 500;
   DECLARE v_offset INT DEFAULT 0;
   
-  -- Get total player count
+  -- Get total player count (excluding banned players)
   SELECT COUNT(DISTINCT p.id) INTO v_total_players
   FROM kz_players p
-  INNER JOIN kz_records_partitioned r ON p.steamid64 COLLATE utf8mb4_unicode_ci = r.player_id COLLATE utf8mb4_unicode_ci;
+  INNER JOIN kz_records_partitioned r ON p.steamid64 COLLATE utf8mb4_unicode_ci = r.player_id COLLATE utf8mb4_unicode_ci
+  WHERE (p.is_banned IS NULL OR p.is_banned = FALSE);
   
-  SELECT CONCAT('Starting to populate statistics for ', v_total_players, ' players') AS status;
+  SELECT CONCAT('Starting to populate statistics for ', v_total_players, ' non-banned players') AS status;
   
   -- Process in batches to avoid memory issues
   WHILE v_offset < v_total_players DO
-    -- Insert batch of player statistics
+    -- Insert batch of player statistics (only non-banned players)
     INSERT IGNORE INTO kz_player_statistics (
       player_id,
       steamid64,
@@ -105,7 +106,8 @@ BEGIN
     FROM (
       SELECT DISTINCT id, steamid64 
       FROM kz_players p2
-      WHERE EXISTS (
+      WHERE (p2.is_banned IS NULL OR p2.is_banned = FALSE)
+      AND EXISTS (
         SELECT 1 FROM kz_records_partitioned r2 
         WHERE r2.player_id COLLATE utf8mb4_unicode_ci = p2.steamid64 COLLATE utf8mb4_unicode_ci
       )
@@ -137,19 +139,25 @@ BEGIN
   )
   WHERE world_records = 0;
   
-  SELECT CONCAT('Population complete. Processed ', v_processed, ' players') AS result;
+  SELECT CONCAT('Population complete. Processed ', v_processed, ' non-banned players') AS result;
 END$$
 
--- Procedure to refresh statistics for a single player
+-- Procedure to refresh statistics for a single player (skip if banned)
 DROP PROCEDURE IF EXISTS refresh_player_statistics$$
 CREATE PROCEDURE refresh_player_statistics(IN p_player_id INT)
 BEGIN
   DECLARE v_steamid64 VARCHAR(20);
+  DECLARE v_is_banned BOOLEAN DEFAULT FALSE;
   
-  -- Get steamid64 for the player
-  SELECT steamid64 INTO v_steamid64 
+  -- Get steamid64 and ban status for the player
+  SELECT steamid64, COALESCE(is_banned, FALSE) INTO v_steamid64, v_is_banned
   FROM kz_players 
   WHERE id = p_player_id;
+  
+  -- Skip banned players - delete their stats if they exist
+  IF v_is_banned THEN
+    DELETE FROM kz_player_statistics WHERE player_id = p_player_id;
+  ELSE
   
   -- Update or insert statistics
   INSERT INTO kz_player_statistics (
@@ -196,9 +204,10 @@ BEGIN
     first_record_date = VALUES(first_record_date),
     last_record_date = VALUES(last_record_date),
     updated_at = CURRENT_TIMESTAMP;
+  END IF;
 END$$
 
--- Procedure to batch refresh all player statistics
+-- Procedure to batch refresh all player statistics (skip banned players)
 DROP PROCEDURE IF EXISTS refresh_all_player_statistics$$
 CREATE PROCEDURE refresh_all_player_statistics()
 BEGIN
@@ -209,7 +218,8 @@ BEGIN
     SELECT DISTINCT p.id 
     FROM kz_players p
     INNER JOIN kz_records_partitioned r ON p.steamid64 COLLATE utf8mb4_unicode_ci = r.player_id COLLATE utf8mb4_unicode_ci
-    WHERE NOT EXISTS (
+    WHERE (p.is_banned IS NULL OR p.is_banned = FALSE)
+    AND NOT EXISTS (
       SELECT 1 FROM kz_player_statistics ps 
       WHERE ps.player_id = p.id 
       AND ps.updated_at > DATE_SUB(NOW(), INTERVAL 1 DAY)
@@ -217,6 +227,11 @@ BEGIN
     LIMIT 1000;  -- Process in batches
     
   DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+  
+  -- First, clean up any statistics for newly banned players
+  DELETE ps FROM kz_player_statistics ps
+  INNER JOIN kz_players p ON ps.player_id = p.id
+  WHERE p.is_banned = TRUE;
   
   OPEN cur;
   
@@ -240,7 +255,7 @@ BEGIN
   
   CLOSE cur;
   
-  SELECT CONCAT('Completed refreshing ', v_count, ' player statistics') AS result;
+  SELECT CONCAT('Completed refreshing ', v_count, ' non-banned player statistics') AS result;
 END$$
 
 -- Statistics events are now handled by Node.js kzStatistics service
@@ -607,6 +622,8 @@ BEGIN
       LIMIT v_batch_size OFFSET v_offset
     ) s
     INNER JOIN kz_records_partitioned r ON s.id = r.server_id
+    INNER JOIN kz_players p ON r.player_id = p.id
+    WHERE (p.is_banned IS NULL OR p.is_banned = FALSE)
     GROUP BY s.id;
     
     SET v_processed = v_processed + ROW_COUNT();
@@ -669,18 +686,20 @@ BEGIN
   SELECT CONCAT('Completed refreshing ', v_count, ' server statistics') AS result;
 END$$
 
--- Procedure to refresh statistics for a single server
+-- Procedure to refresh statistics for a single server (exclude banned player records)
 DROP PROCEDURE IF EXISTS refresh_server_statistics$$
 CREATE PROCEDURE refresh_server_statistics(IN p_server_id INT)
 BEGIN
   DECLARE v_days_active INT;
   
-  -- Calculate days active
+  -- Calculate days active (only from non-banned player records)
   SELECT GREATEST(1, DATEDIFF(MAX(r.created_on), MIN(r.created_on))) INTO v_days_active
   FROM kz_records_partitioned r
-  WHERE r.server_id = p_server_id;
+  INNER JOIN kz_players p ON r.player_id = p.id
+  WHERE r.server_id = p_server_id
+    AND (p.is_banned IS NULL OR p.is_banned = FALSE);
   
-  -- Update or insert statistics
+  -- Update or insert statistics (excluding banned player records)
   INSERT INTO kz_server_statistics (
     server_id,
     total_records,
@@ -709,7 +728,9 @@ BEGIN
       WHERE wrc.server_id = p_server_id
     )
   FROM kz_records_partitioned r
+  INNER JOIN kz_players p ON r.player_id = p.id
   WHERE r.server_id = p_server_id
+    AND (p.is_banned IS NULL OR p.is_banned = FALSE)
   ON DUPLICATE KEY UPDATE
     total_records = VALUES(total_records),
     unique_players = VALUES(unique_players),
@@ -1022,6 +1043,7 @@ BEGIN
 
   -- Use REPLACE INTO instead of TRUNCATE+INSERT to handle duplicates
   -- This avoids race conditions when multiple processes call the procedure
+  -- Find best time from non-banned players only
   REPLACE INTO kz_worldrecords_cache (map_id, mode, stage, teleports, player_id, steamid64, time, points, server_id, created_on)
   SELECT 
   r.map_id,
@@ -1035,27 +1057,27 @@ BEGIN
   r.server_id,
   r.created_on
   FROM kz_records_partitioned r
+  INNER JOIN kz_players p ON r.player_id = p.id
   INNER JOIN (
+  -- Only consider records from non-banned players when finding best times
   SELECT 
-    map_id, 
-    mode, 
-    stage,
-    CASE WHEN teleports = 0 THEN 0 ELSE 1 END as tp_group,
-    MIN(time) as best_time
-  FROM kz_records_partitioned
-  WHERE player_id IS NOT NULL
-  GROUP BY map_id, mode, stage, tp_group
+    rp.map_id, 
+    rp.mode, 
+    rp.stage,
+    CASE WHEN rp.teleports = 0 THEN 0 ELSE 1 END as tp_group,
+    MIN(rp.time) as best_time
+  FROM kz_records_partitioned rp
+  INNER JOIN kz_players pl ON rp.player_id = pl.id
+  WHERE rp.player_id IS NOT NULL
+    AND (pl.is_banned IS NULL OR pl.is_banned = FALSE)
+  GROUP BY rp.map_id, rp.mode, rp.stage, tp_group
   ) best ON r.map_id = best.map_id 
   AND r.mode = best.mode 
   AND r.stage = best.stage
   AND CASE WHEN r.teleports = 0 THEN 0 ELSE 1 END = best.tp_group
   AND r.time = best.best_time
-  -- Exclude banned players
-  WHERE NOT EXISTS (
-  SELECT 1 FROM kz_players p 
-  WHERE p.id = r.player_id
-  AND p.is_banned = TRUE
-  );
+  -- Ensure the record holder is not banned
+  WHERE (p.is_banned IS NULL OR p.is_banned = FALSE);
 
   COMMIT;
 END$$
