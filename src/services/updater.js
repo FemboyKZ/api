@@ -374,10 +374,11 @@ async function updateLoop() {
         }
       } else {
         // Server is offline or query failed - still insert/update the record
+        // Clear players_list when server is offline to avoid stale data
         await pool.query(
-          `INSERT INTO servers (ip, port, game, status, region, domain, api_id, kzt_id, tickrate, last_update)
-           VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, NOW())
-           ON DUPLICATE KEY UPDATE status=0, region=VALUES(region), domain=VALUES(domain), api_id=VALUES(api_id), kzt_id=VALUES(kzt_id), tickrate=VALUES(tickrate), last_update=NOW()`,
+          `INSERT INTO servers (ip, port, game, status, players_list, region, domain, api_id, kzt_id, tickrate, last_update)
+           VALUES (?, ?, ?, 0, '[]', ?, ?, ?, ?, ?, NOW())
+           ON DUPLICATE KEY UPDATE status=0, players_list='[]', region=VALUES(region), domain=VALUES(domain), api_id=VALUES(api_id), kzt_id=VALUES(kzt_id), tickrate=VALUES(tickrate), last_update=NOW()`,
           [
             server.ip,
             server.port,
