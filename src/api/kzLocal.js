@@ -308,7 +308,7 @@ router.get(
         m.InRankedPool as in_ranked_pool
       FROM Maps m
       WHERE m.Name = ?`,
-        [sanitizeString(mapname)]
+        [sanitizeString(mapname)],
       );
 
       if (maps.length === 0) {
@@ -329,7 +329,7 @@ router.get(
       WHERE mc.MapID = ?
       GROUP BY mc.MapCourseID, mc.Course, mc.Created
       ORDER BY mc.Course`,
-        [map.id]
+        [map.id],
       );
 
       // Get mode statistics per course
@@ -344,7 +344,7 @@ router.get(
       WHERE mc.MapID = ?
       GROUP BY mc.Course, t.Mode
       ORDER BY mc.Course, t.Mode`,
-        [map.id]
+        [map.id],
       );
 
       // Group mode stats by course
@@ -380,7 +380,7 @@ router.get(
       logger.error(`Error fetching KZ local map: ${error.message}`);
       res.status(500).json({ error: "Failed to fetch map" });
     }
-  }
+  },
 );
 
 // ==================== RECORDS/TIMES ENDPOINTS ====================
@@ -475,7 +475,7 @@ router.get(
       const { limit: validLimit, offset } = validatePagination(
         page,
         limit,
-        100
+        100,
       );
 
       const pool = getPoolForTickrate(tickrate);
@@ -629,7 +629,7 @@ router.get(
       logger.error(`Error fetching KZ local records: ${error.message}`);
       res.status(500).json({ error: "Failed to fetch records" });
     }
-  }
+  },
 );
 
 /**
@@ -690,7 +690,7 @@ router.get(
       JOIN MapCourses mc ON t.MapCourseID = mc.MapCourseID
       JOIN Maps m ON mc.MapID = m.MapID
       WHERE t.TimeID = ?`,
-        [parseInt(id, 10)]
+        [parseInt(id, 10)],
       );
 
       if (records.length === 0) {
@@ -721,7 +721,7 @@ router.get(
       logger.error(`Error fetching KZ local record: ${error.message}`);
       res.status(500).json({ error: "Failed to fetch record" });
     }
-  }
+  },
 );
 
 // ==================== JUMPSTATS ENDPOINTS ====================
@@ -816,7 +816,7 @@ router.get(
       const { limit: validLimit, offset } = validatePagination(
         page,
         limit,
-        100
+        100,
       );
 
       const pool = getPoolForTickrate(tickrate);
@@ -968,7 +968,7 @@ router.get(
       logger.error(`Error fetching KZ local jumpstats: ${error.message}`);
       res.status(500).json({ error: "Failed to fetch jumpstats" });
     }
-  }
+  },
 );
 
 /**
@@ -1028,7 +1028,7 @@ router.get(
       FROM Jumpstats j
       JOIN Players p ON j.SteamID32 = p.SteamID32
       WHERE j.JumpID = ?`,
-        [parseInt(id, 10)]
+        [parseInt(id, 10)],
       );
 
       if (jumpstats.length === 0) {
@@ -1061,7 +1061,7 @@ router.get(
       logger.error(`Error fetching KZ local jumpstat: ${error.message}`);
       res.status(500).json({ error: "Failed to fetch jumpstat" });
     }
-  }
+  },
 );
 
 // ==================== PLAYERS ENDPOINTS ====================
@@ -1128,7 +1128,7 @@ router.get(
       const { limit: validLimit, offset } = validatePagination(
         page,
         limit,
-        100
+        100,
       );
 
       const pool = getPoolForTickrate(tickrate);
@@ -1217,7 +1217,7 @@ router.get(
       logger.error(`Error fetching KZ local players: ${error.message}`);
       res.status(500).json({ error: "Failed to fetch players" });
     }
-  }
+  },
 );
 
 /**
@@ -1284,7 +1284,7 @@ router.get(
         p.Created as created
       FROM Players p
       WHERE p.SteamID32 = ?`,
-        [steamid32]
+        [steamid32],
       );
 
       if (players.length === 0) {
@@ -1305,7 +1305,7 @@ router.get(
       FROM Times t
       WHERE t.SteamID32 = ?
       GROUP BY t.Mode`,
-        [steamid32]
+        [steamid32],
       );
 
       // Get jumpstats statistics by type
@@ -1319,7 +1319,7 @@ router.get(
       FROM Jumpstats j
       WHERE j.SteamID32 = ?
       GROUP BY j.JumpType, j.Mode`,
-        [steamid32]
+        [steamid32],
       );
 
       // Get air stats
@@ -1330,7 +1330,7 @@ router.get(
         Count as count
       FROM AirStats
       WHERE SteamID32 = ?`,
-        [steamid32]
+        [steamid32],
       );
 
       // Get bhop stats
@@ -1342,7 +1342,7 @@ router.get(
         StatCount as count
       FROM BhopStats
       WHERE SteamID32 = ?`,
-        [steamid32]
+        [steamid32],
       );
 
       res.json({
@@ -1403,7 +1403,7 @@ router.get(
       logger.error(`Error fetching KZ local player: ${error.message}`);
       res.status(500).json({ error: "Failed to fetch player" });
     }
-  }
+  },
 );
 
 module.exports = router;
