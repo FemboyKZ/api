@@ -10,7 +10,7 @@ const {
   closeAllKzLocalDatabases,
 } = require("./db/kzLocal");
 const { startUpdateLoop } = require("./services/updater");
-const { startAvatarUpdateJob } = require("./services/steamQuery");
+// const { startAvatarUpdateJob } = require("./services/steamQuery");
 const { startScraperJob } = require("./services/kzRecordsScraper");
 const { startBanCleanupJob } = require("./services/kzBanStatus");
 const { initWebSocket } = require("./services/websocket");
