@@ -816,7 +816,7 @@ router.get(
       const { limit: validLimit, offset } = validatePagination(
         page,
         limit,
-        100,
+        1000, // Higher limit for jumpstats to allow client-side deduplication
       );
 
       const pool = getPoolForTickrate(tickrate);
