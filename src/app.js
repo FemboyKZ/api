@@ -20,7 +20,11 @@ const kzBansRouter = require("./api/kzBans");
 const kzLocalRouter = require("./api/kzLocal");
 const errorHandler = require("./utils/errorHandler");
 const logger = require("./utils/logger");
-const { adminAuth, shouldSkipRateLimit, apiKeyMiddleware } = require("./utils/auth");
+const {
+  adminAuth,
+  shouldSkipRateLimit,
+  apiKeyMiddleware,
+} = require("./utils/auth");
 
 // Trust proxy - only when binding to localhost (behind reverse proxy like Apache, Nginx, etc.)
 // This allows Express to read the real client IP from X-Forwarded-For header
