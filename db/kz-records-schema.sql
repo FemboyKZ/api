@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS kz_player_statistics (
   total_maps INT UNSIGNED NOT NULL DEFAULT 0,
   total_points BIGINT UNSIGNED NOT NULL DEFAULT 0,
   total_playtime DECIMAL(12,3) NOT NULL DEFAULT 0,
-  avg_teleports DECIMAL(6,2) NOT NULL DEFAULT 0,
+  avg_teleports DECIMAL(10,2) NOT NULL DEFAULT 0,
   world_records INT UNSIGNED NOT NULL DEFAULT 0,
   
   pro_records INT UNSIGNED NOT NULL DEFAULT 0,
@@ -56,211 +56,341 @@ CREATE TABLE IF NOT EXISTS kz_player_statistics (
 
 DELIMITER $$
 
--- Procedure for initial population of statistics table
+-- =====================================================
+-- OPTIMIZED: Batched refresh with commits
+-- Processes players in batches to avoid lock timeouts
+-- =====================================================
+DROP PROCEDURE IF EXISTS refresh_player_statistics_batched$$
+CREATE PROCEDURE refresh_player_statistics_batched(
+  IN p_batch_size INT,
+  IN p_max_batches INT
+)
+BEGIN
+  DECLARE v_batch_count INT DEFAULT 0;
+  DECLARE v_total_affected INT DEFAULT 0;
+  DECLARE v_batch_affected INT;
+  DECLARE v_more_rows INT DEFAULT 1;
+  
+  -- Default batch size if not specified
+  IF p_batch_size IS NULL OR p_batch_size <= 0 THEN
+    SET p_batch_size = 5000;
+  END IF;
+  
+  -- Default max batches (0 = unlimited)
+  IF p_max_batches IS NULL THEN
+    SET p_max_batches = 0;
+  END IF;
+  
+  -- First, clean up any statistics for banned players
+  DELETE ps FROM kz_player_statistics ps
+  INNER JOIN kz_players p ON ps.player_id = p.id
+  WHERE p.is_banned = TRUE;
+  
+  COMMIT;
+  
+  -- Process in batches until no more stale players
+  WHILE v_more_rows = 1 DO
+    -- Check batch limit
+    IF p_max_batches > 0 AND v_batch_count >= p_max_batches THEN
+      SET v_more_rows = 0;
+    ELSE
+      -- Create temp table for this batch of player IDs
+      DROP TEMPORARY TABLE IF EXISTS tmp_batch_players;
+      CREATE TEMPORARY TABLE tmp_batch_players (
+        player_id INT UNSIGNED PRIMARY KEY,
+        steamid64 VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+        INDEX idx_steamid (steamid64)
+      ) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      
+      -- Select batch of stale players (no recent stats)
+      INSERT INTO tmp_batch_players (player_id, steamid64)
+      SELECT p.id, p.steamid64
+      FROM kz_players p
+      WHERE (p.is_banned IS NULL OR p.is_banned = FALSE)
+        AND NOT EXISTS (
+          SELECT 1 FROM kz_player_statistics ps 
+          WHERE ps.player_id = p.id 
+          AND ps.updated_at > DATE_SUB(NOW(), INTERVAL 1 DAY)
+        )
+        AND EXISTS (
+          SELECT 1 FROM kz_records_partitioned r 
+          WHERE r.steamid64 = p.steamid64
+          LIMIT 1
+        )
+      LIMIT p_batch_size;
+      
+      SET v_batch_affected = ROW_COUNT();
+      
+      IF v_batch_affected = 0 THEN
+        SET v_more_rows = 0;
+      ELSE
+        -- Insert/update statistics for this batch only
+        INSERT INTO kz_player_statistics (
+          player_id,
+          steamid64,
+          total_records,
+          total_maps,
+          total_points,
+          total_playtime,
+          avg_teleports,
+          world_records,
+          pro_records,
+          tp_records,
+          best_time,
+          first_record_date,
+          last_record_date
+        )
+        SELECT 
+          bp.player_id,
+          bp.steamid64,
+          COUNT(DISTINCT r.id) AS total_records,
+          COUNT(DISTINCT r.map_id) AS total_maps,
+          COALESCE(SUM(r.points), 0) AS total_points,
+          COALESCE(SUM(r.time), 0) AS total_playtime,
+          COALESCE(AVG(r.teleports), 0) AS avg_teleports,
+          COALESCE(wrc.world_record_count, 0) AS world_records,
+          SUM(CASE WHEN r.teleports = 0 THEN 1 ELSE 0 END) AS pro_records,
+          SUM(CASE WHEN r.teleports > 0 THEN 1 ELSE 0 END) AS tp_records,
+          MIN(r.time) AS best_time,
+          MIN(r.created_on) AS first_record_date,
+          MAX(r.created_on) AS last_record_date
+        FROM tmp_batch_players bp
+        INNER JOIN kz_records_partitioned r ON bp.steamid64 = r.steamid64
+        LEFT JOIN (
+          SELECT player_id, COUNT(*) AS world_record_count
+          FROM kz_worldrecords_cache
+          GROUP BY player_id
+        ) wrc ON wrc.player_id = bp.steamid64
+        GROUP BY bp.player_id, bp.steamid64, wrc.world_record_count
+        ON DUPLICATE KEY UPDATE
+          total_records = VALUES(total_records),
+          total_maps = VALUES(total_maps),
+          total_points = VALUES(total_points),
+          total_playtime = VALUES(total_playtime),
+          avg_teleports = VALUES(avg_teleports),
+          world_records = VALUES(world_records),
+          pro_records = VALUES(pro_records),
+          tp_records = VALUES(tp_records),
+          best_time = VALUES(best_time),
+          first_record_date = VALUES(first_record_date),
+          last_record_date = VALUES(last_record_date),
+          updated_at = CURRENT_TIMESTAMP;
+        
+        SET v_total_affected = v_total_affected + v_batch_affected;
+        SET v_batch_count = v_batch_count + 1;
+        
+        -- Commit this batch
+        COMMIT;
+        
+        -- Clean up temp table
+        DROP TEMPORARY TABLE IF EXISTS tmp_batch_players;
+      END IF;
+    END IF;
+  END WHILE;
+  
+  SELECT v_total_affected AS players_processed, v_batch_count AS batches;
+END$$
+
+-- =====================================================
+-- Wrapper procedure with default batch size
+-- =====================================================
+DROP PROCEDURE IF EXISTS refresh_all_player_statistics$$
+CREATE PROCEDURE refresh_all_player_statistics()
+BEGIN
+  -- Use 5000 players per batch, unlimited batches
+  CALL refresh_player_statistics_batched(5000, 0);
+END$$
+
+-- =====================================================
+-- Populate procedure (also uses batched approach)
+-- =====================================================
 DROP PROCEDURE IF EXISTS populate_player_statistics$$
 CREATE PROCEDURE populate_player_statistics()
 BEGIN
-  DECLARE v_total_players INT;
-  DECLARE v_processed INT DEFAULT 0;
-  DECLARE v_batch_size INT DEFAULT 500;
-  DECLARE v_offset INT DEFAULT 0;
-  
-  -- Get total player count (excluding banned players)
-  SELECT COUNT(DISTINCT p.id) INTO v_total_players
-  FROM kz_players p
-  INNER JOIN kz_records_partitioned r ON p.steamid64 COLLATE utf8mb4_unicode_ci = r.player_id COLLATE utf8mb4_unicode_ci
-  WHERE (p.is_banned IS NULL OR p.is_banned = FALSE);
-  
-  SELECT CONCAT('Starting to populate statistics for ', v_total_players, ' non-banned players') AS status;
-  
-  -- Process in batches to avoid memory issues
-  WHILE v_offset < v_total_players DO
-    -- Insert batch of player statistics (only non-banned players)
-    INSERT IGNORE INTO kz_player_statistics (
-      player_id,
-      steamid64,
-      total_records,
-      total_maps,
-      total_points,
-      total_playtime,
-      avg_teleports,
-      pro_records,
-      tp_records,
-      best_time,
-      first_record_date,
-      last_record_date
-    )
-    SELECT 
-      p.id,
-      p.steamid64,
-      COUNT(DISTINCT r.id),
-      COUNT(DISTINCT r.map_id),
-      COALESCE(SUM(r.points), 0),
-      COALESCE(SUM(r.time), 0),
-      COALESCE(AVG(r.teleports), 0),
-      SUM(CASE WHEN r.teleports = 0 THEN 1 ELSE 0 END),
-      SUM(CASE WHEN r.teleports > 0 THEN 1 ELSE 0 END),
-      MIN(r.time),
-      MIN(r.created_on),
-      MAX(r.created_on)
-    FROM (
-      SELECT DISTINCT id, steamid64 
-      FROM kz_players p2
-      WHERE (p2.is_banned IS NULL OR p2.is_banned = FALSE)
-      AND EXISTS (
-        SELECT 1 FROM kz_records_partitioned r2 
-        WHERE r2.player_id COLLATE utf8mb4_unicode_ci = p2.steamid64 COLLATE utf8mb4_unicode_ci
-      )
-      ORDER BY id
-      LIMIT v_batch_size OFFSET v_offset
-    ) p
-    INNER JOIN kz_records_partitioned r ON p.steamid64 COLLATE utf8mb4_unicode_ci = r.player_id COLLATE utf8mb4_unicode_ci
-    GROUP BY p.id, p.steamid64;
-    
-    SET v_processed = v_processed + ROW_COUNT();
-    SET v_offset = v_offset + v_batch_size;
-    
-    SELECT CONCAT('Processed ', v_processed, ' / ', v_total_players, ' players') AS progress;
-    
-    -- Commit to free up resources
-    COMMIT;
-    
-    -- Small delay
-    DO SLEEP(0.5);
-  END WHILE;
-
-    -- Update world records count
-  UPDATE kz_player_statistics ps
-  SET world_records = (
-    SELECT COUNT(*) 
-    FROM kz_worldrecords_cache wrc
-    INNER JOIN kz_players p ON wrc.player_id COLLATE utf8mb4_unicode_ci = p.steamid64 COLLATE utf8mb4_unicode_ci
-    WHERE p.id = ps.player_id
-  )
-  WHERE world_records = 0;
-  
-  SELECT CONCAT('Population complete. Processed ', v_processed, ' non-banned players') AS result;
+  -- Force refresh is essentially populate
+  CALL force_refresh_player_statistics_batched(5000, 0);
 END$$
 
--- Procedure to refresh statistics for a single player (skip if banned)
+-- =====================================================
+-- Single player refresh (optimized)
+-- =====================================================
 DROP PROCEDURE IF EXISTS refresh_player_statistics$$
 CREATE PROCEDURE refresh_player_statistics(IN p_player_id INT)
 BEGIN
   DECLARE v_steamid64 VARCHAR(20);
   DECLARE v_is_banned BOOLEAN DEFAULT FALSE;
   
-  -- Get steamid64 and ban status for the player
-  SELECT steamid64, COALESCE(is_banned, FALSE) INTO v_steamid64, v_is_banned
+  SELECT steamid64, COALESCE(is_banned, FALSE) 
+  INTO v_steamid64, v_is_banned
   FROM kz_players 
   WHERE id = p_player_id;
   
-  -- Skip banned players - delete their stats if they exist
   IF v_is_banned THEN
     DELETE FROM kz_player_statistics WHERE player_id = p_player_id;
   ELSE
-  
-  -- Update or insert statistics
-  INSERT INTO kz_player_statistics (
-    player_id,
-    steamid64,
-    total_records,
-    total_maps,
-    total_points,
-    total_playtime,
-    avg_teleports,
-    world_records,
-    pro_records,
-    tp_records,
-    best_time,
-    first_record_date,
-    last_record_date
-  )
-  SELECT 
-    p_player_id,
-    v_steamid64,
-    COUNT(DISTINCT r.id),
-    COUNT(DISTINCT r.map_id),
-    COALESCE(SUM(r.points), 0),
-    COALESCE(SUM(r.time), 0),
-    COALESCE(AVG(r.teleports), 0),
-    (SELECT COUNT(*) FROM kz_worldrecords_cache WHERE player_id COLLATE utf8mb4_unicode_ci = v_steamid64 COLLATE utf8mb4_unicode_ci),
-    SUM(CASE WHEN r.teleports = 0 THEN 1 ELSE 0 END),
-    SUM(CASE WHEN r.teleports > 0 THEN 1 ELSE 0 END),
-    MIN(r.time),
-    MIN(r.created_on),
-    MAX(r.created_on)
-  FROM kz_records_partitioned r
-  WHERE r.player_id COLLATE utf8mb4_unicode_ci = v_steamid64 COLLATE utf8mb4_unicode_ci
-  ON DUPLICATE KEY UPDATE
-    total_records = VALUES(total_records),
-    total_maps = VALUES(total_maps),
-    total_points = VALUES(total_points),
-    total_playtime = VALUES(total_playtime),
-    avg_teleports = VALUES(avg_teleports),
-    world_records = VALUES(world_records),
-    pro_records = VALUES(pro_records),
-    tp_records = VALUES(tp_records),
-    best_time = VALUES(best_time),
-    first_record_date = VALUES(first_record_date),
-    last_record_date = VALUES(last_record_date),
-    updated_at = CURRENT_TIMESTAMP;
+    INSERT INTO kz_player_statistics (
+      player_id, steamid64, total_records, total_maps, total_points,
+      total_playtime, avg_teleports, world_records, pro_records, tp_records,
+      best_time, first_record_date, last_record_date
+    )
+    SELECT 
+      p_player_id,
+      v_steamid64,
+      COUNT(DISTINCT r.id),
+      COUNT(DISTINCT r.map_id),
+      COALESCE(SUM(r.points), 0),
+      COALESCE(SUM(r.time), 0),
+      COALESCE(AVG(r.teleports), 0),
+      (SELECT COUNT(*) FROM kz_worldrecords_cache WHERE player_id = v_steamid64),
+      SUM(CASE WHEN r.teleports = 0 THEN 1 ELSE 0 END),
+      SUM(CASE WHEN r.teleports > 0 THEN 1 ELSE 0 END),
+      MIN(r.time),
+      MIN(r.created_on),
+      MAX(r.created_on)
+    FROM kz_records_partitioned r
+    WHERE r.steamid64 = v_steamid64
+    ON DUPLICATE KEY UPDATE
+      total_records = VALUES(total_records),
+      total_maps = VALUES(total_maps),
+      total_points = VALUES(total_points),
+      total_playtime = VALUES(total_playtime),
+      avg_teleports = VALUES(avg_teleports),
+      world_records = VALUES(world_records),
+      pro_records = VALUES(pro_records),
+      tp_records = VALUES(tp_records),
+      best_time = VALUES(best_time),
+      first_record_date = VALUES(first_record_date),
+      last_record_date = VALUES(last_record_date),
+      updated_at = CURRENT_TIMESTAMP;
   END IF;
 END$$
 
--- Procedure to batch refresh all player statistics (skip banned players)
-DROP PROCEDURE IF EXISTS refresh_all_player_statistics$$
-CREATE PROCEDURE refresh_all_player_statistics()
+-- =====================================================
+-- Force refresh (ignores staleness check)
+-- =====================================================
+DROP PROCEDURE IF EXISTS force_refresh_player_statistics_batched$$
+CREATE PROCEDURE force_refresh_player_statistics_batched(
+  IN p_batch_size INT,
+  IN p_max_batches INT
+)
 BEGIN
-  DECLARE done INT DEFAULT 0;
-  DECLARE v_player_id INT;
-  DECLARE v_count INT DEFAULT 0;
-  DECLARE cur CURSOR FOR 
-    SELECT DISTINCT p.id 
-    FROM kz_players p
-    INNER JOIN kz_records_partitioned r ON p.steamid64 COLLATE utf8mb4_unicode_ci = r.player_id COLLATE utf8mb4_unicode_ci
-    WHERE (p.is_banned IS NULL OR p.is_banned = FALSE)
-    AND NOT EXISTS (
-      SELECT 1 FROM kz_player_statistics ps 
-      WHERE ps.player_id = p.id 
-      AND ps.updated_at > DATE_SUB(NOW(), INTERVAL 1 DAY)
-    )
-    LIMIT 1000;  -- Process in batches
-    
-  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+  DECLARE v_batch_count INT DEFAULT 0;
+  DECLARE v_total_affected INT DEFAULT 0;
+  DECLARE v_batch_affected INT;
+  DECLARE v_offset INT DEFAULT 0;
+  DECLARE v_total_players INT;
   
-  -- First, clean up any statistics for newly banned players
+  IF p_batch_size IS NULL OR p_batch_size <= 0 THEN
+    SET p_batch_size = 5000;
+  END IF;
+  
+  IF p_max_batches IS NULL THEN
+    SET p_max_batches = 0;
+  END IF;
+  
+  -- Clean up banned player stats
   DELETE ps FROM kz_player_statistics ps
   INNER JOIN kz_players p ON ps.player_id = p.id
   WHERE p.is_banned = TRUE;
+  COMMIT;
   
-  OPEN cur;
+  -- Count total players to process
+  SELECT COUNT(DISTINCT p.id) INTO v_total_players
+  FROM kz_players p
+  WHERE (p.is_banned IS NULL OR p.is_banned = FALSE)
+    AND EXISTS (
+      SELECT 1 FROM kz_records_partitioned r 
+      WHERE r.steamid64 = p.steamid64
+      LIMIT 1
+    );
   
-  read_loop: LOOP
-    FETCH cur INTO v_player_id;
-    IF done THEN
-      LEAVE read_loop;
+  -- Process all players in order by ID
+  WHILE v_offset < v_total_players DO
+    IF p_max_batches > 0 AND v_batch_count >= p_max_batches THEN
+      SET v_offset = v_total_players; -- Exit loop
+    ELSE
+      DROP TEMPORARY TABLE IF EXISTS tmp_batch_players;
+      CREATE TEMPORARY TABLE tmp_batch_players (
+        player_id INT UNSIGNED PRIMARY KEY,
+        steamid64 VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+        INDEX idx_steamid (steamid64)
+      ) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      
+      -- Select batch by offset (for force refresh, ignore staleness)
+      INSERT INTO tmp_batch_players (player_id, steamid64)
+      SELECT p.id, p.steamid64
+      FROM kz_players p
+      WHERE (p.is_banned IS NULL OR p.is_banned = FALSE)
+        AND EXISTS (
+          SELECT 1 FROM kz_records_partitioned r 
+          WHERE r.steamid64 = p.steamid64
+          LIMIT 1
+        )
+      ORDER BY p.id
+      LIMIT p_batch_size OFFSET v_offset;
+      
+      SET v_batch_affected = ROW_COUNT();
+      
+      IF v_batch_affected > 0 THEN
+        INSERT INTO kz_player_statistics (
+          player_id, steamid64, total_records, total_maps, total_points,
+          total_playtime, avg_teleports, world_records, pro_records, tp_records,
+          best_time, first_record_date, last_record_date
+        )
+        SELECT 
+          bp.player_id,
+          bp.steamid64,
+          COUNT(DISTINCT r.id),
+          COUNT(DISTINCT r.map_id),
+          COALESCE(SUM(r.points), 0),
+          COALESCE(SUM(r.time), 0),
+          COALESCE(AVG(r.teleports), 0),
+          COALESCE(wrc.world_record_count, 0),
+          SUM(CASE WHEN r.teleports = 0 THEN 1 ELSE 0 END),
+          SUM(CASE WHEN r.teleports > 0 THEN 1 ELSE 0 END),
+          MIN(r.time),
+          MIN(r.created_on),
+          MAX(r.created_on)
+        FROM tmp_batch_players bp
+        INNER JOIN kz_records_partitioned r ON bp.steamid64 = r.steamid64
+        LEFT JOIN (
+          SELECT player_id, COUNT(*) AS world_record_count
+          FROM kz_worldrecords_cache
+          GROUP BY player_id
+        ) wrc ON wrc.player_id = bp.steamid64
+        GROUP BY bp.player_id, bp.steamid64, wrc.world_record_count
+        ON DUPLICATE KEY UPDATE
+          total_records = VALUES(total_records),
+          total_maps = VALUES(total_maps),
+          total_points = VALUES(total_points),
+          total_playtime = VALUES(total_playtime),
+          avg_teleports = VALUES(avg_teleports),
+          world_records = VALUES(world_records),
+          pro_records = VALUES(pro_records),
+          tp_records = VALUES(tp_records),
+          best_time = VALUES(best_time),
+          first_record_date = VALUES(first_record_date),
+          last_record_date = VALUES(last_record_date),
+          updated_at = CURRENT_TIMESTAMP;
+        
+        SET v_total_affected = v_total_affected + v_batch_affected;
+        SET v_batch_count = v_batch_count + 1;
+        SET v_offset = v_offset + p_batch_size;
+        
+        COMMIT;
+        
+        DROP TEMPORARY TABLE IF EXISTS tmp_batch_players;
+      ELSE
+        SET v_offset = v_total_players; -- Exit loop
+      END IF;
     END IF;
-    
-    CALL refresh_player_statistics(v_player_id);
-    SET v_count = v_count + 1;
-    
-    -- Log progress every 100 players
-    IF v_count MOD 100 = 0 THEN
-      SELECT CONCAT('Processed ', v_count, ' players...') AS progress;
-    END IF;
-    
-    -- Small delay to prevent overwhelming the server
-    DO SLEEP(0.01);
-  END LOOP;
+  END WHILE;
   
-  CLOSE cur;
-  
-  SELECT CONCAT('Completed refreshing ', v_count, ' non-banned player statistics') AS result;
+  SELECT v_total_affected AS players_processed, v_batch_count AS batches;
 END$$
 
 -- Statistics events are now handled by Node.js kzStatistics service
 -- See: src/services/kzStatistics.js
--- To remove existing events, run: db/migrations/remove_statistics_events.sql
 
 DELIMITER ;
 
@@ -396,49 +526,60 @@ BEGIN
   SELECT CONCAT('Population complete. Processed ', v_processed, ' maps') AS result;
 END$$
 
--- Procedure to batch refresh all map statistics
+-- Procedure to batch refresh all map statistics (optimized bulk operation)
 DROP PROCEDURE IF EXISTS refresh_all_map_statistics$$
 CREATE PROCEDURE refresh_all_map_statistics()
 BEGIN
-  DECLARE done INT DEFAULT 0;
-  DECLARE v_map_id INT;
-  DECLARE v_count INT DEFAULT 0;
-  DECLARE cur CURSOR FOR 
-    SELECT DISTINCT m.id 
-    FROM kz_maps m
-    INNER JOIN kz_records_partitioned r ON m.id = r.map_id
-    WHERE NOT EXISTS (
+  DECLARE v_affected_rows INT;
+  
+  -- Bulk update only maps with stale statistics (not updated in last day)
+  INSERT INTO kz_map_statistics (
+    map_id,
+    total_records,
+    unique_players,
+    total_completions,
+    pro_records,
+    tp_records,
+    world_record_time,
+    avg_time,
+    first_record_date,
+    last_record_date
+  )
+  SELECT 
+    m.id AS map_id,
+    COUNT(DISTINCT r.id) AS total_records,
+    COUNT(DISTINCT r.player_id) AS unique_players,
+    COUNT(*) AS total_completions,
+    SUM(CASE WHEN r.teleports = 0 THEN 1 ELSE 0 END) AS pro_records,
+    SUM(CASE WHEN r.teleports > 0 THEN 1 ELSE 0 END) AS tp_records,
+    MIN(r.time) AS world_record_time,
+    AVG(r.time) AS avg_time,
+    MIN(r.created_on) AS first_record_date,
+    MAX(r.created_on) AS last_record_date
+  FROM kz_maps m
+  INNER JOIN kz_records_partitioned r ON m.id = r.map_id
+  INNER JOIN kz_players p ON r.player_id = p.id
+  WHERE (p.is_banned IS NULL OR p.is_banned = FALSE)
+    AND NOT EXISTS (
       SELECT 1 FROM kz_map_statistics ms 
       WHERE ms.map_id = m.id 
       AND ms.updated_at > DATE_SUB(NOW(), INTERVAL 1 DAY)
     )
-    LIMIT 1000;  -- Process in batches
-    
-  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+  GROUP BY m.id
+  ON DUPLICATE KEY UPDATE
+    total_records = VALUES(total_records),
+    unique_players = VALUES(unique_players),
+    total_completions = VALUES(total_completions),
+    pro_records = VALUES(pro_records),
+    tp_records = VALUES(tp_records),
+    world_record_time = VALUES(world_record_time),
+    avg_time = VALUES(avg_time),
+    first_record_date = VALUES(first_record_date),
+    last_record_date = VALUES(last_record_date),
+    updated_at = CURRENT_TIMESTAMP;
   
-  OPEN cur;
-  
-  read_loop: LOOP
-    FETCH cur INTO v_map_id;
-    IF done THEN
-      LEAVE read_loop;
-    END IF;
-    
-    CALL refresh_map_statistics(v_map_id);
-    SET v_count = v_count + 1;
-    
-    -- Log progress every 50 maps
-    IF v_count MOD 50 = 0 THEN
-      SELECT CONCAT('Processed ', v_count, ' maps...') AS progress;
-    END IF;
-    
-    -- Small delay to prevent overwhelming the server
-    DO SLEEP(0.01);
-  END LOOP;
-  
-  CLOSE cur;
-  
-  SELECT CONCAT('Completed refreshing ', v_count, ' map statistics') AS result;
+  SET v_affected_rows = ROW_COUNT();
+  SELECT CONCAT('Completed refreshing ', v_affected_rows, ' map statistics') AS result;
 END$$
 
 -- Procedure to refresh statistics for a single map
@@ -641,49 +782,70 @@ BEGIN
   SELECT CONCAT('Population complete. Processed ', v_processed, ' servers') AS result;
 END$$
 
--- Procedure to batch refresh all server statistics
+-- Procedure to batch refresh all server statistics (optimized bulk operation)
 DROP PROCEDURE IF EXISTS refresh_all_server_statistics$$
 CREATE PROCEDURE refresh_all_server_statistics()
 BEGIN
-  DECLARE done INT DEFAULT 0;
-  DECLARE v_server_id INT;
-  DECLARE v_count INT DEFAULT 0;
-  DECLARE cur CURSOR FOR 
-    SELECT DISTINCT s.id 
-    FROM kz_servers s
-    INNER JOIN kz_records_partitioned r ON s.id = r.server_id
-    WHERE NOT EXISTS (
+  DECLARE v_affected_rows INT;
+  
+  -- Bulk update only servers with stale statistics (not updated in last day)
+  INSERT INTO kz_server_statistics (
+    server_id,
+    total_records,
+    unique_players,
+    unique_maps,
+    pro_records,
+    tp_records,
+    first_record_date,
+    last_record_date,
+    avg_records_per_day,
+    world_records_hosted
+  )
+  SELECT 
+    s.id AS server_id,
+    COUNT(DISTINCT r.id) AS total_records,
+    COUNT(DISTINCT r.player_id) AS unique_players,
+    COUNT(DISTINCT r.map_id) AS unique_maps,
+    SUM(CASE WHEN r.teleports = 0 THEN 1 ELSE 0 END) AS pro_records,
+    SUM(CASE WHEN r.teleports > 0 THEN 1 ELSE 0 END) AS tp_records,
+    MIN(r.created_on) AS first_record_date,
+    MAX(r.created_on) AS last_record_date,
+    CASE 
+      WHEN DATEDIFF(MAX(r.created_on), MIN(r.created_on)) > 0 
+      THEN COUNT(*) / DATEDIFF(MAX(r.created_on), MIN(r.created_on)) 
+      ELSE COUNT(*) 
+    END AS avg_records_per_day,
+    COALESCE(wrc.world_records_count, 0) AS world_records_hosted
+  FROM kz_servers s
+  INNER JOIN kz_records_partitioned r ON s.id = r.server_id
+  INNER JOIN kz_players p ON r.player_id = p.id
+  LEFT JOIN (
+    -- Pre-aggregate world records count per server
+    SELECT server_id, COUNT(*) AS world_records_count
+    FROM kz_worldrecords_cache
+    GROUP BY server_id
+  ) wrc ON wrc.server_id = s.id
+  WHERE (p.is_banned IS NULL OR p.is_banned = FALSE)
+    AND NOT EXISTS (
       SELECT 1 FROM kz_server_statistics ss 
       WHERE ss.server_id = s.id 
       AND ss.updated_at > DATE_SUB(NOW(), INTERVAL 1 DAY)
     )
-    LIMIT 1000;  -- Process in batches
-    
-  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+  GROUP BY s.id, wrc.world_records_count
+  ON DUPLICATE KEY UPDATE
+    total_records = VALUES(total_records),
+    unique_players = VALUES(unique_players),
+    unique_maps = VALUES(unique_maps),
+    pro_records = VALUES(pro_records),
+    tp_records = VALUES(tp_records),
+    first_record_date = VALUES(first_record_date),
+    last_record_date = VALUES(last_record_date),
+    avg_records_per_day = VALUES(avg_records_per_day),
+    world_records_hosted = VALUES(world_records_hosted),
+    updated_at = CURRENT_TIMESTAMP;
   
-  OPEN cur;
-  
-  read_loop: LOOP
-    FETCH cur INTO v_server_id;
-    IF done THEN
-      LEAVE read_loop;
-    END IF;
-    
-    CALL refresh_server_statistics(v_server_id);
-    SET v_count = v_count + 1;
-    
-    -- Log progress every 20 servers
-    IF v_count MOD 20 = 0 THEN
-      SELECT CONCAT('Processed ', v_count, ' servers...') AS progress;
-    END IF;
-    
-    -- Small delay to prevent overwhelming the server
-    DO SLEEP(0.01);
-  END LOOP;
-  
-  CLOSE cur;
-  
-  SELECT CONCAT('Completed refreshing ', v_count, ' server statistics') AS result;
+  SET v_affected_rows = ROW_COUNT();
+  SELECT CONCAT('Completed refreshing ', v_affected_rows, ' server statistics') AS result;
 END$$
 
 -- Procedure to refresh statistics for a single server (exclude banned player records)

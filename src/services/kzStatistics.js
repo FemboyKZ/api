@@ -23,26 +23,57 @@ const logger = require("../utils/logger");
 const DEFAULT_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
 const MAX_RETRIES = 3;
 const RETRY_DELAY_BASE = 1000; // 1 second base delay
+const BATCH_SIZE = 5000; // Players per batch
+const MAX_BATCHES = 0; // 0 = unlimited
 
 /**
- * Refresh player statistics
+ * Refresh player statistics using batched procedure
  * Updates stats for players not refreshed in 24 hours
+ * @param {number} batchSize - Number of players per batch (default: 5000)
+ * @param {number} maxBatches - Maximum batches to process (0 = unlimited)
  */
-async function refreshPlayerStatistics() {
+async function refreshPlayerStatistics(
+  batchSize = BATCH_SIZE,
+  maxBatches = MAX_BATCHES,
+) {
   const pool = getKzPool();
   let retryCount = 0;
 
   while (retryCount < MAX_RETRIES) {
+    let connection;
     try {
-      logger.info("Refreshing player statistics...");
+      logger.info("Refreshing player statistics (batched)...");
       const startTime = Date.now();
 
-      await pool.query("CALL refresh_all_player_statistics()");
+      // Get a dedicated connection for longer timeout
+      connection = await pool.getConnection();
+
+      // Set longer timeout for this connection (10 minutes per batch should be plenty)
+      await connection.query("SET SESSION innodb_lock_wait_timeout = 600");
+      await connection.query("SET SESSION wait_timeout = 28800");
+
+      // Call batched procedure
+      const [results] = await connection.query(
+        "CALL refresh_player_statistics_batched(?, ?)",
+        [batchSize, maxBatches],
+      );
+
+      // Extract results (last result set contains summary)
+      const summary = Array.isArray(results)
+        ? results[results.length - 1]
+        : results;
+      const playersProcessed = summary?.[0]?.players_processed || 0;
+      const batches = summary?.[0]?.batches || 0;
 
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      logger.info(`Player statistics refreshed successfully in ${elapsed}s`);
-      return true;
+      logger.info(
+        `Player statistics refreshed: ${playersProcessed} players in ${batches} batches (${elapsed}s)`,
+      );
+
+      connection.release();
+      return { success: true, playersProcessed, batches };
     } catch (error) {
+      if (connection) connection.release();
       retryCount++;
       if (retryCount < MAX_RETRIES) {
         logger.warn(
@@ -56,7 +87,7 @@ async function refreshPlayerStatistics() {
       logger.error(
         `Failed to refresh player statistics after ${MAX_RETRIES} attempts: ${error.message}`,
       );
-      return false;
+      return { success: false, error: error.message };
     }
   }
 }
