@@ -7,25 +7,16 @@ const {
   isValidSteamID,
   convertToSteamID64,
 } = require("../utils/validators");
+const {
+  CS2_MODES,
+  JUMP_TYPES: CS2_JUMP_TYPES,
+  formatRuntimeSeconds: formatRuntime,
+  formatDistance,
+  formatStat,
+  formatAirtime,
+} = require("../utils/kzHelpers");
 const logger = require("../utils/logger");
 const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
-
-// CS2KZ Modes (from Modes table, but these are the standard ones)
-const CS2_MODES = {
-  1: "classic",
-  2: "vanilla",
-};
-
-// CS2KZ Jump Types
-const CS2_JUMP_TYPES = {
-  0: "longjump",
-  1: "bhop",
-  2: "multibhop",
-  3: "weirdjump",
-  4: "dropbhop",
-  5: "countjump",
-  6: "ladderjump",
-};
 
 /**
  * Get database pool
@@ -33,45 +24,6 @@ const CS2_JUMP_TYPES = {
  */
 function getPool() {
   return getKzLocalCS2Pool();
-}
-
-/**
- * Format runtime from seconds (DOUBLE) to readable format
- * CS2KZ stores RunTime as DOUBLE in seconds
- * @param {number} runtime - Runtime in seconds
- * @returns {number} Runtime in seconds (already correct format)
- */
-function formatRuntime(runtime) {
-  return runtime;
-}
-
-/**
- * Format distance from units to readable value
- * CS2KZ stores distance as INTEGER (distance * 10000)
- * @param {number} distance - Distance in units
- * @returns {number} Distance value
- */
-function formatDistance(distance) {
-  return distance / 10000;
-}
-
-/**
- * Format jumpstat values (sync, pre, max)
- * CS2KZ stores these as INTEGER (value * 100)
- * @param {number} value - Raw stat value
- * @returns {number} Formatted stat value
- */
-function formatStat(value) {
-  return value / 100;
-}
-
-/**
- * Format airtime from ticks to seconds
- * @param {number} airtime - Airtime in ticks
- * @returns {number} Airtime in seconds (assuming 64 tick)
- */
-function formatAirtime(airtime) {
-  return airtime / 64;
 }
 
 // ==================== PLAYERS ENDPOINTS ====================
@@ -963,7 +915,7 @@ router.get(
  *         name: course
  *         schema:
  *           type: string
- *         description: Filter by course name (default: Main)
+ *         description: "Filter by course name (default: Main)"
  *       - in: query
  *         name: teleports
  *         schema:

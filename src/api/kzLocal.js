@@ -9,56 +9,21 @@ const {
   sanitizeString,
   isValidSteamID,
   convertToSteamID64,
+  steamid32To64,
+  steamid64To32,
 } = require("../utils/validators");
+const {
+  KZ_MODES,
+  JUMP_TYPES,
+  AIR_TYPES,
+  BHOP_STAT_TYPES,
+  SCROLL_EFF_TYPES,
+  formatRuntimeMs: formatRuntime,
+  formatDistance,
+  formatStat,
+} = require("../utils/kzHelpers");
 const logger = require("../utils/logger");
 const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
-
-// Constants for KZ modes and jump types
-const KZ_MODES = {
-  0: "vanilla",
-  1: "simplekz",
-  2: "kztimer",
-};
-
-const JUMP_TYPES = {
-  0: "longjump",
-  1: "bhop",
-  2: "multibhop",
-  3: "weirdjump",
-  4: "dropbhop",
-  5: "countjump",
-  6: "ladderjump",
-};
-
-// AirStats AirType enum from more-stats plugin
-// See: https://github.com/zer0k-z/more-stats/blob/main/addons/sourcemod/scripting/include/more-stats.inc
-const AIR_TYPES = {
-  0: "air_time", // Ticks spent in the air
-  1: "strafes", // Strafe count in the air, determined by mouse movements
-  2: "overlap", // Ticks with overlapped strafe keys (no acceleration)
-  3: "dead_air", // Ticks with no strafe key pressed
-  4: "bad_angles", // Ticks where air acceleration has no impact due to bad angles
-  5: "air_accel_time", // Ticks gaining speed in the air (Sync2)
-  6: "air_vel_change_time", // Ticks where air acceleration would have an impact on velocity (Sync3)
-};
-
-// BhopStats StatType1 enum from more-stats plugin
-const BHOP_STAT_TYPES = {
-  0: "bhop_ticks", // Ground ticks before jump (0-7 ticks, index in StatType2)
-  1: "perf_streaks", // Consecutive perfect bhop streaks (1-24, index in StatType2)
-  2: "scroll_efficiency", // Scroll stats: 0=registered, 1=fast, 2=slow, 3=timing_total, 4=timing_samples
-  3: "strafe_count", // Strafe count during bhops
-  4: "gokz_perf_count", // Total perfect bhops as counted by GOKZ
-};
-
-// ScrollEff sub-types for StatType1=2
-const SCROLL_EFF_TYPES = {
-  0: "registered_scrolls",
-  1: "fast_scrolls",
-  2: "slow_scrolls",
-  3: "timing_total",
-  4: "timing_samples",
-};
 
 /**
  * Helper to get pool based on tickrate parameter
@@ -67,51 +32,6 @@ const SCROLL_EFF_TYPES = {
  */
 function getPoolForTickrate(tickrate) {
   return tickrate === "64" ? getKzLocalCSGO64Pool() : getKzLocalCSGO128Pool();
-}
-
-/**
- * Convert SteamID32 to SteamID64
- * @param {number} steamid32 - SteamID32 (account ID)
- * @returns {string} SteamID64
- */
-function steamid32To64(steamid32) {
-  return (BigInt("76561197960265728") + BigInt(steamid32)).toString();
-}
-
-/**
- * Convert SteamID64 to SteamID32
- * @param {string} steamid64 - SteamID64
- * @returns {number} SteamID32
- */
-function steamid64To32(steamid64) {
-  return Number(BigInt(steamid64) - BigInt("76561197960265728"));
-}
-
-/**
- * Format runtime from MS to seconds
- * @param {number} runtime - Runtime in MS (1000 = 1 second)
- * @returns {number} Runtime in seconds
- */
-function formatRuntime(runtime) {
-  return runtime / 1000;
-}
-
-/**
- * Format distance from units to readable value
- * @param {number} distance - Distance in units (10000 = 1.0)
- * @returns {number} Distance value
- */
-function formatDistance(distance) {
-  return distance / 10000;
-}
-
-/**
- * Format js stats from raw to readable value
- * @param {number} value - Raw stat value (sync, pre, max)
- * @returns {number} Formatted stat value
- */
-function formatStat(value) {
-  return value / 100;
 }
 
 // ==================== MAPS ENDPOINTS ====================

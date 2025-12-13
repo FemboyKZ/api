@@ -1,6 +1,9 @@
 const Rcon = require("rcon-srcds").default;
 const logger = require("../utils/logger");
-const { sanitizePlayerName } = require("../utils/validators");
+const {
+  sanitizePlayerName,
+  convertToSteamID64,
+} = require("../utils/validators");
 
 /**
  * RCON Query Service for CS:GO and CS2 Servers
@@ -299,54 +302,6 @@ function parseStatusResponse(statusText, isCS2 = false) {
     `Parsed ${players.length} players (${serverInfo.botCount} bots)`,
   );
   return { players, serverInfo };
-}
-
-/**
- * Convert Steam ID from SteamID2 or SteamID3 format to SteamID64
- *
- * Supported formats:
- * - 76561198... (SteamID64) - returned as-is
- * - STEAM_X:Y:Z (SteamID2) - converted to SteamID64
- * - [U:1:Z] (SteamID3) - converted to SteamID64
- *
- * @param {string} steamid - Steam ID in any format
- * @returns {string|null} SteamID64 (17-digit string) or null if invalid
- */
-function convertToSteamID64(steamid) {
-  if (!steamid) return null;
-
-  const trimmedId = steamid.trim();
-
-  // Already SteamID64
-  if (/^\d{17}$/.test(trimmedId)) {
-    return trimmedId;
-  }
-
-  // SteamID2: STEAM_X:Y:Z -> 76561197960265728 + (Z * 2) + Y
-  const steamID2Match = trimmedId.match(/STEAM_[0-9]:([0-9]):(\d+)/);
-  if (steamID2Match) {
-    const [, y, z] = steamID2Match;
-    const accountId = parseInt(z, 10) * 2 + parseInt(y, 10);
-    const steamId64 = (
-      BigInt(76561197960265728) + BigInt(accountId)
-    ).toString();
-    logger.debug(`Converted ${trimmedId} -> ${steamId64}`);
-    return steamId64;
-  }
-
-  // SteamID3: [U:1:Z] -> 76561197960265728 + Z
-  const steamID3Match = trimmedId.match(/\[U:1:(\d+)\]/);
-  if (steamID3Match) {
-    const accountId = parseInt(steamID3Match[1], 10);
-    const steamId64 = (
-      BigInt(76561197960265728) + BigInt(accountId)
-    ).toString();
-    logger.debug(`Converted ${trimmedId} -> ${steamId64}`);
-    return steamId64;
-  }
-
-  logger.warn(`Unknown Steam ID format: ${trimmedId}`);
-  return null;
 }
 
 module.exports = { queryRcon, convertToSteamID64 };

@@ -1,5 +1,11 @@
 // Validation utilities for API input
 
+/**
+ * Steam base ID constant (used in all SteamID conversions)
+ * SteamID64 = STEAM_BASE_ID + account_id
+ */
+const STEAM_BASE_ID = BigInt("76561197960265728");
+
 function isValidIP(ip) {
   // IPv4 validation
   const ipv4Regex =
@@ -60,7 +66,7 @@ function convertToSteamID64(steamid) {
     const Y = parseInt(steamid2Match[1], 10);
     const Z = parseInt(steamid2Match[2], 10);
     const accountID = Z * 2 + Y;
-    const steamID64 = BigInt("76561197960265728") + BigInt(accountID);
+    const steamID64 = STEAM_BASE_ID + BigInt(accountID);
     return steamID64.toString();
   }
 
@@ -68,11 +74,29 @@ function convertToSteamID64(steamid) {
   const steamid3Match = steamid.match(/^\[U:1:([0-9]+)\]$/);
   if (steamid3Match) {
     const accountID = parseInt(steamid3Match[1], 10);
-    const steamID64 = BigInt("76561197960265728") + BigInt(accountID);
+    const steamID64 = STEAM_BASE_ID + BigInt(accountID);
     return steamID64.toString();
   }
 
   return null;
+}
+
+/**
+ * Convert SteamID32 (account ID) to SteamID64
+ * @param {number|string} steamid32 - SteamID32 (account ID)
+ * @returns {string} SteamID64
+ */
+function steamid32To64(steamid32) {
+  return (STEAM_BASE_ID + BigInt(steamid32)).toString();
+}
+
+/**
+ * Convert SteamID64 to SteamID32 (account ID)
+ * @param {string} steamid64 - SteamID64
+ * @returns {number} SteamID32
+ */
+function steamid64To32(steamid64) {
+  return Number(BigInt(steamid64) - STEAM_BASE_ID);
 }
 
 function sanitizeString(str, maxLength = 255) {
@@ -86,6 +110,29 @@ function validatePagination(page, limit, maxLimit = 100) {
   const offset = (validPage - 1) * validLimit;
 
   return { page: validPage, limit: validLimit, offset };
+}
+
+/**
+ * Validate and get sort field from allowed fields
+ * @param {string} sort - Requested sort field
+ * @param {string[]} validFields - Array of valid field names
+ * @param {string} defaultField - Default field if invalid
+ * @returns {string} Valid sort field
+ */
+function validateSortField(sort, validFields, defaultField) {
+  return validFields.includes(sort) ? sort : defaultField;
+}
+
+/**
+ * Validate and get sort order (ASC/DESC)
+ * @param {string} order - Requested order ('asc' or 'desc')
+ * @param {string} defaultOrder - Default order if not specified ('DESC')
+ * @returns {string} 'ASC' or 'DESC'
+ */
+function validateSortOrder(order, defaultOrder = "DESC") {
+  if (order === "asc") return "ASC";
+  if (order === "desc") return "DESC";
+  return defaultOrder;
 }
 
 /**
@@ -194,12 +241,22 @@ function sanitizeMapName(mapName) {
 }
 
 module.exports = {
+  // Constants
+  STEAM_BASE_ID,
+  // IP/Port validation
   isValidIP,
   isValidPort,
+  // SteamID functions
   isValidSteamID,
   convertToSteamID64,
+  steamid32To64,
+  steamid64To32,
+  // String sanitization
   sanitizeString,
-  validatePagination,
   sanitizePlayerName,
   sanitizeMapName,
+  // Query helpers
+  validatePagination,
+  validateSortField,
+  validateSortOrder,
 };
