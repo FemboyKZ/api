@@ -5,7 +5,7 @@ const {
   getClientIP,
   isLocalhost,
   isWhitelisted,
-} = require("../src/utils/adminAuth");
+} = require("../src/utils/auth");
 
 // Store original env vars
 const originalEnv = process.env;
@@ -127,7 +127,7 @@ describe("Admin Auth Middleware", () => {
 
       // Re-require the module to pick up new env vars
       jest.resetModules();
-      const { adminAuth: freshAdminAuth } = require("../src/utils/adminAuth");
+      const { adminAuth: freshAdminAuth } = require("../src/utils/auth");
 
       freshAdminAuth(mockReq, mockRes, mockNext);
 
@@ -141,7 +141,7 @@ describe("Admin Auth Middleware", () => {
     it("should accept valid API key in Authorization header", () => {
       process.env.ADMIN_API_KEY = "test-secret-key-12345";
       jest.resetModules();
-      const { adminAuth: freshAdminAuth } = require("../src/utils/adminAuth");
+      const { adminAuth: freshAdminAuth } = require("../src/utils/auth");
 
       mockReq.headers.authorization = "Bearer test-secret-key-12345";
 
@@ -156,7 +156,7 @@ describe("Admin Auth Middleware", () => {
     it("should accept valid API key in X-API-Key header", () => {
       process.env.ADMIN_API_KEY = "test-secret-key-12345";
       jest.resetModules();
-      const { adminAuth: freshAdminAuth } = require("../src/utils/adminAuth");
+      const { adminAuth: freshAdminAuth } = require("../src/utils/auth");
 
       mockReq.headers["x-api-key"] = "test-secret-key-12345";
 
@@ -168,7 +168,7 @@ describe("Admin Auth Middleware", () => {
     it("should accept valid API key in query parameter", () => {
       process.env.ADMIN_API_KEY = "test-secret-key-12345";
       jest.resetModules();
-      const { adminAuth: freshAdminAuth } = require("../src/utils/adminAuth");
+      const { adminAuth: freshAdminAuth } = require("../src/utils/auth");
 
       mockReq.query.api_key = "test-secret-key-12345";
 
@@ -181,7 +181,7 @@ describe("Admin Auth Middleware", () => {
       process.env.ADMIN_API_KEY = "test-secret-key-12345";
       process.env.NODE_ENV = "production";
       jest.resetModules();
-      const { adminAuth: freshAdminAuth } = require("../src/utils/adminAuth");
+      const { adminAuth: freshAdminAuth } = require("../src/utils/auth");
 
       mockReq.headers.authorization = "Bearer wrong-key";
 
@@ -196,7 +196,7 @@ describe("Admin Auth Middleware", () => {
     it("should allow localhost access in development mode", () => {
       process.env.NODE_ENV = "development";
       jest.resetModules();
-      const { adminAuth: freshAdminAuth } = require("../src/utils/adminAuth");
+      const { adminAuth: freshAdminAuth } = require("../src/utils/auth");
 
       mockReq.socket.remoteAddress = "127.0.0.1";
 
@@ -215,7 +215,7 @@ describe("Admin Auth Middleware", () => {
       jest.resetModules();
       const {
         optionalAdminAuth: freshOptionalAdminAuth,
-      } = require("../src/utils/adminAuth");
+      } = require("../src/utils/auth");
 
       freshOptionalAdminAuth(mockReq, mockRes, mockNext);
 
@@ -228,7 +228,7 @@ describe("Admin Auth Middleware", () => {
       jest.resetModules();
       const {
         optionalAdminAuth: freshOptionalAdminAuth,
-      } = require("../src/utils/adminAuth");
+      } = require("../src/utils/auth");
 
       mockReq.headers.authorization = "Bearer test-secret-key-12345";
 

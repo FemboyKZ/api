@@ -16,7 +16,7 @@ jest.mock("../src/db/redis", () => ({
 }));
 
 // Mock adminAuth to allow all requests in tests
-jest.mock("../src/utils/adminAuth", () => ({
+jest.mock("../src/utils/auth", () => ({
   adminAuth: (req, res, next) => {
     req.adminAuth = { method: "test", ip: "127.0.0.1" };
     next();
@@ -26,6 +26,13 @@ jest.mock("../src/utils/adminAuth", () => ({
     req.adminAuth = { method: "test", ip: "127.0.0.1" };
     next();
   },
+  apiKeyMiddleware: (req, res, next) => next(),
+  shouldSkipRateLimit: () => true,
+  getClientIP: () => "127.0.0.1",
+  isLocalhost: () => true,
+  isWhitelisted: () => false,
+  isApiWhitelisted: () => false,
+  generateAPIKey: () => "test-api-key",
 }));
 
 // Mock kzStatistics service
