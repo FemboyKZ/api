@@ -596,6 +596,7 @@ async function populateWorldRecords(pool, options) {
   let totalMaps = 0;
   let totalWRs = 0;
   let hasMore = true;
+  let lastMapName = "";
 
   // Build query based on force option
   let whereClause = "WHERE m.validated = TRUE";
@@ -604,11 +605,17 @@ async function populateWorldRecords(pool, options) {
   }
 
   while (hasMore) {
+    // Use cursor-based pagination with map_name for --force mode
+    let cursorClause = "";
+    if (options.force && lastMapName) {
+      cursorClause = `AND m.map_name > '${lastMapName.replace(/'/g, "''")}'`;
+    }
+    
     const [maps] = await pool.query(
       `SELECT m.id, m.map_name
        FROM kz_maps m
        LEFT JOIN kz_map_statistics ms ON m.id = ms.map_id
-       ${whereClause}
+       ${whereClause} ${cursorClause}
        ORDER BY m.map_name ASC
        LIMIT ?`,
       [options.batchSize],
@@ -627,6 +634,7 @@ async function populateWorldRecords(pool, options) {
       console.log(`${wrCount}/6 WRs`);
       totalMaps++;
       totalWRs += wrCount;
+      lastMapName = map.map_name;
     }
 
     if (maps.length < options.batchSize) {
@@ -676,6 +684,7 @@ async function populatePlayerPBs(pool, options) {
   let totalPlayers = 0;
   let totalPBs = 0;
   let hasMore = true;
+  let lastPlayerId = 0;
 
   // Build where clause based on force option
   let existsClause = "";
@@ -691,10 +700,11 @@ async function populatePlayerPBs(pool, options) {
        FROM kz_players p
        INNER JOIN kz_records_partitioned r ON p.id = r.player_id
        WHERE (p.is_banned IS NULL OR p.is_banned = FALSE)
+         AND p.id > ?
          ${existsClause}
        ORDER BY p.id
        LIMIT ?`,
-      [options.batchSize],
+      [lastPlayerId, options.batchSize],
     );
 
     if (players.length === 0) {
@@ -715,6 +725,7 @@ async function populatePlayerPBs(pool, options) {
       console.log(`${pbCount} PBs`);
       totalPlayers++;
       totalPBs += pbCount;
+      lastPlayerId = player.id;
     }
 
     if (players.length < options.batchSize) {
