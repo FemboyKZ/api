@@ -1,4 +1,4 @@
-const { defineConfig } = require("eslint/config");
+const { defineConfig, globalIgnores } = require("eslint/config");
 
 module.exports = defineConfig([
   {
@@ -7,4 +7,5 @@ module.exports = defineConfig([
       "prefer-const": "error",
     },
   },
+  globalIgnores(["coverage/*"]),
 ]);

@@ -13,8 +13,8 @@
     "test": "jest --coverage",
     "test:watch": "jest --watch",
     "test:ci": "jest --ci --coverage --maxWorkers=2",
-    "lint": "eslint src/**/*.js",
-    "lint:fix": "eslint src/**/*.js --fix",
+    "lint": "npx eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "npx eslint . --ext .js,.jsx,.ts,.tsx --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "docker:build": "docker build -t server-api .",
@@ -44,7 +44,7 @@
     "winston": "^3.19.0"
   },
   "devDependencies": {
-    "eslint": "^9.39.1",
+    "eslint": "^9.39.2",
     "jest": "^30.2.0",
     "jsdom": "^27.3.0",
     "nodemon": "^3.1.11",
