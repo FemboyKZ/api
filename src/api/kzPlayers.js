@@ -721,6 +721,474 @@ router.get(
   },
 );
 
+/**
+ * @swagger
+ * /kzglobal/players/{steamid}/pbs:
+ *   get:
+ *     summary: Get player's personal bests
+ *     description: Returns cached personal bests for a player across all maps
+ *     tags: [KZ Global]
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SteamID64 or Steam ID
+ *       - in: query
+ *         name: mode
+ *         schema:
+ *           type: string
+ *           default: kz_timer
+ *         description: Game mode filter
+ *       - in: query
+ *         name: stage
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Stage filter (0 for main course)
+ *       - in: query
+ *         name: validated
+ *         schema:
+ *           type: boolean
+ *         description: Only show validated maps
+ *     responses:
+ *       200:
+ *         description: Player's personal bests
+ *       404:
+ *         description: Player not found
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/:steamid/pbs",
+  cacheMiddleware(60, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const { steamid } = req.params;
+      const { mode = "kz_timer", stage = 0, validated } = req.query;
+
+      const pool = getKzPool();
+
+      // Convert to SteamID64 if needed
+      let steamid64 = steamid;
+      if (!isValidSteamID(steamid)) {
+        const converted = convertToSteamID64(steamid);
+        if (!converted) {
+          return res.status(400).json({ error: "Invalid SteamID format" });
+        }
+        steamid64 = converted;
+      }
+
+      // Check if PBs table exists and has data
+      const pbsTableExists = await tableExists("kz_player_map_pbs");
+
+      if (pbsTableExists) {
+        // Use cached PBs
+        const { getPlayerPBs } = require("../services/playerPBsSync");
+        const pbs = await getPlayerPBs(steamid64, {
+          mode: sanitizeString(mode, 32),
+          stage: parseInt(stage, 10) || 0,
+          validated:
+            validated === "true" ? true : validated === "false" ? false : null,
+        });
+
+        if (pbs.length > 0) {
+          return res.json({
+            steamid64,
+            mode,
+            stage: parseInt(stage, 10) || 0,
+            data: pbs,
+            total: pbs.length,
+            source: "cache",
+          });
+        }
+      }
+
+      // Fallback: calculate PBs on the fly
+      let query = `
+        SELECT 
+          m.id as map_id,
+          m.map_name,
+          m.difficulty as map_difficulty,
+          m.validated as map_validated,
+          pro.time as pro_time,
+          pro.points as pro_points,
+          pro.id as pro_record_id,
+          pro.created_on as pro_created_on,
+          tp.time as tp_time,
+          tp.teleports as tp_teleports,
+          tp.points as tp_points,
+          tp.id as tp_record_id,
+          tp.created_on as tp_created_on
+        FROM kz_maps m
+        INNER JOIN (
+          SELECT DISTINCT map_id FROM kz_records_partitioned 
+          WHERE steamid64 = ? AND mode = ? AND stage = ?
+        ) player_maps ON m.id = player_maps.map_id
+        LEFT JOIN (
+          SELECT r.map_id, r.id, r.time, r.points, r.created_on
+          FROM kz_records_partitioned r
+          INNER JOIN (
+            SELECT map_id, MIN(time) as min_time
+            FROM kz_records_partitioned
+            WHERE steamid64 = ? AND mode = ? AND stage = ? AND teleports = 0
+            GROUP BY map_id
+          ) best ON r.map_id = best.map_id AND r.time = best.min_time
+          WHERE r.steamid64 = ? AND r.mode = ? AND r.stage = ? AND r.teleports = 0
+          GROUP BY r.map_id
+        ) pro ON m.id = pro.map_id
+        LEFT JOIN (
+          SELECT r.map_id, r.id, r.time, r.teleports, r.points, r.created_on
+          FROM kz_records_partitioned r
+          INNER JOIN (
+            SELECT map_id, MIN(time) as min_time
+            FROM kz_records_partitioned
+            WHERE steamid64 = ? AND mode = ? AND stage = ? AND teleports > 0
+            GROUP BY map_id
+          ) best ON r.map_id = best.map_id AND r.time = best.min_time
+          WHERE r.steamid64 = ? AND r.mode = ? AND r.stage = ? AND r.teleports > 0
+          GROUP BY r.map_id
+        ) tp ON m.id = tp.map_id
+        WHERE 1=1
+      `;
+
+      const stageNum = parseInt(stage, 10) || 0;
+      const modeStr = sanitizeString(mode, 32);
+      const params = [
+        steamid64,
+        modeStr,
+        stageNum,
+        steamid64,
+        modeStr,
+        stageNum,
+        steamid64,
+        modeStr,
+        stageNum,
+        steamid64,
+        modeStr,
+        stageNum,
+        steamid64,
+        modeStr,
+        stageNum,
+      ];
+
+      if (validated === "true") {
+        query += " AND m.validated = TRUE";
+      } else if (validated === "false") {
+        query += " AND m.validated = FALSE";
+      }
+
+      query += " ORDER BY m.map_name ASC";
+
+      const [pbs] = await pool.query(query, params);
+
+      res.json({
+        steamid64,
+        mode: modeStr,
+        stage: stageNum,
+        data: pbs,
+        total: pbs.length,
+        source: "live",
+      });
+    } catch (e) {
+      logger.error(
+        `Failed to fetch PBs for player ${req.params.steamid}: ${e.message}`,
+      );
+      res.status(500).json({ error: "Failed to fetch player PBs" });
+    }
+  },
+);
+
+/**
+ * @swagger
+ * /kzglobal/players/{steamid}/completions:
+ *   get:
+ *     summary: Get player's map completion status
+ *     description: Returns all maps with player's completion status for filtering
+ *     tags: [KZ Global]
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SteamID64 or Steam ID
+ *       - in: query
+ *         name: mode
+ *         schema:
+ *           type: string
+ *           default: kz_timer
+ *       - in: query
+ *         name: stage
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *       - in: query
+ *         name: validated
+ *         schema:
+ *           type: boolean
+ *           default: true
+ *       - in: query
+ *         name: difficulty
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 7
+ *       - in: query
+ *         name: completed
+ *         schema:
+ *           type: string
+ *           enum: [pro, tp, any, none]
+ *         description: Filter by completion type
+ *     responses:
+ *       200:
+ *         description: Maps with completion status and statistics
+ *       400:
+ *         description: Invalid SteamID
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/:steamid/completions",
+  cacheMiddleware(60, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const { steamid } = req.params;
+      const {
+        mode = "kz_timer",
+        stage = 0,
+        validated = "true",
+        difficulty,
+        completed,
+      } = req.query;
+
+      const pool = getKzPool();
+
+      // Convert to SteamID64 if needed
+      let steamid64 = steamid;
+      if (!isValidSteamID(steamid)) {
+        const converted = convertToSteamID64(steamid);
+        if (!converted) {
+          return res.status(400).json({ error: "Invalid SteamID format" });
+        }
+        steamid64 = converted;
+      }
+
+      // Check if PBs table exists
+      const pbsTableExists = await tableExists("kz_player_map_pbs");
+
+      if (pbsTableExists) {
+        const {
+          getPlayerMapCompletions,
+        } = require("../services/playerPBsSync");
+        const result = await getPlayerMapCompletions(steamid64, {
+          mode: sanitizeString(mode, 32),
+          stage: parseInt(stage, 10) || 0,
+          validated:
+            validated === "true" ? true : validated === "false" ? false : null,
+          difficulty: difficulty ? parseInt(difficulty, 10) : null,
+          completed: completed || null,
+        });
+
+        return res.json({
+          steamid64,
+          mode,
+          stage: parseInt(stage, 10) || 0,
+          ...result,
+        });
+      }
+
+      // Fallback: calculate on the fly
+      const stageNum = parseInt(stage, 10) || 0;
+      const modeStr = sanitizeString(mode, 32);
+
+      let query = `
+        SELECT 
+          m.id as map_id,
+          m.map_name,
+          m.difficulty,
+          m.validated,
+          pb.pro_time,
+          pb.pro_points,
+          pb.tp_time,
+          pb.tp_teleports,
+          pb.tp_points,
+          CASE 
+            WHEN pb.pro_time IS NOT NULL THEN 'pro'
+            WHEN pb.tp_time IS NOT NULL THEN 'tp'
+            ELSE 'none'
+          END as completion_status
+        FROM kz_maps m
+        LEFT JOIN (
+          SELECT 
+            map_id,
+            MIN(CASE WHEN teleports = 0 THEN time END) as pro_time,
+            MAX(CASE WHEN teleports = 0 THEN points END) as pro_points,
+            MIN(CASE WHEN teleports > 0 THEN time END) as tp_time,
+            MIN(CASE WHEN teleports > 0 THEN teleports END) as tp_teleports,
+            MAX(CASE WHEN teleports > 0 THEN points END) as tp_points
+          FROM kz_records_partitioned
+          WHERE steamid64 = ? AND mode = ? AND stage = ?
+          GROUP BY map_id
+        ) pb ON m.id = pb.map_id
+        WHERE 1=1
+      `;
+      const params = [steamid64, modeStr, stageNum];
+
+      if (validated === "true") {
+        query += " AND m.validated = TRUE";
+      } else if (validated === "false") {
+        query += " AND m.validated = FALSE";
+      }
+
+      if (difficulty) {
+        query += " AND m.difficulty = ?";
+        params.push(parseInt(difficulty, 10));
+      }
+
+      if (completed === "pro") {
+        query += " AND pb.pro_time IS NOT NULL";
+      } else if (completed === "tp") {
+        query += " AND pb.tp_time IS NOT NULL AND pb.pro_time IS NULL";
+      } else if (completed === "any") {
+        query += " AND (pb.pro_time IS NOT NULL OR pb.tp_time IS NOT NULL)";
+      } else if (completed === "none") {
+        query += " AND pb.pro_time IS NULL AND pb.tp_time IS NULL";
+      }
+
+      query += " ORDER BY m.map_name ASC";
+
+      const [maps] = await pool.query(query, params);
+
+      // Calculate stats
+      const stats = {
+        total_maps: 0,
+        completed_pro: 0,
+        completed_tp_only: 0,
+        not_completed: 0,
+        by_difficulty: {},
+      };
+
+      for (const map of maps) {
+        stats.total_maps++;
+        if (map.pro_time !== null) {
+          stats.completed_pro++;
+        } else if (map.tp_time !== null) {
+          stats.completed_tp_only++;
+        } else {
+          stats.not_completed++;
+        }
+
+        const tier = map.difficulty || 0;
+        if (!stats.by_difficulty[tier]) {
+          stats.by_difficulty[tier] = {
+            total: 0,
+            completed_pro: 0,
+            completed_tp: 0,
+          };
+        }
+        stats.by_difficulty[tier].total++;
+        if (map.pro_time !== null) {
+          stats.by_difficulty[tier].completed_pro++;
+        }
+        if (map.tp_time !== null) {
+          stats.by_difficulty[tier].completed_tp++;
+        }
+      }
+
+      res.json({
+        steamid64,
+        mode: modeStr,
+        stage: stageNum,
+        data: maps,
+        stats,
+      });
+    } catch (e) {
+      logger.error(
+        `Failed to fetch completions for player ${req.params.steamid}: ${e.message}`,
+      );
+      res.status(500).json({ error: "Failed to fetch player completions" });
+    }
+  },
+);
+
+/**
+ * @swagger
+ * /kzglobal/players/{steamid}/refresh-pbs:
+ *   post:
+ *     summary: Force refresh player's PBs cache
+ *     description: Triggers a refresh of the player's personal bests cache
+ *     tags: [KZ Global]
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: PBs refreshed successfully
+ *       404:
+ *         description: Player not found
+ *       500:
+ *         description: Server error
+ */
+router.post("/:steamid/refresh-pbs", async (req, res) => {
+  try {
+    const { steamid } = req.params;
+    const pool = getKzPool();
+
+    // Convert to SteamID64 if needed
+    let steamid64 = steamid;
+    if (!isValidSteamID(steamid)) {
+      const converted = convertToSteamID64(steamid);
+      if (!converted) {
+        return res.status(400).json({ error: "Invalid SteamID format" });
+      }
+      steamid64 = converted;
+    }
+
+    // Get player ID
+    const [players] = await pool.query(
+      "SELECT id, player_name FROM kz_players WHERE steamid64 = ?",
+      [steamid64],
+    );
+
+    if (players.length === 0) {
+      return res.status(404).json({ error: "Player not found" });
+    }
+
+    const playerId = players[0].id;
+    const playerName = players[0].player_name;
+
+    // Check if PBs table exists
+    const pbsTableExists = await tableExists("kz_player_map_pbs");
+    if (!pbsTableExists) {
+      return res.status(503).json({
+        error: "PBs cache table not available",
+        message: "Run the migration to create kz_player_map_pbs table",
+      });
+    }
+
+    // Refresh PBs
+    const { refreshPlayerPBs } = require("../services/playerPBsSync");
+    const pbCount = await refreshPlayerPBs(playerId);
+
+    res.json({
+      message: "PBs refreshed successfully",
+      steamid64,
+      player_name: playerName,
+      pbs_count: pbCount,
+    });
+  } catch (e) {
+    logger.error(
+      `Failed to refresh PBs for player ${req.params.steamid}: ${e.message}`,
+    );
+    res.status(500).json({ error: "Failed to refresh player PBs" });
+  }
+});
+
 // Helper function to check if a table exists
 async function tableExists(tableName) {
   try {

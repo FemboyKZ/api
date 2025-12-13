@@ -18,6 +18,7 @@ const kzMapsRouter = require("./api/kzMaps");
 const kzServersRouter = require("./api/kzServers");
 const kzBansRouter = require("./api/kzBans");
 const kzLocalRouter = require("./api/kzLocal");
+const kzLocalCS2Router = require("./api/kzLocalCS2");
 const errorHandler = require("./utils/errorHandler");
 const logger = require("./utils/logger");
 const {
@@ -115,6 +116,9 @@ app.use("/kzglobal/bans", kzBansRouter);
 
 // KZ Local endpoints (CSGO 128/64 tick servers)
 app.use("/kzlocal", kzLocalRouter);
+
+// KZ Local CS2 endpoints (CS2 servers)
+app.use("/kzlocal-cs2", kzLocalCS2Router);
 
 app.use(errorHandler);
 

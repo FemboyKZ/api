@@ -39,6 +39,14 @@ const options = {
         name: "History",
         description: "Historical data and trends endpoints",
       },
+      {
+        name: "KZ Local",
+        description: "CS:GO KZ local server data (128/64 tick)",
+      },
+      {
+        name: "KZ Local CS2",
+        description: "CS2 KZ local server data (cs2kz-metamod plugin)",
+      },
     ],
   },
   // Path to the API routes with JSDoc comments

@@ -13,6 +13,8 @@ const { startUpdateLoop } = require("./services/updater");
 // const { startAvatarUpdateJob } = require("./services/steamQuery");
 const { startScraperJob } = require("./services/kzRecordsScraper");
 const { startBanCleanupJob } = require("./services/kzBanStatus");
+const { startWorldRecordsSyncJob } = require("./services/wrSync");
+const { startPlayerPBsSyncJob } = require("./services/playerPBsSync");
 const { initWebSocket } = require("./services/websocket");
 const { initRedis, closeRedis } = require("./db/redis");
 const { loadMessageIds } = require("./services/discordWebhook");
@@ -101,6 +103,18 @@ async function startServer() {
         startStatisticsJob(statsInterval);
         logger.info(
           `KZ Statistics refresh job enabled (interval: ${statsInterval / 1000 / 60} minutes)`,
+        );
+
+        // Step 14: Start World Records initial population (one-time, then updated by scraper)
+        startWorldRecordsSyncJob();
+        logger.info(
+          "World Records initial population started (updates via scraper after initial sync)",
+        );
+
+        // Step 15: Start Player PBs initial population (one-time, then updated by scraper)
+        startPlayerPBsSyncJob();
+        logger.info(
+          "Player PBs initial population started (updates via scraper after initial sync)",
         );
       }
     });

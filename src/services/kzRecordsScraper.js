@@ -487,8 +487,368 @@ async function processRecord(connection, record) {
     ],
   );
 
-  // Return true if a row was inserted, false if it was a duplicate
-  return result.affectedRows > 0;
+  const wasInserted = result.affectedRows > 0;
+
+  // If record was inserted, update PB and WR caches
+  if (wasInserted) {
+    await updatePBAndWROnNewRecord(connection, {
+      playerId: playerId.id,
+      steamid64: playerId.steamid64,
+      mapId,
+      mapName: sanitizeString(record.map_name, 255, "unknown_map"),
+      mode,
+      stage,
+      time,
+      teleports,
+      points,
+      recordId: record.id,
+      createdOn,
+    });
+  }
+
+  return wasInserted;
+}
+
+/**
+ * Update player PB and map WR caches when a new record is inserted
+ * Only updates if the new time is better than existing cached time
+ */
+async function updatePBAndWROnNewRecord(connection, recordData) {
+  const {
+    playerId,
+    steamid64,
+    mapId,
+    mapName,
+    mode,
+    stage,
+    time,
+    teleports,
+    points,
+    recordId,
+    createdOn,
+  } = recordData;
+
+  try {
+    // Check if kz_player_map_pbs table exists
+    const [pbTableCheck] = await connection.query(
+      `SELECT COUNT(*) as count FROM information_schema.tables 
+       WHERE table_schema = DATABASE() AND table_name = 'kz_player_map_pbs'`,
+    );
+
+    if (pbTableCheck[0].count > 0) {
+      // Update player PB cache
+      await updatePlayerPBOnNewRecord(connection, {
+        playerId,
+        steamid64,
+        mapId,
+        mapName,
+        mode,
+        stage,
+        time,
+        teleports,
+        points,
+        recordId,
+        createdOn,
+      });
+    }
+
+    // Check if kz_map_statistics table has new WR columns (expanded to all modes)
+    const [wrColumnCheck] = await connection.query(
+      `SELECT COUNT(*) as count FROM information_schema.columns 
+       WHERE table_schema = DATABASE() 
+       AND table_name = 'kz_map_statistics' 
+       AND column_name = 'wr_kz_timer_pro_time'`,
+    );
+
+    // Only update WR for stage 0 (main course)
+    if (wrColumnCheck[0].count > 0 && stage === 0) {
+      await updateMapWROnNewRecord(connection, {
+        mapId,
+        steamid64,
+        mode,
+        time,
+        teleports,
+        recordId,
+        createdOn,
+      });
+    }
+  } catch (error) {
+    // Log but don't fail the record insert - PB/WR updates are secondary
+    logger.warn(
+      `[KZ Scraper] Failed to update PB/WR cache for record ${recordId}: ${error.message}`,
+    );
+  }
+}
+
+/**
+ * Update player PB cache for a specific map/mode/stage
+ */
+async function updatePlayerPBOnNewRecord(connection, recordData) {
+  const {
+    playerId,
+    steamid64,
+    mapId,
+    mapName,
+    mode,
+    stage,
+    time,
+    teleports,
+    points,
+    recordId,
+    createdOn,
+  } = recordData;
+
+  const isPro = teleports === 0;
+
+  // Get current PB for this player/map/mode/stage
+  const [existing] = await connection.query(
+    `SELECT id, pro_time, tp_time FROM kz_player_map_pbs 
+     WHERE player_id = ? AND map_id = ? AND mode = ? AND stage = ?`,
+    [playerId, mapId, mode, stage],
+  );
+
+  if (existing.length === 0) {
+    // No existing PB - get map metadata and insert
+    const [mapData] = await connection.query(
+      `SELECT difficulty, validated FROM kz_maps WHERE id = ?`,
+      [mapId],
+    );
+
+    const difficulty = mapData.length > 0 ? mapData[0].difficulty : null;
+    const validated = mapData.length > 0 ? mapData[0].validated : null;
+
+    if (isPro) {
+      await connection.query(
+        `INSERT INTO kz_player_map_pbs 
+         (player_id, steamid64, map_id, map_name, mode, stage, 
+          pro_time, pro_teleports, pro_points, pro_record_id, pro_created_on,
+          map_difficulty, map_validated)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
+        [
+          playerId,
+          steamid64,
+          mapId,
+          mapName,
+          mode,
+          stage,
+          time,
+          points,
+          recordId,
+          createdOn,
+          difficulty,
+          validated,
+        ],
+      );
+    } else {
+      await connection.query(
+        `INSERT INTO kz_player_map_pbs 
+         (player_id, steamid64, map_id, map_name, mode, stage, 
+          tp_time, tp_teleports, tp_points, tp_record_id, tp_created_on,
+          map_difficulty, map_validated)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          playerId,
+          steamid64,
+          mapId,
+          mapName,
+          mode,
+          stage,
+          time,
+          teleports,
+          points,
+          recordId,
+          createdOn,
+          difficulty,
+          validated,
+        ],
+      );
+    }
+    logger.debug(
+      `[KZ Scraper] Created new PB for player ${playerId} on ${mapName}`,
+    );
+  } else {
+    // Check if new time is better
+    const currentPB = existing[0];
+    const currentTime = isPro ? currentPB.pro_time : currentPB.tp_time;
+
+    if (currentTime === null || time < parseFloat(currentTime)) {
+      // New PB!
+      if (isPro) {
+        await connection.query(
+          `UPDATE kz_player_map_pbs 
+           SET pro_time = ?, pro_points = ?, pro_record_id = ?, pro_created_on = ?, updated_at = NOW()
+           WHERE id = ?`,
+          [time, points, recordId, createdOn, currentPB.id],
+        );
+      } else {
+        await connection.query(
+          `UPDATE kz_player_map_pbs 
+           SET tp_time = ?, tp_teleports = ?, tp_points = ?, tp_record_id = ?, tp_created_on = ?, updated_at = NOW()
+           WHERE id = ?`,
+          [time, teleports, points, recordId, createdOn, currentPB.id],
+        );
+      }
+      logger.debug(
+        `[KZ Scraper] Updated PB for player ${playerId} on ${mapName}: ${currentTime}s → ${time}s`,
+      );
+    }
+  }
+}
+
+/**
+ * Update map WR cache if new record is faster
+ * Handles all 3 modes (kz_timer, kz_simple, kz_vanilla) and both pro/overall
+ */
+async function updateMapWROnNewRecord(connection, recordData) {
+  const { mapId, steamid64, mode, time, teleports, recordId } = recordData;
+
+  // Determine which WR columns to potentially update
+  const modePrefix = mode.replace("_", "_"); // kz_timer, kz_simple, kz_vanilla
+  const isPro = teleports === 0;
+
+  // Get player name
+  const [player] = await connection.query(
+    `SELECT player_name FROM kz_players WHERE steamid64 = ?`,
+    [steamid64],
+  );
+  const playerName = player.length > 0 ? player[0].player_name : "Unknown";
+
+  // Columns to update based on mode
+  const proTimeCol = `wr_${modePrefix}_pro_time`;
+  const proSteamidCol = `wr_${modePrefix}_pro_steamid64`;
+  const proPlayerCol = `wr_${modePrefix}_pro_player_name`;
+  const proRecordCol = `wr_${modePrefix}_pro_record_id`;
+
+  const overallTimeCol = `wr_${modePrefix}_overall_time`;
+  const overallTpsCol = `wr_${modePrefix}_overall_teleports`;
+  const overallSteamidCol = `wr_${modePrefix}_overall_steamid64`;
+  const overallPlayerCol = `wr_${modePrefix}_overall_player_name`;
+  const overallRecordCol = `wr_${modePrefix}_overall_record_id`;
+
+  // Get current WRs for this map and mode
+  const [existing] = await connection.query(
+    `SELECT ${proTimeCol} as pro_time, ${overallTimeCol} as overall_time 
+     FROM kz_map_statistics WHERE map_id = ?`,
+    [mapId],
+  );
+
+  if (existing.length === 0) {
+    // No statistics row yet - this shouldn't happen if populate_map_statistics ran
+    // But let's be safe and create one
+    const insertData = { map_id: mapId };
+
+    if (isPro) {
+      // Pro record - update both pro and overall columns
+      await connection.query(
+        `INSERT INTO kz_map_statistics 
+         (map_id, ${proTimeCol}, ${proSteamidCol}, ${proPlayerCol}, ${proRecordCol},
+          ${overallTimeCol}, ${overallTpsCol}, ${overallSteamidCol}, ${overallPlayerCol}, ${overallRecordCol})
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           ${proTimeCol} = IF(VALUES(${proTimeCol}) < ${proTimeCol} OR ${proTimeCol} IS NULL, VALUES(${proTimeCol}), ${proTimeCol}),
+           ${proSteamidCol} = IF(VALUES(${proTimeCol}) < ${proTimeCol} OR ${proTimeCol} IS NULL, VALUES(${proSteamidCol}), ${proSteamidCol}),
+           ${proPlayerCol} = IF(VALUES(${proTimeCol}) < ${proTimeCol} OR ${proTimeCol} IS NULL, VALUES(${proPlayerCol}), ${proPlayerCol}),
+           ${proRecordCol} = IF(VALUES(${proTimeCol}) < ${proTimeCol} OR ${proTimeCol} IS NULL, VALUES(${proRecordCol}), ${proRecordCol}),
+           ${overallTimeCol} = IF(VALUES(${overallTimeCol}) < ${overallTimeCol} OR ${overallTimeCol} IS NULL, VALUES(${overallTimeCol}), ${overallTimeCol}),
+           ${overallTpsCol} = IF(VALUES(${overallTimeCol}) < ${overallTimeCol} OR ${overallTimeCol} IS NULL, VALUES(${overallTpsCol}), ${overallTpsCol}),
+           ${overallSteamidCol} = IF(VALUES(${overallTimeCol}) < ${overallTimeCol} OR ${overallTimeCol} IS NULL, VALUES(${overallSteamidCol}), ${overallSteamidCol}),
+           ${overallPlayerCol} = IF(VALUES(${overallTimeCol}) < ${overallTimeCol} OR ${overallTimeCol} IS NULL, VALUES(${overallPlayerCol}), ${overallPlayerCol}),
+           ${overallRecordCol} = IF(VALUES(${overallTimeCol}) < ${overallTimeCol} OR ${overallTimeCol} IS NULL, VALUES(${overallRecordCol}), ${overallRecordCol})`,
+        [
+          mapId,
+          time,
+          steamid64,
+          playerName,
+          recordId,
+          time,
+          steamid64,
+          playerName,
+          recordId,
+        ],
+      );
+    } else {
+      // TP record - only update overall columns
+      await connection.query(
+        `INSERT INTO kz_map_statistics 
+         (map_id, ${overallTimeCol}, ${overallTpsCol}, ${overallSteamidCol}, ${overallPlayerCol}, ${overallRecordCol})
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           ${overallTimeCol} = IF(VALUES(${overallTimeCol}) < ${overallTimeCol} OR ${overallTimeCol} IS NULL, VALUES(${overallTimeCol}), ${overallTimeCol}),
+           ${overallTpsCol} = IF(VALUES(${overallTimeCol}) < ${overallTimeCol} OR ${overallTimeCol} IS NULL, VALUES(${overallTpsCol}), ${overallTpsCol}),
+           ${overallSteamidCol} = IF(VALUES(${overallTimeCol}) < ${overallTimeCol} OR ${overallTimeCol} IS NULL, VALUES(${overallSteamidCol}), ${overallSteamidCol}),
+           ${overallPlayerCol} = IF(VALUES(${overallTimeCol}) < ${overallTimeCol} OR ${overallTimeCol} IS NULL, VALUES(${overallPlayerCol}), ${overallPlayerCol}),
+           ${overallRecordCol} = IF(VALUES(${overallTimeCol}) < ${overallTimeCol} OR ${overallTimeCol} IS NULL, VALUES(${overallRecordCol}), ${overallRecordCol})`,
+        [mapId, time, teleports, steamid64, playerName, recordId],
+      );
+    }
+    logger.debug(
+      `[KZ Scraper] Set initial WR for map ${mapId} (${mode}): ${time}s by ${playerName}`,
+    );
+    return;
+  }
+
+  // Check if this beats current WRs
+  const currentProTime = existing[0].pro_time
+    ? parseFloat(existing[0].pro_time)
+    : null;
+  const currentOverallTime = existing[0].overall_time
+    ? parseFloat(existing[0].overall_time)
+    : null;
+
+  const updates = [];
+  const values = [];
+
+  if (isPro) {
+    // Pro record can beat both pro and overall WRs
+    if (currentProTime === null || time < currentProTime) {
+      updates.push(
+        `${proTimeCol} = ?`,
+        `${proSteamidCol} = ?`,
+        `${proPlayerCol} = ?`,
+        `${proRecordCol} = ?`,
+      );
+      values.push(time, steamid64, playerName, recordId);
+      logger.info(
+        `[KZ Scraper] New PRO WR for map ${mapId} (${mode}): ${currentProTime}s → ${time}s by ${playerName}`,
+      );
+    }
+    if (currentOverallTime === null || time < currentOverallTime) {
+      updates.push(
+        `${overallTimeCol} = ?`,
+        `${overallTpsCol} = ?`,
+        `${overallSteamidCol} = ?`,
+        `${overallPlayerCol} = ?`,
+        `${overallRecordCol} = ?`,
+      );
+      values.push(time, 0, steamid64, playerName, recordId);
+      logger.info(
+        `[KZ Scraper] New OVERALL WR for map ${mapId} (${mode}): ${currentOverallTime}s → ${time}s by ${playerName}`,
+      );
+    }
+  } else {
+    // TP record can only beat overall WR
+    if (currentOverallTime === null || time < currentOverallTime) {
+      updates.push(
+        `${overallTimeCol} = ?`,
+        `${overallTpsCol} = ?`,
+        `${overallSteamidCol} = ?`,
+        `${overallPlayerCol} = ?`,
+        `${overallRecordCol} = ?`,
+      );
+      values.push(time, teleports, steamid64, playerName, recordId);
+      logger.info(
+        `[KZ Scraper] New OVERALL WR (TP) for map ${mapId} (${mode}): ${currentOverallTime}s → ${time}s by ${playerName} (${teleports} TPs)`,
+      );
+    }
+  }
+
+  if (updates.length > 0) {
+    values.push(mapId);
+    await connection.query(
+      `UPDATE kz_map_statistics SET ${updates.join(", ")} WHERE map_id = ?`,
+      values,
+    );
+  }
 }
 
 /**

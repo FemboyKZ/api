@@ -335,6 +335,407 @@ router.get(
 
 /**
  * @swagger
+ * /kzglobal/maps/enriched:
+ *   get:
+ *     summary: Get enriched maps with world record holders
+ *     description: Returns maps with global data and world record holder information for efficient front-end loading. Optionally include player completion status.
+ *     tags: [KZ Global]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *           maximum: 100
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: Filter by map name (partial match)
+ *       - in: query
+ *         name: difficulty
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 7
+ *         description: Filter by difficulty tier
+ *       - in: query
+ *         name: validated
+ *         schema:
+ *           type: boolean
+ *         description: Filter by validation status
+ *       - in: query
+ *         name: steamid
+ *         schema:
+ *           type: string
+ *         description: SteamID64 to include player completion status
+ *       - in: query
+ *         name: completed
+ *         schema:
+ *           type: string
+ *           enum: [pro, tp, any, none]
+ *         description: Filter by completion status (requires steamid)
+ *       - in: query
+ *         name: mode
+ *         schema:
+ *           type: string
+ *           default: kz_timer
+ *         description: Mode for completion check
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *           enum: [name, difficulty, records, updated_on]
+ *           default: name
+ *       - in: query
+ *         name: order
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: asc
+ *     responses:
+ *       200:
+ *         description: Enriched maps with world records and optional completion status
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/enriched",
+  cacheMiddleware(60, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const pool = getKzPool();
+      if (!pool) {
+        logger.error("KZ database pool not initialized");
+        return res.status(503).json({
+          error: "KZ database service unavailable",
+          message: "The KZ records database is not connected.",
+        });
+      }
+
+      const {
+        page,
+        limit,
+        name,
+        difficulty,
+        validated,
+        steamid,
+        completed,
+        mode = "kz_timer",
+        sort = "name",
+        order = "asc",
+      } = req.query;
+      const { limit: validLimit, offset } = validatePagination(
+        page,
+        limit,
+        100,
+      );
+
+      const validSortFields = ["name", "difficulty", "records", "updated_on"];
+      const sortField = validSortFields.includes(sort) ? sort : "name";
+      const sortOrder = order === "asc" ? "ASC" : "DESC";
+      const modeStr = sanitizeString(mode, 32) || "kz_timer";
+
+      // Build WHERE conditions
+      const whereConditions = ["1=1"];
+      const params = [];
+
+      if (name) {
+        whereConditions.push("m.map_name LIKE ?");
+        params.push(`%${sanitizeString(name, 255)}%`);
+      }
+
+      if (difficulty !== undefined) {
+        const diff = parseInt(difficulty, 10);
+        if (diff >= 1 && diff <= 7) {
+          whereConditions.push("m.difficulty = ?");
+          params.push(diff);
+        }
+      }
+
+      if (validated !== undefined) {
+        const isValidated = validated === "true" || validated === true;
+        whereConditions.push("m.validated = ?");
+        params.push(isValidated);
+      }
+
+      // Add completion filter if steamid is provided
+      const hasSteamid = steamid && steamid.length > 0;
+      if (hasSteamid && completed) {
+        if (completed === "pro") {
+          whereConditions.push("pb.pro_time IS NOT NULL");
+        } else if (completed === "tp") {
+          whereConditions.push(
+            "pb.tp_time IS NOT NULL AND pb.pro_time IS NULL",
+          );
+        } else if (completed === "any") {
+          whereConditions.push(
+            "(pb.pro_time IS NOT NULL OR pb.tp_time IS NOT NULL)",
+          );
+        } else if (completed === "none") {
+          whereConditions.push("pb.pro_time IS NULL AND pb.tp_time IS NULL");
+        }
+      }
+
+      const whereClause = whereConditions.join(" AND ");
+
+      // Build count query (need to include PB join if filtering by completion)
+      let countQuery;
+      let countParams;
+      if (hasSteamid && completed) {
+        countQuery = `
+        SELECT COUNT(*) as total 
+        FROM kz_maps m
+        LEFT JOIN kz_player_map_pbs pb ON m.id = pb.map_id AND pb.steamid64 = ? AND pb.mode = ? AND pb.stage = 0
+        WHERE ${whereClause}
+      `;
+        countParams = [steamid, modeStr, ...params];
+      } else {
+        countQuery = `SELECT COUNT(*) as total FROM kz_maps m WHERE ${whereClause}`;
+        countParams = params;
+      }
+
+      const [countResult] = await pool.query(countQuery, countParams);
+      const total = countResult[0].total;
+
+      // Map sort field
+      let sortColumn;
+      if (sortField === "name") {
+        sortColumn = "m.map_name";
+      } else if (sortField === "difficulty") {
+        sortColumn = "m.difficulty";
+      } else if (sortField === "updated_on") {
+        sortColumn = "m.global_updated_on";
+      } else {
+        sortColumn = "COALESCE(ms.total_records, 0)";
+      }
+
+      // Build main query with optional PB data
+      let pbSelectClause = "";
+      let pbJoinClause = "";
+      if (hasSteamid) {
+        pbSelectClause = `,
+        pb.pro_time as player_pro_time,
+        pb.pro_points as player_pro_points,
+        pb.tp_time as player_tp_time,
+        pb.tp_teleports as player_tp_teleports,
+        pb.tp_points as player_tp_points,
+        CASE 
+          WHEN pb.pro_time IS NOT NULL THEN 'pro'
+          WHEN pb.tp_time IS NOT NULL THEN 'tp'
+          ELSE 'none'
+        END as completion_status`;
+        pbJoinClause = `LEFT JOIN kz_player_map_pbs pb ON m.id = pb.map_id AND pb.steamid64 = ? AND pb.mode = ? AND pb.stage = 0`;
+      }
+
+      // Query with all world record types (all 3 modes, pro + overall)
+      const query = `
+      SELECT 
+        m.id,
+        m.map_id,
+        m.map_name,
+        m.difficulty,
+        m.validated,
+        m.filesize,
+        m.workshop_url,
+        m.download_url,
+        m.global_created_on,
+        m.global_updated_on,
+        COALESCE(ms.total_records, 0) as records_count,
+        COALESCE(ms.unique_players, 0) as unique_players,
+        -- KZTimer WRs
+        ms.wr_kz_timer_pro_time,
+        ms.wr_kz_timer_pro_steamid64,
+        ms.wr_kz_timer_pro_player_name,
+        ms.wr_kz_timer_pro_record_id,
+        ms.wr_kz_timer_overall_time,
+        ms.wr_kz_timer_overall_teleports,
+        ms.wr_kz_timer_overall_steamid64,
+        ms.wr_kz_timer_overall_player_name,
+        ms.wr_kz_timer_overall_record_id,
+        -- KZSimple WRs
+        ms.wr_kz_simple_pro_time,
+        ms.wr_kz_simple_pro_steamid64,
+        ms.wr_kz_simple_pro_player_name,
+        ms.wr_kz_simple_pro_record_id,
+        ms.wr_kz_simple_overall_time,
+        ms.wr_kz_simple_overall_teleports,
+        ms.wr_kz_simple_overall_steamid64,
+        ms.wr_kz_simple_overall_player_name,
+        ms.wr_kz_simple_overall_record_id,
+        -- KZVanilla WRs
+        ms.wr_kz_vanilla_pro_time,
+        ms.wr_kz_vanilla_pro_steamid64,
+        ms.wr_kz_vanilla_pro_player_name,
+        ms.wr_kz_vanilla_pro_record_id,
+        ms.wr_kz_vanilla_overall_time,
+        ms.wr_kz_vanilla_overall_teleports,
+        ms.wr_kz_vanilla_overall_steamid64,
+        ms.wr_kz_vanilla_overall_player_name,
+        ms.wr_kz_vanilla_overall_record_id,
+        (SELECT COUNT(DISTINCT r.stage) FROM kz_records_partitioned r WHERE r.map_id = m.id AND r.stage > 0) as courses_count
+        ${pbSelectClause}
+      FROM kz_maps m
+      LEFT JOIN kz_map_statistics ms ON m.id = ms.map_id
+      ${pbJoinClause}
+      WHERE ${whereClause}
+      ORDER BY ${sortColumn} ${sortOrder}
+      LIMIT ? OFFSET ?
+    `;
+
+      // Build query params
+      let queryParams;
+      if (hasSteamid) {
+        queryParams = [steamid, modeStr, ...params, validLimit, offset];
+      } else {
+        queryParams = [...params, validLimit, offset];
+      }
+      const [maps] = await pool.query(query, queryParams);
+
+      // Helper to format WR data
+      const formatWR = (
+        time,
+        steamid64,
+        playerName,
+        recordId,
+        teleports = null,
+      ) => {
+        if (time === null) return null;
+        const wr = {
+          time: parseFloat(time),
+          steamid64,
+          playerName,
+          recordId,
+        };
+        if (teleports !== null) {
+          wr.teleports = teleports;
+        }
+        return wr;
+      };
+
+      // Format response for site consumption
+      const enrichedMaps = maps.map((map) => {
+        const result = {
+          name: map.map_name,
+          mapId: map.map_id,
+          difficulty: map.difficulty,
+          validated: map.validated,
+          workshopUrl: map.workshop_url,
+          downloadUrl: map.download_url,
+          recordsCount: map.records_count,
+          coursesCount: map.courses_count || 0,
+          globalCreatedOn: map.global_created_on,
+          globalUpdatedOn: map.global_updated_on,
+          worldRecords: {
+            kz_timer: {
+              pro: formatWR(
+                map.wr_kz_timer_pro_time,
+                map.wr_kz_timer_pro_steamid64,
+                map.wr_kz_timer_pro_player_name,
+                map.wr_kz_timer_pro_record_id,
+              ),
+              overall: formatWR(
+                map.wr_kz_timer_overall_time,
+                map.wr_kz_timer_overall_steamid64,
+                map.wr_kz_timer_overall_player_name,
+                map.wr_kz_timer_overall_record_id,
+                map.wr_kz_timer_overall_teleports,
+              ),
+            },
+            kz_simple: {
+              pro: formatWR(
+                map.wr_kz_simple_pro_time,
+                map.wr_kz_simple_pro_steamid64,
+                map.wr_kz_simple_pro_player_name,
+                map.wr_kz_simple_pro_record_id,
+              ),
+              overall: formatWR(
+                map.wr_kz_simple_overall_time,
+                map.wr_kz_simple_overall_steamid64,
+                map.wr_kz_simple_overall_player_name,
+                map.wr_kz_simple_overall_record_id,
+                map.wr_kz_simple_overall_teleports,
+              ),
+            },
+            kz_vanilla: {
+              pro: formatWR(
+                map.wr_kz_vanilla_pro_time,
+                map.wr_kz_vanilla_pro_steamid64,
+                map.wr_kz_vanilla_pro_player_name,
+                map.wr_kz_vanilla_pro_record_id,
+              ),
+              overall: formatWR(
+                map.wr_kz_vanilla_overall_time,
+                map.wr_kz_vanilla_overall_steamid64,
+                map.wr_kz_vanilla_overall_player_name,
+                map.wr_kz_vanilla_overall_record_id,
+                map.wr_kz_vanilla_overall_teleports,
+              ),
+            },
+          },
+          // Legacy field for backwards compatibility (KZT pro)
+          worldRecord: formatWR(
+            map.wr_kz_timer_pro_time,
+            map.wr_kz_timer_pro_steamid64,
+            map.wr_kz_timer_pro_player_name,
+            map.wr_kz_timer_pro_record_id,
+          ),
+          isGlobal: map.difficulty !== null,
+        };
+
+        // Add player completion data if steamid was provided
+        if (hasSteamid) {
+          result.playerCompletion = {
+            status: map.completion_status || "none",
+            proTime: map.player_pro_time
+              ? parseFloat(map.player_pro_time)
+              : null,
+            proPoints: map.player_pro_points || null,
+            tpTime: map.player_tp_time ? parseFloat(map.player_tp_time) : null,
+            tpTeleports: map.player_tp_teleports || null,
+            tpPoints: map.player_tp_points || null,
+          };
+        }
+
+        return result;
+      });
+
+      res.json({
+        data: enrichedMaps,
+        pagination: {
+          page: parseInt(page, 10) || 1,
+          limit: validLimit,
+          total: total,
+          totalPages: Math.ceil(total / validLimit),
+        },
+      });
+    } catch (e) {
+      logger.error(`Failed to fetch enriched KZ maps: ${e.message}`, {
+        stack: e.stack,
+      });
+
+      if (e.code === "ECONNREFUSED") {
+        return res.status(503).json({
+          error: "Database connection refused",
+          message: "Cannot connect to KZ records database.",
+        });
+      }
+
+      res.status(500).json({
+        error: "Failed to fetch enriched KZ maps",
+        details: e.message,
+      });
+    }
+  },
+);
+
+/**
+ * @swagger
  * /kzglobal/maps/{mapname}:
  *   get:
  *     summary: Get map details
@@ -668,5 +1069,79 @@ router.get(
     }
   },
 );
+
+/**
+ * @swagger
+ * /kzglobal/maps/{mapname}/refresh-wr:
+ *   post:
+ *     summary: Refresh world record from KZTimer API
+ *     description: Forces a refresh of the world record data from KZTimer Global API
+ *     tags: [KZ Global]
+ *     parameters:
+ *       - in: path
+ *         name: mapname
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Map name
+ *     responses:
+ *       200:
+ *         description: World record refreshed successfully
+ *       404:
+ *         description: Map not found
+ *       503:
+ *         description: Could not fetch WR from KZTimer API
+ *       500:
+ *         description: Server error
+ */
+router.post("/:mapname/refresh-wr", async (req, res) => {
+  try {
+    const { mapname } = req.params;
+    const { refreshMapWorldRecord } = require("../services/wrSync");
+
+    const pool = getKzPool();
+    if (!pool) {
+      return res.status(503).json({
+        error: "KZ database service unavailable",
+      });
+    }
+
+    // Check if map exists
+    const [maps] = await pool.query(
+      "SELECT id, map_name FROM kz_maps WHERE map_name = ?",
+      [sanitizeString(mapname, 255)],
+    );
+
+    if (maps.length === 0) {
+      return res.status(404).json({ error: "Map not found" });
+    }
+
+    // Refresh WR from KZTimer
+    const wrData = await refreshMapWorldRecord(mapname);
+
+    if (wrData) {
+      res.json({
+        message: "World record refreshed successfully",
+        map_name: mapname,
+        world_record: {
+          time: wrData.time,
+          steamid64: wrData.steamid64,
+          player_name: wrData.playerName,
+          record_id: wrData.recordId,
+        },
+      });
+    } else {
+      res.status(503).json({
+        error: "Could not fetch world record from KZTimer API",
+        map_name: mapname,
+      });
+    }
+  } catch (e) {
+    logger.error(
+      `Failed to refresh WR for map ${req.params.mapname}: ${e.message}`,
+    );
+    res.status(500).json({ error: "Failed to refresh world record" });
+  }
+});
 
 module.exports = router;
