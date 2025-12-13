@@ -20,9 +20,7 @@ function createKzPool() {
     waitForConnections: true,
     connectionLimit: 50, // Increased from 10 - critical for 25M+ records DB
     queueLimit: 100, // Limit queue to fail fast
-    acquireTimeout: 30000, // 30s timeout to acquire connection
     connectTimeout: 60000, // 60 seconds
-    timeout: 60000, // 60 seconds for queries
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
     jsonStrings: false,

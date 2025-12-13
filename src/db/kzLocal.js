@@ -23,7 +23,6 @@ function createKzLocalCS2Pool() {
     connectionLimit: 10,
     queueLimit: 0,
     connectTimeout: 60000, // 60 seconds
-    timeout: 60000, // 60 seconds for queries
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
     jsonStrings: false,
@@ -44,7 +43,6 @@ function createKzLocalCSGO128Pool() {
     connectionLimit: 10,
     queueLimit: 0,
     connectTimeout: 60000, // 60 seconds
-    timeout: 60000, // 60 seconds for queries
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
     jsonStrings: false,
@@ -65,7 +63,6 @@ function createKzLocalCSGO64Pool() {
     connectionLimit: 10,
     queueLimit: 0,
     connectTimeout: 60000, // 60 seconds
-    timeout: 60000, // 60 seconds for queries
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
     jsonStrings: false,
