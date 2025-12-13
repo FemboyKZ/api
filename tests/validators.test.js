@@ -289,4 +289,95 @@ describe("Validators", () => {
       expect(sanitizeMapName("  kz_grotto  ")).toBe("kz_grotto");
     });
   });
+
+  describe("validateSortField", () => {
+    const { validateSortField } = require("../src/utils/validators");
+    const validFields = ["name", "created", "updated", "records"];
+
+    it("should return the sort field if it is valid", () => {
+      expect(validateSortField("name", validFields, "created")).toBe("name");
+      expect(validateSortField("updated", validFields, "created")).toBe(
+        "updated",
+      );
+      expect(validateSortField("records", validFields, "created")).toBe(
+        "records",
+      );
+    });
+
+    it("should return the default field if sort is invalid", () => {
+      expect(validateSortField("invalid", validFields, "created")).toBe(
+        "created",
+      );
+      expect(validateSortField("", validFields, "name")).toBe("name");
+      expect(validateSortField(undefined, validFields, "records")).toBe(
+        "records",
+      );
+    });
+
+    it("should return the default field if sort is null", () => {
+      expect(validateSortField(null, validFields, "created")).toBe("created");
+    });
+  });
+
+  describe("validateSortOrder", () => {
+    const { validateSortOrder } = require("../src/utils/validators");
+
+    it("should return ASC for 'asc' input", () => {
+      expect(validateSortOrder("asc")).toBe("ASC");
+      expect(validateSortOrder("asc", "ASC")).toBe("ASC");
+      expect(validateSortOrder("asc", "DESC")).toBe("ASC");
+    });
+
+    it("should return DESC for 'desc' input", () => {
+      expect(validateSortOrder("desc")).toBe("DESC");
+      expect(validateSortOrder("desc", "ASC")).toBe("DESC");
+      expect(validateSortOrder("desc", "DESC")).toBe("DESC");
+    });
+
+    it("should return default order for invalid input", () => {
+      expect(validateSortOrder("invalid")).toBe("DESC");
+      expect(validateSortOrder("")).toBe("DESC");
+      expect(validateSortOrder(undefined)).toBe("DESC");
+      expect(validateSortOrder(null)).toBe("DESC");
+    });
+
+    it("should use custom default order when provided", () => {
+      expect(validateSortOrder("invalid", "ASC")).toBe("ASC");
+      expect(validateSortOrder(undefined, "ASC")).toBe("ASC");
+      expect(validateSortOrder("", "ASC")).toBe("ASC");
+    });
+  });
+
+  describe("steamid32To64", () => {
+    const { steamid32To64 } = require("../src/utils/validators");
+
+    it("should convert steamid32 to steamid64", () => {
+      // Account ID 1 -> 76561197960265729
+      expect(steamid32To64(1)).toBe("76561197960265729");
+      // Account ID 24691 -> 76561197960290419
+      expect(steamid32To64(24691)).toBe("76561197960290419");
+      // Large account ID: 484982302 -> 76561198445248030
+      expect(steamid32To64(484982302)).toBe("76561198445248030");
+    });
+
+    it("should handle string input", () => {
+      expect(steamid32To64("1")).toBe("76561197960265729");
+      expect(steamid32To64("24691")).toBe("76561197960290419");
+    });
+  });
+
+  describe("steamid64To32", () => {
+    const { steamid64To32 } = require("../src/utils/validators");
+
+    it("should convert steamid64 to steamid32", () => {
+      expect(steamid64To32("76561197960265729")).toBe(1);
+      expect(steamid64To32("76561197960290419")).toBe(24691);
+      expect(steamid64To32("76561198445248030")).toBe(484982302);
+    });
+
+    it("should return account ID as number", () => {
+      const result = steamid64To32("76561197960265729");
+      expect(typeof result).toBe("number");
+    });
+  });
 });
