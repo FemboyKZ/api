@@ -10,9 +10,7 @@
       "game": "csgo128",
       "jump_type": 0,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 261 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 261 }],
       "enabled": true
     },
     {
@@ -22,9 +20,7 @@
       "game": "csgo128",
       "jump_type": 0,
       "mode": 1,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 295 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 295 }],
       "enabled": true
     },
     {
@@ -34,9 +30,7 @@
       "game": "csgo128",
       "jump_type": 1,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 252 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 252 }],
       "enabled": true
     },
     {
@@ -46,9 +40,7 @@
       "game": "csgo128",
       "jump_type": 1,
       "mode": 1,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 295 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 295 }],
       "enabled": true
     },
     {
@@ -58,9 +50,7 @@
       "game": "csgo128",
       "jump_type": 1,
       "mode": 2,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 367 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 367 }],
       "enabled": true
     },
     {
@@ -70,9 +60,7 @@
       "game": "csgo128",
       "jump_type": 2,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 256 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 256 }],
       "enabled": true
     },
     {
@@ -82,9 +70,7 @@
       "game": "csgo128",
       "jump_type": 2,
       "mode": 1,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 297 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 297 }],
       "enabled": true
     },
     {
@@ -94,9 +80,7 @@
       "game": "csgo128",
       "jump_type": 2,
       "mode": 2,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 367 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 367 }],
       "enabled": true
     },
     {
@@ -106,9 +90,7 @@
       "game": "csgo128",
       "jump_type": 3,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 262 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 262 }],
       "enabled": true
     },
     {
@@ -118,9 +100,7 @@
       "game": "csgo128",
       "jump_type": 3,
       "mode": 1,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 300 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 300 }],
       "enabled": true
     },
     {
@@ -130,9 +110,7 @@
       "game": "csgo128",
       "jump_type": 3,
       "mode": 2,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 332 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 332 }],
       "enabled": true
     },
     {
@@ -142,9 +120,7 @@
       "game": "csgo128",
       "jump_type": 4,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 126 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 126 }],
       "enabled": true
     },
     {
@@ -154,9 +130,7 @@
       "game": "csgo128",
       "jump_type": 4,
       "mode": 1,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 207 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 207 }],
       "enabled": true
     },
     {
@@ -166,9 +140,7 @@
       "game": "csgo128",
       "jump_type": 4,
       "mode": 2,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 207 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 207 }],
       "enabled": true
     },
     {
@@ -178,9 +150,7 @@
       "game": "csgo128",
       "jump_type": 5,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 275 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 275 }],
       "enabled": true
     },
     {
@@ -190,9 +160,7 @@
       "game": "csgo128",
       "jump_type": 5,
       "mode": 1,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 288 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 288 }],
       "enabled": true
     },
     {
@@ -202,9 +170,7 @@
       "game": "csgo128",
       "jump_type": 5,
       "mode": 2,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 288 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 288 }],
       "enabled": true
     },
     {
@@ -214,9 +180,7 @@
       "game": "csgo128",
       "jump_type": 6,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 285 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 285 }],
       "enabled": true
     },
     {
@@ -226,9 +190,7 @@
       "game": "csgo128",
       "jump_type": 6,
       "mode": 1,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 297 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 297 }],
       "enabled": true
     },
     {
@@ -238,9 +200,7 @@
       "game": "csgo128",
       "jump_type": 6,
       "mode": 2,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 367 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 367 }],
       "enabled": true
     },
     {
@@ -250,9 +210,7 @@
       "game": "csgo128",
       "jump_type": 7,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 0 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 0 }],
       "enabled": true
     },
     {
@@ -262,9 +220,7 @@
       "game": "csgo128",
       "jump_type": 7,
       "mode": 1,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 0 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 0 }],
       "enabled": true
     },
     {
@@ -274,9 +230,7 @@
       "game": "csgo128",
       "jump_type": 7,
       "mode": 2,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 347 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 347 }],
       "enabled": true
     },
     {
@@ -286,9 +240,7 @@
       "game": "csgo128",
       "jump_type": 8,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 0 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 0 }],
       "enabled": true
     },
     {
@@ -298,9 +250,7 @@
       "game": "csgo128",
       "jump_type": 8,
       "mode": 1,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 0 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 0 }],
       "enabled": true
     },
     {
@@ -310,9 +260,7 @@
       "game": "csgo128",
       "jump_type": 8,
       "mode": 2,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 299 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 299 }],
       "enabled": true
     },
     {
@@ -320,9 +268,7 @@
       "name": "CSGO 64tick Remove Non-VNL Mode Jumps",
       "description": "CSGO 64 tick only supports VNL mode (mode 0) - remove all others",
       "game": "csgo64",
-      "conditions": [
-        { "field": "mode", "operator": "!=", "value": 0 }
-      ],
+      "conditions": [{ "field": "mode", "operator": "!=", "value": 0 }],
       "enabled": true
     },
     {
@@ -332,9 +278,7 @@
       "game": "csgo64",
       "jump_type": 0,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 252 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 252 }],
       "enabled": true
     },
     {
@@ -344,9 +288,7 @@
       "game": "csgo64",
       "jump_type": 1,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 250 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 250 }],
       "enabled": true
     },
     {
@@ -356,9 +298,7 @@
       "game": "csgo64",
       "jump_type": 2,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 255 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 255 }],
       "enabled": true
     },
     {
@@ -368,9 +308,7 @@
       "game": "csgo64",
       "jump_type": 3,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 251 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 251 }],
       "enabled": true
     },
     {
@@ -380,9 +318,7 @@
       "game": "csgo64",
       "jump_type": 4,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 118 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 118 }],
       "enabled": true
     },
     {
@@ -392,9 +328,7 @@
       "game": "csgo64",
       "jump_type": 5,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 270 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 270 }],
       "enabled": true
     },
     {
@@ -404,9 +338,7 @@
       "game": "csgo64",
       "jump_type": 6,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 275 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 275 }],
       "enabled": true
     },
     {
@@ -416,9 +348,7 @@
       "game": "csgo64",
       "jump_type": 7,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 0 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 0 }],
       "enabled": true
     },
     {
@@ -428,9 +358,7 @@
       "game": "csgo64",
       "jump_type": 8,
       "mode": 0,
-      "conditions": [
-        { "field": "distance", "operator": ">", "value": 0 }
-      ],
+      "conditions": [{ "field": "distance", "operator": ">", "value": 0 }],
       "enabled": true
     },
     {

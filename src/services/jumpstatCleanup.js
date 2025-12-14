@@ -18,7 +18,7 @@ const logger = require("../utils/logger");
 // Path to the filter configuration file
 const FILTERS_CONFIG_PATH = path.join(
   __dirname,
-  "../../config/jumpstat-filters.json"
+  "../../config/jumpstat-filters.json",
 );
 
 // Valid operators for filter conditions
@@ -79,7 +79,7 @@ function loadFilters() {
   try {
     if (!fs.existsSync(FILTERS_CONFIG_PATH)) {
       logger.warn(
-        `Jumpstat filters config not found at ${FILTERS_CONFIG_PATH}`
+        `Jumpstat filters config not found at ${FILTERS_CONFIG_PATH}`,
       );
       return [];
     }
@@ -105,14 +105,14 @@ function loadFilters() {
       for (const condition of filter.conditions) {
         if (!condition.field || !condition.operator) {
           logger.warn(
-            `Invalid condition in filter ${filter.id}: ${JSON.stringify(condition)}`
+            `Invalid condition in filter ${filter.id}: ${JSON.stringify(condition)}`,
           );
           return false;
         }
 
         if (!VALID_OPERATORS.includes(condition.operator)) {
           logger.warn(
-            `Invalid operator in filter ${filter.id}: ${condition.operator}`
+            `Invalid operator in filter ${filter.id}: ${condition.operator}`,
           );
           return false;
         }
@@ -163,16 +163,19 @@ function buildWhereClause(filter, fieldMap) {
   // Process each condition
   for (const condition of filter.conditions) {
     const dbField = fieldMap[condition.field] || condition.field;
-    
+
     // Scale distance values - database stores distance * 10000
     // So 250 units in config = 2500000 in database
     let conditionValue = condition.value;
     if (condition.field === "distance" && typeof conditionValue === "number") {
       conditionValue = conditionValue * 10000;
     }
-    
+
     // Scale other jumpstat values stored as value * 100 (sync, pre, max)
-    if (["sync", "pre", "max"].includes(condition.field) && typeof conditionValue === "number") {
+    if (
+      ["sync", "pre", "max"].includes(condition.field) &&
+      typeof conditionValue === "number"
+    ) {
       conditionValue = conditionValue * 100;
     }
 
@@ -188,9 +191,13 @@ function buildWhereClause(filter, fieldMap) {
           // Scale array values if needed
           let scaledValues = condition.value;
           if (condition.field === "distance") {
-            scaledValues = condition.value.map(v => typeof v === "number" ? v * 10000 : v);
+            scaledValues = condition.value.map((v) =>
+              typeof v === "number" ? v * 10000 : v,
+            );
           } else if (["sync", "pre", "max"].includes(condition.field)) {
-            scaledValues = condition.value.map(v => typeof v === "number" ? v * 100 : v);
+            scaledValues = condition.value.map((v) =>
+              typeof v === "number" ? v * 100 : v,
+            );
           }
           const placeholders = scaledValues.map(() => "?").join(", ");
           conditions.push(`${dbField} IN (${placeholders})`);
@@ -202,9 +209,13 @@ function buildWhereClause(filter, fieldMap) {
           // Scale array values if needed
           let scaledValues = condition.value;
           if (condition.field === "distance") {
-            scaledValues = condition.value.map(v => typeof v === "number" ? v * 10000 : v);
+            scaledValues = condition.value.map((v) =>
+              typeof v === "number" ? v * 10000 : v,
+            );
           } else if (["sync", "pre", "max"].includes(condition.field)) {
-            scaledValues = condition.value.map(v => typeof v === "number" ? v * 100 : v);
+            scaledValues = condition.value.map((v) =>
+              typeof v === "number" ? v * 100 : v,
+            );
           }
           const placeholders = scaledValues.map(() => "?").join(", ");
           conditions.push(`${dbField} NOT IN (${placeholders})`);
@@ -245,7 +256,7 @@ async function processCS2Filter(pool, filter, options = {}) {
     // Count matching records
     const [countResult] = await pool.query(
       `SELECT COUNT(*) as count FROM Jumpstats WHERE ${whereClause}`,
-      params
+      params,
     );
     const matchCount = countResult[0].count;
 
@@ -263,7 +274,7 @@ async function processCS2Filter(pool, filter, options = {}) {
     if (dryRun) {
       // In dry run mode, just return the count without moving anything
       logger.info(
-        `[DRY RUN] CS2 filter "${filter.name}" would match ${matchCount} records`
+        `[DRY RUN] CS2 filter "${filter.name}" would match ${matchCount} records`,
       );
       return {
         filter_id: filter.id,
@@ -313,7 +324,7 @@ async function processCS2Filter(pool, filter, options = {}) {
       connection.release();
 
       logger.info(
-        `CS2 filter "${filter.name}" quarantined ${insertResult.affectedRows} records`
+        `CS2 filter "${filter.name}" quarantined ${insertResult.affectedRows} records`,
       );
 
       return {
@@ -360,7 +371,7 @@ async function processCSGOFilter(pool, filter, options = {}, tickrate = "128") {
     // Count matching records
     const [countResult] = await pool.query(
       `SELECT COUNT(*) as count FROM Jumpstats WHERE ${whereClause}`,
-      params
+      params,
     );
     const matchCount = countResult[0].count;
 
@@ -377,7 +388,7 @@ async function processCSGOFilter(pool, filter, options = {}, tickrate = "128") {
 
     if (dryRun) {
       logger.info(
-        `[DRY RUN] CSGO${tickrate} filter "${filter.name}" would match ${matchCount} records`
+        `[DRY RUN] CSGO${tickrate} filter "${filter.name}" would match ${matchCount} records`,
       );
       return {
         filter_id: filter.id,
@@ -427,7 +438,7 @@ async function processCSGOFilter(pool, filter, options = {}, tickrate = "128") {
       connection.release();
 
       logger.info(
-        `CSGO${tickrate} filter "${filter.name}" quarantined ${insertResult.affectedRows} records`
+        `CSGO${tickrate} filter "${filter.name}" quarantined ${insertResult.affectedRows} records`,
       );
 
       return {
@@ -445,7 +456,7 @@ async function processCSGOFilter(pool, filter, options = {}, tickrate = "128") {
     }
   } catch (error) {
     logger.error(
-      `CSGO${tickrate} filter "${filter.id}" failed: ${error.message}`
+      `CSGO${tickrate} filter "${filter.id}" failed: ${error.message}`,
     );
     return {
       filter_id: filter.id,
@@ -479,7 +490,7 @@ async function logCleanupOperation(pool, result) {
         result.dry_run,
         result.executed_by || "system",
         result.error || null,
-      ]
+      ],
     );
   } catch (error) {
     logger.error(`Failed to log cleanup operation: ${error.message}`);
@@ -504,7 +515,7 @@ async function runCleanup(options = {}) {
   } = options;
 
   logger.info(
-    `Starting jumpstat cleanup (dryRun: ${dryRun}, game: ${game}, filter: ${filterId || "all"})`
+    `Starting jumpstat cleanup (dryRun: ${dryRun}, game: ${game}, filter: ${filterId || "all"})`,
   );
 
   const filters = loadFilters();
@@ -537,7 +548,7 @@ async function runCleanup(options = {}) {
   if (game === "all" || game === "cs2") {
     const cs2Pool = getKzLocalCS2Pool();
     const cs2Filters = filtersToRun.filter(
-      (f) => f.game === "cs2" || f.game === "all" || !f.game
+      (f) => f.game === "cs2" || f.game === "all" || !f.game,
     );
 
     for (const filter of cs2Filters) {
@@ -560,7 +571,7 @@ async function runCleanup(options = {}) {
         f.game === "csgo" ||
         f.game === "csgo128" ||
         f.game === "all" ||
-        !f.game
+        !f.game,
     );
 
     for (const filter of csgo128Filters) {
@@ -568,7 +579,7 @@ async function runCleanup(options = {}) {
         csgo128Pool,
         filter,
         processOptions,
-        "128"
+        "128",
       );
       results.push(result);
 
@@ -584,10 +595,7 @@ async function runCleanup(options = {}) {
     // Include filters for: csgo (generic), csgo64 (specific), all, or unspecified
     const csgo64Filters = filtersToRun.filter(
       (f) =>
-        f.game === "csgo" ||
-        f.game === "csgo64" ||
-        f.game === "all" ||
-        !f.game
+        f.game === "csgo" || f.game === "csgo64" || f.game === "all" || !f.game,
     );
 
     for (const filter of csgo64Filters) {
@@ -595,7 +603,7 @@ async function runCleanup(options = {}) {
         csgo64Pool,
         filter,
         processOptions,
-        "64"
+        "64",
       );
       results.push(result);
 
@@ -611,7 +619,7 @@ async function runCleanup(options = {}) {
   const errors = results.filter((r) => r.error);
 
   logger.info(
-    `Jumpstat cleanup complete: ${totalMatched} matched, ${totalQuarantined} quarantined, ${errors.length} errors`
+    `Jumpstat cleanup complete: ${totalMatched} matched, ${totalQuarantined} quarantined, ${errors.length} errors`,
   );
 
   return {
@@ -651,9 +659,7 @@ async function getQuarantinedJumpstats(options = {}) {
   }
 
   if (steamid64) {
-    whereConditions.push(
-      game === "cs2" ? "SteamID64 = ?" : "steamid64 = ?"
-    );
+    whereConditions.push(game === "cs2" ? "SteamID64 = ?" : "steamid64 = ?");
     params.push(steamid64);
   }
 
@@ -855,7 +861,7 @@ async function restoreAllJumpstats(game, options = {}) {
     // Get count before restore
     const [countResult] = await connection.query(
       `SELECT COUNT(*) as count FROM Jumpstats_Quarantine WHERE ${whereClause}`,
-      params
+      params,
     );
     const totalToRestore = countResult[0].count;
 
@@ -881,7 +887,7 @@ async function restoreAllJumpstats(game, options = {}) {
     logger.info(
       `Restored ${insertResult.affectedRows} jumpstats from quarantine (${game})${
         filterId ? ` for filter ${filterId}` : ""
-      }`
+      }`,
     );
 
     return {

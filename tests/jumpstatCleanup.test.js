@@ -164,7 +164,7 @@ describe("Jumpstat Cleanup Service", () => {
       const result = buildWhereClause(filter, CS2_FIELD_MAP);
 
       expect(result.whereClause).toBe(
-        "Distance > ? AND Strafes < ? AND Sync = ?"
+        "Distance > ? AND Strafes < ? AND Sync = ?",
       );
       // Distance scaled by 10000, sync scaled by 100
       expect(result.params).toEqual([2500000, 10, 10000]);
@@ -298,7 +298,7 @@ describe("Jumpstat Cleanup Service", () => {
       const filter = {
         jump_type: 0,
         tickrate: 64, // This should be ignored for CS2
-        conditions: [{ field: "distance", operator: ">", "value": 295 }],
+        conditions: [{ field: "distance", operator: ">", value: 295 }],
       };
 
       // CS2 field map doesn't have tickrate, so it should be skipped
@@ -319,7 +319,9 @@ describe("Jumpstat Cleanup Service", () => {
       const result = buildWhereClause(filter, CSGO_FIELD_MAP);
 
       // CSGO uses PascalCase columns, and mode filter should be applied
-      expect(result.whereClause).toBe("JumpType = ? AND Mode = ? AND Distance > ?");
+      expect(result.whereClause).toBe(
+        "JumpType = ? AND Mode = ? AND Distance > ?",
+      );
       // Distance scaled by 10000
       expect(result.params).toEqual([0, 1, 3020000]);
     });

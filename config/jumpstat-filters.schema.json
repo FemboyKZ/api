@@ -73,7 +73,20 @@
                 },
                 "operator": {
                   "type": "string",
-                  "enum": [">", "<", ">=", "<=", "=", "!=", "LIKE", "NOT LIKE", "IN", "NOT IN", "IS NULL", "IS NOT NULL"],
+                  "enum": [
+                    ">",
+                    "<",
+                    ">=",
+                    "<=",
+                    "=",
+                    "!=",
+                    "LIKE",
+                    "NOT LIKE",
+                    "IN",
+                    "NOT IN",
+                    "IS NULL",
+                    "IS NOT NULL"
+                  ],
                   "description": "Comparison operator"
                 },
                 "value": {

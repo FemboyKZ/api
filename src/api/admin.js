@@ -430,7 +430,13 @@ router.post("/cleanup-jumpstats", async (req, res) => {
  */
 router.get("/quarantined-jumpstats", async (req, res) => {
   try {
-    const { game = "cs2", page = "1", limit = "50", filterId, steamid64 } = req.query;
+    const {
+      game = "cs2",
+      page = "1",
+      limit = "50",
+      filterId,
+      steamid64,
+    } = req.query;
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
@@ -449,7 +455,9 @@ router.get("/quarantined-jumpstats", async (req, res) => {
       ...result,
     });
   } catch (error) {
-    logger.error("Failed to get quarantined jumpstats", { error: error.message });
+    logger.error("Failed to get quarantined jumpstats", {
+      error: error.message,
+    });
     res.status(500).json({ error: "Failed to get quarantined jumpstats" });
   }
 });
@@ -510,11 +518,15 @@ router.post("/restore-all-jumpstats", async (req, res) => {
     const { game, filterId } = req.query;
 
     if (!game) {
-      return res.status(400).json({ error: "Game parameter is required (cs2|csgo128|csgo64)" });
+      return res
+        .status(400)
+        .json({ error: "Game parameter is required (cs2|csgo128|csgo64)" });
     }
 
     if (!["cs2", "csgo128", "csgo64"].includes(game)) {
-      return res.status(400).json({ error: "Invalid game. Must be cs2, csgo128, or csgo64" });
+      return res
+        .status(400)
+        .json({ error: "Invalid game. Must be cs2, csgo128, or csgo64" });
     }
 
     logger.info("Restoring all quarantined jumpstats", { game, filterId });
