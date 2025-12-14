@@ -440,7 +440,7 @@
       "game": "csgo",
       "jump_type": 0,
       "conditions": [
-        { "field": "strafes", "operator": ">=", "value": 1 },
+        { "field": "strafes", "operator": "<=", "value": 1 },
         { "field": "distance", "operator": ">", "value": 260 }
       ],
       "enabled": true
