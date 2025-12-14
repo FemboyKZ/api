@@ -482,6 +482,7 @@ async function getPlayerMapCompletions(steamid64, options = {}) {
           total: 0,
           completed_pro: 0,
           completed_tp: 0,
+          completed_any: 0,
         };
       }
       stats.by_difficulty[tier].total++;
@@ -490,6 +491,9 @@ async function getPlayerMapCompletions(steamid64, options = {}) {
       }
       if (map.tp_time !== null) {
         stats.by_difficulty[tier].completed_tp++;
+      }
+      if (map.pro_time !== null || map.tp_time !== null) {
+        stats.by_difficulty[tier].completed_any++;
       }
     }
 

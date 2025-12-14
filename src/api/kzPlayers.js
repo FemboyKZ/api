@@ -991,12 +991,21 @@ router.get(
           completed: completed || null,
         });
 
-        return res.json({
-          steamid64,
-          mode,
-          stage: parseInt(stage, 10) || 0,
-          ...result,
-        });
+        // Check if player has any completions in PBs cache
+        // If no completions found, fallback to querying kz_records_partitioned directly
+        const hasCompletions =
+          result.stats &&
+          (result.stats.completed_pro > 0 || result.stats.completed_tp_only > 0);
+
+        if (hasCompletions) {
+          return res.json({
+            steamid64,
+            mode,
+            stage: parseInt(stage, 10) || 0,
+            ...result,
+          });
+        }
+        // No completions in PBs cache, fall through to kz_records_partitioned query
       }
 
       // Fallback: calculate on the fly
@@ -1086,6 +1095,7 @@ router.get(
             total: 0,
             completed_pro: 0,
             completed_tp: 0,
+            completed_any: 0,
           };
         }
         stats.by_difficulty[tier].total++;
@@ -1094,6 +1104,9 @@ router.get(
         }
         if (map.tp_time !== null) {
           stats.by_difficulty[tier].completed_tp++;
+        }
+        if (map.pro_time !== null || map.tp_time !== null) {
+          stats.by_difficulty[tier].completed_any++;
         }
       }
 
