@@ -135,7 +135,8 @@ describe("Jumpstat Cleanup Service", () => {
       const result = buildWhereClause(filter, CS2_FIELD_MAP);
 
       expect(result.whereClause).toBe("Distance > ?");
-      expect(result.params).toEqual([300]);
+      // Distance is scaled by 10000 (300 * 10000 = 3000000)
+      expect(result.params).toEqual([3000000]);
     });
 
     it("should build WHERE clause with jump_type", () => {
@@ -147,7 +148,8 @@ describe("Jumpstat Cleanup Service", () => {
       const result = buildWhereClause(filter, CS2_FIELD_MAP);
 
       expect(result.whereClause).toBe("JumpType = ? AND Distance > ?");
-      expect(result.params).toEqual([1, 350]);
+      // Distance is scaled by 10000 (350 * 10000 = 3500000)
+      expect(result.params).toEqual([1, 3500000]);
     });
 
     it("should build WHERE clause with multiple conditions", () => {
@@ -164,7 +166,8 @@ describe("Jumpstat Cleanup Service", () => {
       expect(result.whereClause).toBe(
         "Distance > ? AND Strafes < ? AND Sync = ?"
       );
-      expect(result.params).toEqual([250, 10, 100]);
+      // Distance scaled by 10000, sync scaled by 100
+      expect(result.params).toEqual([2500000, 10, 10000]);
     });
 
     it("should handle IS NULL operator", () => {
@@ -238,7 +241,8 @@ describe("Jumpstat Cleanup Service", () => {
       const result = buildWhereClause(filter, CS2_FIELD_MAP);
 
       expect(result.whereClause).toBe("Distance >= ? AND Distance <= ?");
-      expect(result.params).toEqual([100, 200]);
+      // Distance scaled by 10000
+      expect(result.params).toEqual([1000000, 2000000]);
     });
 
     it("should handle != operator", () => {
@@ -286,7 +290,8 @@ describe("Jumpstat Cleanup Service", () => {
 
       // CSGO uses PascalCase columns, and tickrate is NOT in the WHERE clause
       expect(result.whereClause).toBe("JumpType = ? AND Distance > ?");
-      expect(result.params).toEqual([1, 290]);
+      // Distance scaled by 10000
+      expect(result.params).toEqual([1, 2900000]);
     });
 
     it("should not add tickrate filter for CS2 (no tickrate field)", () => {
@@ -300,7 +305,8 @@ describe("Jumpstat Cleanup Service", () => {
       const result = buildWhereClause(filter, CS2_FIELD_MAP);
 
       expect(result.whereClause).toBe("JumpType = ? AND Distance > ?");
-      expect(result.params).toEqual([0, 295]);
+      // Distance scaled by 10000
+      expect(result.params).toEqual([0, 2950000]);
     });
 
     it("should build WHERE clause with mode filter", () => {
@@ -314,7 +320,8 @@ describe("Jumpstat Cleanup Service", () => {
 
       // CSGO uses PascalCase columns, and mode filter should be applied
       expect(result.whereClause).toBe("JumpType = ? AND Mode = ? AND Distance > ?");
-      expect(result.params).toEqual([0, 1, 302]);
+      // Distance scaled by 10000
+      expect(result.params).toEqual([0, 1, 3020000]);
     });
   });
 

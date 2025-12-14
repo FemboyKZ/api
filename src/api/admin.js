@@ -20,6 +20,7 @@ const {
   runCleanup: runJumpstatCleanup,
   getQuarantinedJumpstats,
   restoreJumpstat,
+  restoreAllJumpstats,
   getAvailableFilters: getJumpstatFilters,
 } = require("../services/jumpstatCleanup");
 
@@ -493,6 +494,47 @@ router.post("/restore-jumpstat/:id", async (req, res) => {
   } catch (error) {
     logger.error("Failed to restore jumpstat", { error: error.message });
     res.status(500).json({ error: "Failed to restore jumpstat" });
+  }
+});
+
+/**
+ * POST /admin/restore-all-jumpstats
+ * Restore all quarantined jumpstats back to the main table
+ * Query params:
+ *   - game: string (cs2|csgo128|csgo64, required)
+ *   - filterId: string (optional - only restore records from this filter)
+ */
+router.post("/restore-all-jumpstats", async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const { game, filterId } = req.query;
+
+    if (!game) {
+      return res.status(400).json({ error: "Game parameter is required (cs2|csgo128|csgo64)" });
+    }
+
+    if (!["cs2", "csgo128", "csgo64"].includes(game)) {
+      return res.status(400).json({ error: "Invalid game. Must be cs2, csgo128, or csgo64" });
+    }
+
+    logger.info("Restoring all quarantined jumpstats", { game, filterId });
+
+    const result = await restoreAllJumpstats(game, { filterId });
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    logger.logRequest(req, res, Date.now() - startTime);
+
+    res.json({
+      success: result.success,
+      restored: result.restored,
+      message: result.message,
+      game,
+      filterId: filterId || null,
+      elapsed: `${elapsed}s`,
+    });
+  } catch (error) {
+    logger.error("Failed to restore all jumpstats", { error: error.message });
+    res.status(500).json({ error: "Failed to restore all jumpstats" });
   }
 });
 

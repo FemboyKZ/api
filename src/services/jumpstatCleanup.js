@@ -57,7 +57,6 @@ const CS2_FIELD_MAP = {
 // CSGO field mapping (PascalCase like CS2, uses SteamID32)
 const CSGO_FIELD_MAP = {
   id: "JumpID",
-  jump_id: "JumpID",
   steamid32: "SteamID32",
   jump_type: "JumpType",
   mode: "Mode",
@@ -65,7 +64,6 @@ const CSGO_FIELD_MAP = {
   is_block: "IsBlockJump",
   block: "Block",
   strafes: "Strafes",
-  strafe_count: "Strafes",
   sync: "Sync",
   pre: "Pre",
   max: "Max",
@@ -165,6 +163,18 @@ function buildWhereClause(filter, fieldMap) {
   // Process each condition
   for (const condition of filter.conditions) {
     const dbField = fieldMap[condition.field] || condition.field;
+    
+    // Scale distance values - database stores distance * 10000
+    // So 250 units in config = 2500000 in database
+    let conditionValue = condition.value;
+    if (condition.field === "distance" && typeof conditionValue === "number") {
+      conditionValue = conditionValue * 10000;
+    }
+    
+    // Scale other jumpstat values stored as value * 100 (sync, pre, max)
+    if (["sync", "pre", "max"].includes(condition.field) && typeof conditionValue === "number") {
+      conditionValue = conditionValue * 100;
+    }
 
     switch (condition.operator) {
       case "IS NULL":
@@ -175,16 +185,30 @@ function buildWhereClause(filter, fieldMap) {
         break;
       case "IN":
         if (Array.isArray(condition.value)) {
-          const placeholders = condition.value.map(() => "?").join(", ");
+          // Scale array values if needed
+          let scaledValues = condition.value;
+          if (condition.field === "distance") {
+            scaledValues = condition.value.map(v => typeof v === "number" ? v * 10000 : v);
+          } else if (["sync", "pre", "max"].includes(condition.field)) {
+            scaledValues = condition.value.map(v => typeof v === "number" ? v * 100 : v);
+          }
+          const placeholders = scaledValues.map(() => "?").join(", ");
           conditions.push(`${dbField} IN (${placeholders})`);
-          params.push(...condition.value);
+          params.push(...scaledValues);
         }
         break;
       case "NOT IN":
         if (Array.isArray(condition.value)) {
-          const placeholders = condition.value.map(() => "?").join(", ");
+          // Scale array values if needed
+          let scaledValues = condition.value;
+          if (condition.field === "distance") {
+            scaledValues = condition.value.map(v => typeof v === "number" ? v * 10000 : v);
+          } else if (["sync", "pre", "max"].includes(condition.field)) {
+            scaledValues = condition.value.map(v => typeof v === "number" ? v * 100 : v);
+          }
+          const placeholders = scaledValues.map(() => "?").join(", ");
           conditions.push(`${dbField} NOT IN (${placeholders})`);
-          params.push(...condition.value);
+          params.push(...scaledValues);
         }
         break;
       case "LIKE":
@@ -195,7 +219,7 @@ function buildWhereClause(filter, fieldMap) {
       default:
         // Standard comparison operators: >, <, >=, <=, =, !=
         conditions.push(`${dbField} ${condition.operator} ?`);
-        params.push(condition.value);
+        params.push(conditionValue);
     }
   }
 
@@ -773,11 +797,112 @@ function getAvailableFilters() {
   }));
 }
 
+/**
+ * Restore all quarantined jumpstats back to the original table
+ * @param {string} game - 'cs2', 'csgo128', or 'csgo64'
+ * @param {Object} options - Optional filters for bulk restore
+ * @param {string} [options.filterId] - Only restore records from this filter
+ * @returns {Promise<Object>} Result with count of restored records
+ */
+async function restoreAllJumpstats(game, options = {}) {
+  const { filterId } = options;
+
+  let pool;
+  let insertQuery;
+  let deleteQuery;
+  let whereClause = "1=1";
+  const params = [];
+
+  if (filterId) {
+    whereClause = "filter_id = ?";
+    params.push(filterId);
+  }
+
+  if (game === "cs2") {
+    pool = getKzLocalCS2Pool();
+    insertQuery = `
+      INSERT INTO Jumpstats (
+        ID, SteamID64, JumpType, Mode, Distance, IsBlockJump, Block,
+        Strafes, Sync, Pre, Max, Airtime, Created
+      )
+      SELECT 
+        ID, SteamID64, JumpType, Mode, Distance, IsBlockJump, Block,
+        Strafes, Sync, Pre, Max, Airtime, Created
+      FROM Jumpstats_Quarantine
+      WHERE ${whereClause}
+    `;
+    deleteQuery = `DELETE FROM Jumpstats_Quarantine WHERE ${whereClause}`;
+  } else {
+    pool = game === "csgo64" ? getKzLocalCSGO64Pool() : getKzLocalCSGO128Pool();
+    insertQuery = `
+      INSERT INTO Jumpstats (
+        JumpID, SteamID32, JumpType, Mode, Distance, IsBlockJump, Block,
+        Strafes, Sync, Pre, Max, Airtime, Created
+      )
+      SELECT 
+        JumpID, SteamID32, JumpType, Mode, Distance, IsBlockJump, Block,
+        Strafes, Sync, Pre, Max, Airtime, Created
+      FROM Jumpstats_Quarantine
+      WHERE ${whereClause}
+    `;
+    deleteQuery = `DELETE FROM Jumpstats_Quarantine WHERE ${whereClause}`;
+  }
+
+  const connection = await pool.getConnection();
+  await connection.beginTransaction();
+
+  try {
+    // Get count before restore
+    const [countResult] = await connection.query(
+      `SELECT COUNT(*) as count FROM Jumpstats_Quarantine WHERE ${whereClause}`,
+      params
+    );
+    const totalToRestore = countResult[0].count;
+
+    if (totalToRestore === 0) {
+      await connection.rollback();
+      connection.release();
+      return {
+        success: true,
+        restored: 0,
+        message: "No records to restore",
+      };
+    }
+
+    // Insert all back to original table
+    const [insertResult] = await connection.query(insertQuery, params);
+
+    // Delete from quarantine
+    await connection.query(deleteQuery, params);
+
+    await connection.commit();
+    connection.release();
+
+    logger.info(
+      `Restored ${insertResult.affectedRows} jumpstats from quarantine (${game})${
+        filterId ? ` for filter ${filterId}` : ""
+      }`
+    );
+
+    return {
+      success: true,
+      restored: insertResult.affectedRows,
+      message: `Restored ${insertResult.affectedRows} records`,
+    };
+  } catch (error) {
+    await connection.rollback();
+    connection.release();
+    logger.error(`Failed to restore all jumpstats (${game}): ${error.message}`);
+    throw error;
+  }
+}
+
 module.exports = {
   loadFilters,
   runCleanup,
   getQuarantinedJumpstats,
   restoreJumpstat,
+  restoreAllJumpstats,
   getAvailableFilters,
   buildWhereClause,
   // Export for testing

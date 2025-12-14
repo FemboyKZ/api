@@ -437,7 +437,7 @@
       "id": "csgo_suspicious_zero_strafes",
       "name": "CSGO Suspicious Zero Strafes",
       "description": "Jump with 1 or 0 strafes - potentially cheated",
-      "game": "csgo",
+      "game": "csgo128",
       "jump_type": 0,
       "conditions": [
         { "field": "strafes", "operator": "<=", "value": 1 },
@@ -449,25 +449,25 @@
       "id": "csgo_suspicious_strafe_count_high_skz",
       "name": "CSGO Suspicious Strafe Count (High)",
       "description": "Strafe count impossibly high for the distance achieved",
-      "game": "csgo",
+      "game": "csgo128",
       "mode": 1,
       "conditions": [
         { "field": "strafes", "operator": ">", "value": 25 },
         { "field": "distance", "operator": ">", "value": 287 }
       ],
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "csgo_suspicious_strafe_count_low_skz",
       "name": "CSGO Suspicious Strafe Count (Low)",
       "description": "Strafe count impossibly low for the distance achieved",
-      "game": "csgo",
+      "game": "csgo128",
       "mode": 1,
       "conditions": [
         { "field": "strafes", "operator": "<=", "value": 3 },
         { "field": "distance", "operator": ">", "value": 287 }
       ],
-      "enabled": false
+      "enabled": true
     }
   ]
 }
