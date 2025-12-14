@@ -12,6 +12,7 @@ const {
   cacheMiddleware,
   playersKeyGenerator,
 } = require("../utils/cacheMiddleware");
+const { getPlayerSummary } = require("../services/steamQuery");
 
 /**
  * @swagger
@@ -61,6 +62,9 @@ const {
  *       properties:
  *         steamid:
  *           type: string
+ *         name:
+ *           type: string
+ *           description: Player name (from Steam or latest session)
  *         avatar:
  *           type: string
  *           description: Avatar URL (32x32, append _medium.jpg or _full.jpg for larger sizes)
@@ -486,7 +490,7 @@ router.get(
  *         example: csgo
  *     responses:
  *       200:
- *         description: Successful response with player details grouped by game type
+ *         description: Successful response with player details grouped by game type. If player is not in our database but exists on Steam, their profile will be fetched from Steam API and saved.
  *         content:
  *           application/json:
  *             schema:
@@ -511,7 +515,7 @@ router.get(
  *                   type: string
  *                   example: "Invalid SteamID format"
  *       404:
- *         description: Player not found
+ *         description: Player not found (invalid Steam ID or Steam API unavailable)
  *         content:
  *           application/json:
  *             schema:
@@ -549,8 +553,37 @@ router.get("/:steamid", async (req, res) => {
     query += " ORDER BY last_seen DESC";
 
     const [rows] = await pool.query(query, params);
+    
+    // If player not found in database, try to fetch from Steam API
     if (rows.length === 0) {
-      return res.status(404).json({ error: "Player not found" });
+      // Try to get player info from Steam and save to database
+      const steamPlayer = await getPlayerSummary(steamid64, true);
+      
+      if (!steamPlayer) {
+        return res.status(404).json({ error: "Player not found" });
+      }
+
+      // Return a player with no playtime data
+      const response = {
+        steamid: steamid64,
+        name: steamPlayer.name,
+        avatar: steamPlayer.avatar,
+        csgo: {
+          total_playtime: 0,
+          last_seen: null,
+          sessions: [],
+        },
+        counterstrike2: {
+          total_playtime: 0,
+          last_seen: null,
+          sessions: [],
+        },
+      };
+
+      return res.json({
+        total: 1,
+        data: [response],
+      });
     }
 
     let statsQuery =
@@ -569,13 +602,15 @@ router.get("/:steamid", async (req, res) => {
     // Structure response by game type
     const response = {
       steamid: steamid64, // Always return SteamID64 format
+      name: null,
       avatar: null,
       csgo: {},
       counterstrike2: {},
     };
 
-    // Get avatar from any row (they should all be the same for a steamid)
+    // Get name and avatar from any row (they should all be the same for a steamid)
     if (rows.length > 0) {
+      response.name = rows[0].name;
       response.avatar = rows[0].avatar;
     }
 

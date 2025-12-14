@@ -165,10 +165,81 @@ function startAvatarUpdateJob(intervalMs = 60 * 60 * 1000) {
   setInterval(updateMissingAvatars, intervalMs);
 }
 
+/**
+ * Fetch player summary from Steam API and optionally save to database
+ * @param {string} steamid - Steam ID64 of the player
+ * @param {boolean} saveToDb - Whether to create a player record in the database
+ * @returns {Promise<Object|null>} Player summary or null if not found
+ */
+async function getPlayerSummary(steamid, saveToDb = false) {
+  const STEAM_API_KEY = process.env.STEAM_API_KEY;
+
+  if (!STEAM_API_KEY) {
+    logger.warn("STEAM_API_KEY not configured - cannot fetch player summary");
+    return null;
+  }
+
+  try {
+    const response = await axios.get(STEAM_API_URL, {
+      params: {
+        key: STEAM_API_KEY,
+        steamids: steamid,
+      },
+      timeout: 10000,
+    });
+
+    if (
+      !response.data ||
+      !response.data.response ||
+      !response.data.response.players ||
+      response.data.response.players.length === 0
+    ) {
+      return null;
+    }
+
+    const steamPlayer = response.data.response.players[0];
+
+    const playerData = {
+      steamid: steamPlayer.steamid,
+      name: steamPlayer.personaname,
+      avatar: steamPlayer.avatar || null,
+      profileUrl: steamPlayer.profileurl,
+      personaState: steamPlayer.personastate,
+    };
+
+    // Optionally save to database as a new player with 0 playtime
+    if (saveToDb) {
+      try {
+        // Insert a placeholder record so we have the player in our system
+        // Using 'csgo' as default game since we need a game value
+        await pool.query(
+          `INSERT INTO players (steamid, name, avatar, avatar_updated_at, game, playtime, server_ip, server_port, last_seen)
+           VALUES (?, ?, ?, NOW(), 'csgo', 0, '0.0.0.0', 0, NOW())
+           ON DUPLICATE KEY UPDATE 
+             name = VALUES(name),
+             avatar = VALUES(avatar),
+             avatar_updated_at = NOW()`,
+          [playerData.steamid, playerData.name, playerData.avatar]
+        );
+        logger.info(`Created/updated player record for ${playerData.steamid} (${playerData.name})`);
+      } catch (dbError) {
+        logger.error(`Failed to save player to database: ${dbError.message}`);
+        // Continue anyway - we still have the Steam data
+      }
+    }
+
+    return playerData;
+  } catch (error) {
+    logger.error(`Failed to fetch player summary from Steam: ${error.message}`);
+    return null;
+  }
+}
+
 module.exports = {
   fetchAvatarsFromSteam,
   updateAvatarsInDatabase,
   refreshAvatars,
   startAvatarUpdateJob,
   getSteamIdsNeedingAvatars,
+  getPlayerSummary,
 };
