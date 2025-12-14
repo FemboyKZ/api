@@ -32,9 +32,11 @@ const JUMP_TYPES = {
   1: "bhop",
   2: "multibhop",
   3: "weirdjump",
-  4: "dropbhop",
-  5: "countjump",
-  6: "ladderjump",
+  4: "ladderjump",
+  5: "ladderhop",
+  6: "jumpbug",
+  7: "lowpreweirdjump",
+  8: "lowprebhop"
 };
 
 /**
