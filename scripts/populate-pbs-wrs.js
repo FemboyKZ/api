@@ -16,6 +16,10 @@
  *   --force         Force refresh even if already synced
  *   --help          Show this help message
  *
+ * Environment:
+ *   KZ_SCRAPER_PROXIES  Comma-separated list of proxy URLs for --verify mode
+ *                       Format: http://user:pass@host:port or http://host:port
+ *
  * Examples:
  *   node scripts/populate-pbs-wrs.js                    # Full population from local DB
  *   node scripts/populate-pbs-wrs.js --wrs-only         # Only WRs from local DB
@@ -27,6 +31,8 @@
 require("dotenv").config();
 
 const axios = require("axios");
+const { HttpsProxyAgent } = require("https-proxy-agent");
+const { HttpProxyAgent } = require("http-proxy-agent");
 const {
   initKzDatabase,
   getKzPool,
@@ -35,6 +41,73 @@ const {
 
 const GOKZ_API_URL =
   process.env.GOKZ_API_URL || "https://kztimerglobal.com/api/v2";
+
+// Proxy configuration
+const PROXY_CONFIG = {
+  proxies: process.env.KZ_SCRAPER_PROXIES
+    ? process.env.KZ_SCRAPER_PROXIES.split(",")
+        .map((p) => p.trim())
+        .filter(Boolean)
+    : [],
+  retryAttempts: 3,
+  retryDelay: 2500,
+  rateLimitDelay: 60000,
+};
+
+// Proxy state
+let currentProxyIndex = 0;
+const proxyAgents = [];
+let rateLimitCount = 0;
+
+/**
+ * Setup proxy agents from environment configuration
+ */
+function setupProxies() {
+  if (PROXY_CONFIG.proxies.length > 0) {
+    console.log(`Setting up ${PROXY_CONFIG.proxies.length} proxies...`);
+
+    PROXY_CONFIG.proxies.forEach((proxyUrl, index) => {
+      try {
+        const httpsAgent = new HttpsProxyAgent(proxyUrl);
+        const httpAgent = new HttpProxyAgent(proxyUrl);
+        proxyAgents.push({ proxyUrl, httpsAgent, httpAgent });
+        // Hide password in log
+        const displayUrl = proxyUrl.replace(/:([^@:]+)@/, ":****@");
+        console.log(`  Proxy ${index + 1}: ${displayUrl}`);
+      } catch (error) {
+        console.error(
+          `  Failed to create agent for proxy ${proxyUrl}: ${error.message}`,
+        );
+      }
+    });
+
+    if (proxyAgents.length === 0) {
+      console.log("No valid proxies configured, using direct connection");
+    } else {
+      console.log(`${proxyAgents.length} proxies ready for rotation`);
+    }
+  }
+}
+
+/**
+ * Get axios config with proxy agent if available
+ */
+function getAxiosConfigWithProxy(timeout = 10000) {
+  const config = { timeout };
+
+  if (proxyAgents.length > 0) {
+    const agent = proxyAgents[currentProxyIndex];
+    if (GOKZ_API_URL.startsWith("https")) {
+      config.httpsAgent = agent.httpsAgent;
+    } else {
+      config.httpAgent = agent.httpAgent;
+    }
+    // Round-robin to next proxy
+    currentProxyIndex = (currentProxyIndex + 1) % proxyAgents.length;
+  }
+
+  return config;
+}
 
 // WR types to sync - mode strings map to mode IDs in DB
 const WR_TYPES = [
@@ -85,6 +158,7 @@ function parseArgs() {
     map: null,
     player: null,
     batchSize: 100,
+    concurrency: 10,
     verify: false,
     force: false,
     help: false,
@@ -106,6 +180,9 @@ function parseArgs() {
         break;
       case "--batch":
         options.batchSize = parseInt(args[++i], 10) || 100;
+        break;
+      case "--concurrency":
+        options.concurrency = parseInt(args[++i], 10) || 10;
         break;
       case "--verify":
         options.verify = true;
@@ -131,21 +208,30 @@ Usage:
   node scripts/populate-pbs-wrs.js [options]
 
 Options:
-  --wrs-only      Only populate world records
-  --pbs-only      Only populate player PBs
-  --map <name>    Refresh WRs for a specific map
-  --player <id>   Refresh PBs for a specific player (steamid64)
-  --batch <size>  Batch size for bulk operations (default: 100)
-  --verify        Verify/update stats against KZT API instead of local DB
-  --force         Force refresh even if already synced
-  --help          Show this help message
+  --wrs-only        Only populate world records
+  --pbs-only        Only populate player PBs
+  --map <name>      Refresh WRs for a specific map
+  --player <id>     Refresh PBs for a specific player (steamid64)
+  --batch <size>    Batch size for bulk operations (default: 100)
+  --concurrency <n> Number of players to process in parallel (default: 10)
+  --verify          Verify/update stats against KZT API instead of local DB
+  --force           Force refresh even if already synced
+  --help            Show this help message
+
+Environment:
+  KZ_SCRAPER_PROXIES  Comma-separated proxy URLs for --verify mode (avoids rate limits)
+                      Format: http://user:pass@host:port or http://host:port
 
 Examples:
   node scripts/populate-pbs-wrs.js                    # Full population from local DB
   node scripts/populate-pbs-wrs.js --wrs-only         # Only WRs from local DB  
+  node scripts/populate-pbs-wrs.js --pbs-only --concurrency 20  # Fast PB population
   node scripts/populate-pbs-wrs.js --verify           # Verify against KZT API
   node scripts/populate-pbs-wrs.js --map kz_beginnerblock_go  # Single map
   node scripts/populate-pbs-wrs.js --player 76561198012345678  # Single player
+
+Proxy usage (for --verify mode):
+  KZ_SCRAPER_PROXIES=http://proxy1:8080,http://proxy2:8080 node scripts/populate-pbs-wrs.js --verify
 `);
 }
 
@@ -280,9 +366,9 @@ async function getPBsFromLocalDB(pool, playerId) {
 // ================== API VERIFY FUNCTIONS ==================
 
 /**
- * Fetch WR from KZTimer API for verification
+ * Fetch WR from KZTimer API for verification with proxy and retry support
  */
-async function fetchWRFromAPI(mapName, mode, hasTeleports) {
+async function fetchWRFromAPI(mapName, mode, hasTeleports, attempt = 1) {
   try {
     const params = {
       map_name: mapName,
@@ -296,13 +382,35 @@ async function fetchWRFromAPI(mapName, mode, hasTeleports) {
       params.has_teleports = false;
     }
 
-    const response = await axios.get(`${GOKZ_API_URL}/records/top`, {
-      params,
-      timeout: 10000,
-      validateStatus: (status) => status === 200 || status === 404,
-    });
+    const axiosConfig = getAxiosConfigWithProxy(10000);
+    axiosConfig.params = params;
+    axiosConfig.validateStatus = (status) =>
+      status === 200 || status === 404 || status === 429;
 
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    const response = await axios.get(
+      `${GOKZ_API_URL}/records/top`,
+      axiosConfig,
+    );
+
+    // Handle rate limiting
+    if (response.status === 429) {
+      rateLimitCount++;
+      console.warn(
+        `  Rate limited (429), waiting ${PROXY_CONFIG.rateLimitDelay / 1000}s... (total: ${rateLimitCount})`,
+      );
+      await new Promise((resolve) =>
+        setTimeout(resolve, PROXY_CONFIG.rateLimitDelay),
+      );
+
+      if (attempt < PROXY_CONFIG.retryAttempts) {
+        return fetchWRFromAPI(mapName, mode, hasTeleports, attempt + 1);
+      }
+      return null;
+    }
+
+    // Small delay between requests (reduced if using proxies)
+    const delay = proxyAgents.length > 0 ? 50 : 100;
+    await new Promise((resolve) => setTimeout(resolve, delay));
 
     if (
       response.status === 404 ||
@@ -321,6 +429,15 @@ async function fetchWRFromAPI(mapName, mode, hasTeleports) {
       teleports: wr.teleports,
     };
   } catch (error) {
+    // Retry on network errors
+    if (attempt < PROXY_CONFIG.retryAttempts) {
+      const delay = PROXY_CONFIG.retryDelay * Math.pow(2, attempt - 1);
+      console.warn(
+        `  Retry ${attempt}/${PROXY_CONFIG.retryAttempts} for ${mapName} (${mode}) after ${delay}ms`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return fetchWRFromAPI(mapName, mode, hasTeleports, attempt + 1);
+    }
     console.error(
       `  Error fetching WR for ${mapName} (${mode}): ${error.message}`,
     );
@@ -329,22 +446,44 @@ async function fetchWRFromAPI(mapName, mode, hasTeleports) {
 }
 
 /**
- * Fetch player PBs from KZTimer API for verification
+ * Fetch player PBs from KZTimer API for verification with proxy and retry support
  */
-async function fetchPlayerPBsFromAPI(steamid64) {
+async function fetchPlayerPBsFromAPI(steamid64, attempt = 1) {
   try {
-    const response = await axios.get(`${GOKZ_API_URL}/records/top`, {
-      params: {
-        steamid64,
-        stage: 0,
-        tickrate: 128,
-        limit: 9999,
-      },
-      timeout: 30000,
-      validateStatus: (status) => status === 200 || status === 404,
-    });
+    const axiosConfig = getAxiosConfigWithProxy(30000);
+    axiosConfig.params = {
+      steamid64,
+      stage: 0,
+      tickrate: 128,
+      limit: 9999,
+    };
+    axiosConfig.validateStatus = (status) =>
+      status === 200 || status === 404 || status === 429;
 
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    const response = await axios.get(
+      `${GOKZ_API_URL}/records/top`,
+      axiosConfig,
+    );
+
+    // Handle rate limiting
+    if (response.status === 429) {
+      rateLimitCount++;
+      console.warn(
+        `  Rate limited (429), waiting ${PROXY_CONFIG.rateLimitDelay / 1000}s... (total: ${rateLimitCount})`,
+      );
+      await new Promise((resolve) =>
+        setTimeout(resolve, PROXY_CONFIG.rateLimitDelay),
+      );
+
+      if (attempt < PROXY_CONFIG.retryAttempts) {
+        return fetchPlayerPBsFromAPI(steamid64, attempt + 1);
+      }
+      return [];
+    }
+
+    // Small delay between requests
+    const delay = proxyAgents.length > 0 ? 50 : 100;
+    await new Promise((resolve) => setTimeout(resolve, delay));
 
     if (response.status === 404 || !response.data) {
       return [];
@@ -352,6 +491,15 @@ async function fetchPlayerPBsFromAPI(steamid64) {
 
     return response.data;
   } catch (error) {
+    // Retry on network errors
+    if (attempt < PROXY_CONFIG.retryAttempts) {
+      const delay = PROXY_CONFIG.retryDelay * Math.pow(2, attempt - 1);
+      console.warn(
+        `  Retry ${attempt}/${PROXY_CONFIG.retryAttempts} for player ${steamid64} after ${delay}ms`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return fetchPlayerPBsFromAPI(steamid64, attempt + 1);
+    }
     console.error(`  Error fetching PBs for ${steamid64}: ${error.message}`);
     return [];
   }
@@ -498,66 +646,75 @@ async function updatePlayerPBs(pool, playerId, steamid64, options) {
     pbsByKey = await getPBsFromLocalDB(pool, playerId);
   }
 
-  if (Object.keys(pbsByKey).length === 0) {
+  const pbValues = Object.values(pbsByKey).filter((pb) => pb.mapId);
+  if (pbValues.length === 0) {
     return 0;
   }
 
-  // Upsert PBs
-  let insertedCount = 0;
-  for (const pbData of Object.values(pbsByKey)) {
-    if (!pbData.mapId) continue; // Skip if map not found
+  // Build bulk insert - much faster than individual inserts
+  const values = [];
+  const placeholders = [];
 
+  for (const pbData of pbValues) {
     const pro = pbData.pro;
     const tp = pbData.tp;
 
-    await pool.query(
-      `INSERT INTO kz_player_map_pbs 
-       (player_id, steamid64, map_id, map_name, mode, stage,
-        pro_time, pro_teleports, pro_points, pro_record_id, pro_created_on,
-        tp_time, tp_teleports, tp_points, tp_record_id, tp_created_on,
-        map_difficulty, map_validated)
-       VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-         pro_time = COALESCE(VALUES(pro_time), pro_time),
-         pro_teleports = COALESCE(VALUES(pro_teleports), pro_teleports),
-         pro_points = COALESCE(VALUES(pro_points), pro_points),
-         pro_record_id = COALESCE(VALUES(pro_record_id), pro_record_id),
-         pro_created_on = COALESCE(VALUES(pro_created_on), pro_created_on),
-         tp_time = COALESCE(VALUES(tp_time), tp_time),
-         tp_teleports = COALESCE(VALUES(tp_teleports), tp_teleports),
-         tp_points = COALESCE(VALUES(tp_points), tp_points),
-         tp_record_id = COALESCE(VALUES(tp_record_id), tp_record_id),
-         tp_created_on = COALESCE(VALUES(tp_created_on), tp_created_on),
-         updated_at = NOW()`,
-      [
-        playerId,
-        steamid64,
-        pbData.mapId,
-        pbData.mapName,
-        pbData.mode,
-        pro?.time || null,
-        pro ? 0 : null,
-        pro?.points || null,
-        pro?.recordId || null,
-        pro?.createdOn || null,
-        tp?.time || null,
-        tp?.teleports || null,
-        tp?.points || null,
-        tp?.recordId || null,
-        tp?.createdOn || null,
-        pbData.mapDifficulty,
-        pbData.mapValidated,
-      ],
+    placeholders.push("(?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    values.push(
+      playerId,
+      steamid64,
+      pbData.mapId,
+      pbData.mapName,
+      pbData.mode,
+      pro?.time || null,
+      pro ? 0 : 0,
+      pro?.points ?? 0,
+      pro?.recordId || null,
+      pro?.createdOn || null,
+      tp?.time || null,
+      tp?.teleports ?? 0,
+      tp?.points ?? 0,
+      tp?.recordId || null,
+      tp?.createdOn || null,
+      pbData.mapDifficulty,
+      pbData.mapValidated,
     );
-    insertedCount++;
   }
 
-  // Mark player as synced
-  await pool.query(`UPDATE kz_players SET pbs_synced_at = NOW() WHERE id = ?`, [
-    playerId,
-  ]);
+  // Single bulk upsert query
+  await pool.query(
+    `INSERT INTO kz_player_map_pbs 
+     (player_id, steamid64, map_id, map_name, mode, stage,
+      pro_time, pro_teleports, pro_points, pro_record_id, pro_created_on,
+      tp_time, tp_teleports, tp_points, tp_record_id, tp_created_on,
+      map_difficulty, map_validated)
+     VALUES ${placeholders.join(", ")}
+     ON DUPLICATE KEY UPDATE
+       pro_time = COALESCE(VALUES(pro_time), pro_time),
+       pro_teleports = COALESCE(VALUES(pro_teleports), pro_teleports),
+       pro_points = COALESCE(VALUES(pro_points), pro_points),
+       pro_record_id = COALESCE(VALUES(pro_record_id), pro_record_id),
+       pro_created_on = COALESCE(VALUES(pro_created_on), pro_created_on),
+       tp_time = COALESCE(VALUES(tp_time), tp_time),
+       tp_teleports = COALESCE(VALUES(tp_teleports), tp_teleports),
+       tp_points = COALESCE(VALUES(tp_points), tp_points),
+       tp_record_id = COALESCE(VALUES(tp_record_id), tp_record_id),
+       tp_created_on = COALESCE(VALUES(tp_created_on), tp_created_on),
+       updated_at = NOW()`,
+    values,
+  );
 
-  return insertedCount;
+  // Mark player as synced (ignore if column doesn't exist)
+  try {
+    await pool.query(
+      `UPDATE kz_players SET pbs_synced_at = NOW() WHERE id = ?`,
+      [playerId],
+    );
+  } catch (err) {
+    // Column might not exist yet, ignore
+  }
+
+  return pbValues.length;
 }
 
 // ================== POPULATION FUNCTIONS ==================
@@ -610,7 +767,7 @@ async function populateWorldRecords(pool, options) {
     if (options.force && lastMapName) {
       cursorClause = `AND m.map_name > '${lastMapName.replace(/'/g, "''")}'`;
     }
-    
+
     const [maps] = await pool.query(
       `SELECT m.id, m.map_name
        FROM kz_maps m
@@ -685,6 +842,7 @@ async function populatePlayerPBs(pool, options) {
   let totalPBs = 0;
   let hasMore = true;
   let lastPlayerId = 0;
+  const concurrency = options.concurrency || 10; // Process 10 players in parallel
 
   // Build where clause based on force option
   let existsClause = "";
@@ -712,20 +870,44 @@ async function populatePlayerPBs(pool, options) {
       break;
     }
 
-    console.log(`Processing batch of ${players.length} players...`);
+    console.log(
+      `Processing batch of ${players.length} players (${concurrency} parallel)...`,
+    );
 
-    for (const player of players) {
-      process.stdout.write(`  ${player.player_name}... `);
-      const pbCount = await updatePlayerPBs(
-        pool,
-        player.id,
-        player.steamid64,
-        options,
+    // Process in parallel chunks
+    for (let i = 0; i < players.length; i += concurrency) {
+      const chunk = players.slice(i, i + concurrency);
+
+      const results = await Promise.all(
+        chunk.map(async (player) => {
+          try {
+            const pbCount = await updatePlayerPBs(
+              pool,
+              player.id,
+              player.steamid64,
+              options,
+            );
+            return { player, pbCount, error: null };
+          } catch (err) {
+            return { player, pbCount: 0, error: err.message };
+          }
+        }),
       );
-      console.log(`${pbCount} PBs`);
-      totalPlayers++;
-      totalPBs += pbCount;
-      lastPlayerId = player.id;
+
+      for (const result of results) {
+        if (result.error) {
+          console.log(
+            `  ${result.player.player_name}... ERROR: ${result.error}`,
+          );
+        } else {
+          console.log(
+            `  ${result.player.player_name}... ${result.pbCount} PBs`,
+          );
+        }
+        totalPlayers++;
+        totalPBs += result.pbCount;
+        lastPlayerId = result.player.id;
+      }
     }
 
     if (players.length < options.batchSize) {
@@ -754,6 +936,11 @@ async function main() {
   );
   console.log(`Batch size: ${options.batchSize}`);
   console.log(`Force refresh: ${options.force}`);
+
+  // Setup proxies if in verify mode
+  if (options.verify) {
+    setupProxies();
+  }
 
   try {
     // Initialize database
