@@ -401,9 +401,7 @@
       "name": "CSGO Suspicious Strafe Count (Very High)",
       "description": "Strafe count impossibly high for the distance achieved",
       "game": "csgo",
-      "conditions": [
-        { "field": "strafes", "operator": ">", "value": 25 }
-      ],
+      "conditions": [{ "field": "strafes", "operator": ">", "value": 25 }],
       "enabled": true
     }
   ]

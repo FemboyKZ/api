@@ -553,12 +553,12 @@ router.get("/:steamid", async (req, res) => {
     query += " ORDER BY last_seen DESC";
 
     const [rows] = await pool.query(query, params);
-    
+
     // If player not found in database, try to fetch from Steam API
     if (rows.length === 0) {
       // Try to get player info from Steam and save to database
       const steamPlayer = await getPlayerSummary(steamid64, true);
-      
+
       if (!steamPlayer) {
         return res.status(404).json({ error: "Player not found" });
       }

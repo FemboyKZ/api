@@ -219,9 +219,11 @@ async function getPlayerSummary(steamid, saveToDb = false) {
              name = VALUES(name),
              avatar = VALUES(avatar),
              avatar_updated_at = NOW()`,
-          [playerData.steamid, playerData.name, playerData.avatar]
+          [playerData.steamid, playerData.name, playerData.avatar],
         );
-        logger.info(`Created/updated player record for ${playerData.steamid} (${playerData.name})`);
+        logger.info(
+          `Created/updated player record for ${playerData.steamid} (${playerData.name})`,
+        );
       } catch (dbError) {
         logger.error(`Failed to save player to database: ${dbError.message}`);
         // Continue anyway - we still have the Steam data
