@@ -995,7 +995,8 @@ router.get(
         // If no completions found, fallback to querying kz_records_partitioned directly
         const hasCompletions =
           result.stats &&
-          (result.stats.completed_pro > 0 || result.stats.completed_tp_only > 0);
+          (result.stats.completed_pro > 0 ||
+            result.stats.completed_tp_only > 0);
 
         if (hasCompletions) {
           return res.json({
