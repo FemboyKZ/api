@@ -19,7 +19,6 @@
       "description": "SimpleKZ/KZTimer mode longjump exceeds 295 units",
       "game": "csgo128",
       "jump_type": 0,
-      "mode": 1,
       "conditions": [{ "field": "distance", "operator": ">", "value": 295 }],
       "enabled": true
     },
@@ -394,6 +393,16 @@
       "conditions": [
         { "field": "strafes", "operator": "<=", "value": 3 },
         { "field": "distance", "operator": ">", "value": 287 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo_suspicious_strafe_count_high",
+      "name": "CSGO Suspicious Strafe Count (Very High)",
+      "description": "Strafe count impossibly high for the distance achieved",
+      "game": "csgo",
+      "conditions": [
+        { "field": "strafes", "operator": ">", "value": 25 }
       ],
       "enabled": true
     }
