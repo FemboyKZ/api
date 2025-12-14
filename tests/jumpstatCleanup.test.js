@@ -356,7 +356,6 @@ describe("Jumpstat Cleanup Service", () => {
       expect(CSGO_FIELD_MAP).toHaveProperty("steamid32", "SteamID32");
       expect(CSGO_FIELD_MAP).toHaveProperty("jump_type", "JumpType");
       expect(CSGO_FIELD_MAP).toHaveProperty("strafes", "Strafes");
-      expect(CSGO_FIELD_MAP).toHaveProperty("strafe_count", "Strafes"); // Alias
     });
   });
 

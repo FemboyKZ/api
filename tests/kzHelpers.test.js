@@ -43,10 +43,12 @@ describe("KZ Helpers", () => {
       expect(JUMP_TYPES[1]).toBe("bhop");
       expect(JUMP_TYPES[2]).toBe("multibhop");
       expect(JUMP_TYPES[3]).toBe("weirdjump");
-      expect(JUMP_TYPES[4]).toBe("dropbhop");
-      expect(JUMP_TYPES[5]).toBe("countjump");
-      expect(JUMP_TYPES[6]).toBe("ladderjump");
-      expect(Object.keys(JUMP_TYPES).length).toBe(7);
+      expect(JUMP_TYPES[4]).toBe("ladderjump");
+      expect(JUMP_TYPES[5]).toBe("ladderhop");
+      expect(JUMP_TYPES[6]).toBe("jumpbug");
+      expect(JUMP_TYPES[7]).toBe("lowprebhop");
+      expect(JUMP_TYPES[8]).toBe("lowpreweirdjump");
+      expect(Object.keys(JUMP_TYPES).length).toBe(9);
     });
 
     it("should have AIR_TYPES with correct values", () => {

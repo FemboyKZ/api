@@ -14,6 +14,11 @@ jest.mock("../src/db/redis", () => ({
   setCachedData: jest.fn(),
 }));
 
+// Mock steamQuery service
+jest.mock("../src/services/steamQuery", () => ({
+  getPlayerSummary: jest.fn(() => null),
+}));
+
 describe("Players Endpoints", () => {
   beforeEach(() => {
     jest.clearAllMocks();
