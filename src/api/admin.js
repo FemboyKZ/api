@@ -16,6 +16,12 @@ const {
   populateAllStatistics,
   getStatisticsSummary,
 } = require("../services/kzStatistics");
+const {
+  runCleanup: runJumpstatCleanup,
+  getQuarantinedJumpstats,
+  restoreJumpstat,
+  getAvailableFilters: getJumpstatFilters,
+} = require("../services/jumpstatCleanup");
 
 /**
  * GET /admin/scraper-status
@@ -342,6 +348,151 @@ router.post("/populate-kz-statistics", async (req, res) => {
   } catch (error) {
     logger.error("Failed to populate KZ statistics", { error: error.message });
     res.status(500).json({ error: "Failed to populate KZ statistics" });
+  }
+});
+
+// ==================== JUMPSTAT CLEANUP ENDPOINTS ====================
+
+/**
+ * GET /admin/jumpstat-filters
+ * Get list of available jumpstat cleanup filters
+ */
+router.get("/jumpstat-filters", async (req, res) => {
+  try {
+    const filters = getJumpstatFilters();
+    res.json({
+      success: true,
+      filters,
+      total: filters.length,
+    });
+  } catch (error) {
+    logger.error("Failed to get jumpstat filters", { error: error.message });
+    res.status(500).json({ error: "Failed to get jumpstat filters" });
+  }
+});
+
+/**
+ * POST /admin/cleanup-jumpstats
+ * Run jumpstat cleanup with configured filters
+ * Query params:
+ *   - dryRun: boolean (default: true) - If true, only report what would be cleaned
+ *   - game: string (cs2|csgo|csgo128|csgo64|all, default: all)
+ *   - filterId: string - Run only a specific filter by ID
+ */
+router.post("/cleanup-jumpstats", async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const { dryRun = "true", game = "all", filterId } = req.query;
+    const isDryRun = dryRun === "true" || dryRun === "1";
+
+    logger.info("Jumpstat cleanup triggered", {
+      dryRun: isDryRun,
+      game,
+      filterId: filterId || "all",
+    });
+
+    const result = await runJumpstatCleanup({
+      dryRun: isDryRun,
+      game,
+      filterId,
+      executedBy: req.adminId || "system",
+    });
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    logger.info("Jumpstat cleanup complete", {
+      dryRun: isDryRun,
+      matched: result.summary?.total_matched || 0,
+      quarantined: result.summary?.total_quarantined || 0,
+      elapsed,
+    });
+    logger.logRequest(req, res, Date.now() - startTime);
+
+    res.json({
+      ...result,
+      elapsed: `${elapsed}s`,
+    });
+  } catch (error) {
+    logger.error("Failed to cleanup jumpstats", { error: error.message });
+    res.status(500).json({ error: "Failed to cleanup jumpstats" });
+  }
+});
+
+/**
+ * GET /admin/quarantined-jumpstats
+ * Get list of quarantined jumpstats
+ * Query params:
+ *   - game: string (cs2|csgo128|csgo64, default: cs2)
+ *   - page: number (default: 1)
+ *   - limit: number (default: 50, max: 100)
+ *   - filterId: string - Filter by specific filter ID
+ *   - steamid64: string - Filter by player
+ */
+router.get("/quarantined-jumpstats", async (req, res) => {
+  try {
+    const { game = "cs2", page = "1", limit = "50", filterId, steamid64 } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
+
+    const result = await getQuarantinedJumpstats({
+      game,
+      page: pageNum,
+      limit: limitNum,
+      filterId,
+      steamid64,
+    });
+
+    res.json({
+      success: true,
+      game,
+      ...result,
+    });
+  } catch (error) {
+    logger.error("Failed to get quarantined jumpstats", { error: error.message });
+    res.status(500).json({ error: "Failed to get quarantined jumpstats" });
+  }
+});
+
+/**
+ * POST /admin/restore-jumpstat/:id
+ * Restore a quarantined jumpstat back to the main table
+ * Path params:
+ *   - id: string - Record ID to restore
+ * Query params:
+ *   - game: string (cs2|csgo128|csgo64, default: cs2)
+ */
+router.post("/restore-jumpstat/:id", async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const { id } = req.params;
+    const { game = "cs2" } = req.query;
+
+    if (!id) {
+      return res.status(400).json({ error: "Record ID is required" });
+    }
+
+    logger.info("Restoring quarantined jumpstat", { id, game });
+
+    const result = await restoreJumpstat(id, game);
+
+    logger.logRequest(req, res, Date.now() - startTime);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: result.message,
+        id,
+        game,
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        error: result.message,
+      });
+    }
+  } catch (error) {
+    logger.error("Failed to restore jumpstat", { error: error.message });
+    res.status(500).json({ error: "Failed to restore jumpstat" });
   }
 });
 

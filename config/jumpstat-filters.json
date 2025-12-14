@@ -1,0 +1,473 @@
+{
+  "$schema": "./jumpstat-filters.schema.json",
+  "description": "Filters for detecting potentially bugged or cheated jumpstats based on GOKZ tier config values + 10-20 units (depending on jump type/mode)",
+  "version": "2.1.0",
+  "filters": [
+    {
+      "id": "csgo128_impossible_longjump_vnl",
+      "name": "CSGO 128tick Impossible Longjump (Vanilla)",
+      "description": "Vanilla mode longjump exceeds 261 units",
+      "game": "csgo128",
+      "jump_type": 0,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 261 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_longjump_non_vnl",
+      "name": "CSGO 128tick Impossible Longjump (SimpleKZ/KZTimer)",
+      "description": "SimpleKZ/KZTimer mode longjump exceeds 295 units",
+      "game": "csgo128",
+      "jump_type": 0,
+      "mode": 1,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 295 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_bhop_vnl",
+      "name": "CSGO 128tick Impossible Bhop (Vanilla)",
+      "description": "Vanilla mode bhop exceeds 252 units",
+      "game": "csgo128",
+      "jump_type": 1,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 252 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_bhop_skz",
+      "name": "CSGO 128tick Impossible Bhop (SimpleKZ)",
+      "description": "SimpleKZ mode bhop exceeds 295 units",
+      "game": "csgo128",
+      "jump_type": 1,
+      "mode": 1,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 295 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_bhop_kzt",
+      "name": "CSGO 128tick Impossible Bhop (KZTimer)",
+      "description": "KZTimer mode bhop exceeds 367 units",
+      "game": "csgo128",
+      "jump_type": 1,
+      "mode": 2,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 367 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_multibhop_vnl",
+      "name": "CSGO 128tick Impossible MultiBhop (Vanilla)",
+      "description": "Vanilla mode multibhop exceeds 256 units",
+      "game": "csgo128",
+      "jump_type": 2,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 256 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_multibhop_skz",
+      "name": "CSGO 128tick Impossible MultiBhop (SimpleKZ)",
+      "description": "SimpleKZ mode multibhop exceeds 297 units",
+      "game": "csgo128",
+      "jump_type": 2,
+      "mode": 1,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 297 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_multibhop_kzt",
+      "name": "CSGO 128tick Impossible MultiBhop (KZTimer)",
+      "description": "KZTimer mode multibhop exceeds 367 units",
+      "game": "csgo128",
+      "jump_type": 2,
+      "mode": 2,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 367 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_weirdjump_vnl",
+      "name": "CSGO 128tick Impossible WeirdJump (Vanilla)",
+      "description": "Vanilla mode weirdjump exceeds 262 units",
+      "game": "csgo128",
+      "jump_type": 3,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 262 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_weirdjump_skz",
+      "name": "CSGO 128tick Impossible WeirdJump (SimpleKZ)",
+      "description": "SimpleKZ mode weirdjump exceeds 300 units",
+      "game": "csgo128",
+      "jump_type": 3,
+      "mode": 1,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 300 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_weirdjump_kzt",
+      "name": "CSGO 128tick Impossible WeirdJump (KZTimer)",
+      "description": "KZTimer mode weirdjump exceeds 332 units",
+      "game": "csgo128",
+      "jump_type": 3,
+      "mode": 2,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 332 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_ladderjump_vnl",
+      "name": "CSGO 128tick Impossible LadderJump (Vanilla)",
+      "description": "Vanilla mode ladderjump exceeds 126 units",
+      "game": "csgo128",
+      "jump_type": 4,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 126 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_ladderjump_skz",
+      "name": "CSGO 128tick Impossible LadderJump (SimpleKZ)",
+      "description": "SimpleKZ mode ladderjump exceeds 207 units",
+      "game": "csgo128",
+      "jump_type": 4,
+      "mode": 1,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 207 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_ladderjump_kzt",
+      "name": "CSGO 128tick Impossible LadderJump (KZTimer)",
+      "description": "KZTimer mode ladderjump exceeds 207 units",
+      "game": "csgo128",
+      "jump_type": 4,
+      "mode": 2,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 207 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_ladderhop_vnl",
+      "name": "CSGO 128tick Impossible LadderHop (Vanilla)",
+      "description": "Vanilla mode ladderhop exceeds 275 units",
+      "game": "csgo128",
+      "jump_type": 5,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 275 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_ladderhop_skz",
+      "name": "CSGO 128tick Impossible LadderHop (SimpleKZ)",
+      "description": "SimpleKZ mode ladderhop exceeds 288 units",
+      "game": "csgo128",
+      "jump_type": 5,
+      "mode": 1,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 288 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_ladderhop_kzt",
+      "name": "CSGO 128tick Impossible LadderHop (KZTimer)",
+      "description": "KZTimer mode ladderhop exceeds 288 units",
+      "game": "csgo128",
+      "jump_type": 5,
+      "mode": 2,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 288 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_jumpbug_vnl",
+      "name": "CSGO 128tick Impossible JumpBug (Vanilla)",
+      "description": "Vanilla mode jumpbug exceeds 285 units",
+      "game": "csgo128",
+      "jump_type": 6,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 285 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_jumpbug_skz",
+      "name": "CSGO 128tick Impossible JumpBug (SimpleKZ)",
+      "description": "SimpleKZ mode jumpbug exceeds 297 units",
+      "game": "csgo128",
+      "jump_type": 6,
+      "mode": 1,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 297 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_jumpbug_kzt",
+      "name": "CSGO 128tick Impossible JumpBug (KZTimer)",
+      "description": "KZTimer mode jumpbug exceeds 367 units",
+      "game": "csgo128",
+      "jump_type": 6,
+      "mode": 2,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 367 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_lowprebhop_vnl",
+      "name": "CSGO 128tick Impossible LowPreBhop (Vanilla)",
+      "description": "Vanilla mode lowprebhop exceeds 0 units (not possible)",
+      "game": "csgo128",
+      "jump_type": 7,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 0 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_lowprebhop_skz",
+      "name": "CSGO 128tick Impossible LowPreBhop (SimpleKZ)",
+      "description": "SimpleKZ mode lowprebhop exceeds 0 units (not possible)",
+      "game": "csgo128",
+      "jump_type": 7,
+      "mode": 1,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 0 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_lowprebhop_kzt",
+      "name": "CSGO 128tick Impossible LowPreBhop (KZTimer)",
+      "description": "KZTimer mode lowprebhop exceeds 347 units",
+      "game": "csgo128",
+      "jump_type": 7,
+      "mode": 2,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 347 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_lowpreweirdjump_vnl",
+      "name": "CSGO 128tick Impossible LowPreWeirdJump (Vanilla)",
+      "description": "Vanilla mode lowpreweirdjump exceeds 0 units (not possible)",
+      "game": "csgo128",
+      "jump_type": 8,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 0 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_lowpreweirdjump_skz",
+      "name": "CSGO 128tick Impossible LowPreWeirdJump (SimpleKZ)",
+      "description": "SimpleKZ mode lowpreweirdjump exceeds 0 units (not possible)",
+      "game": "csgo128",
+      "jump_type": 8,
+      "mode": 1,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 0 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo128_impossible_lowpreweirdjump_kzt",
+      "name": "CSGO 128tick Impossible LowPreWeirdJump (KZTimer)",
+      "description": "KZTimer mode lowpreweirdjump exceeds 299 units",
+      "game": "csgo128",
+      "jump_type": 8,
+      "mode": 2,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 299 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo64_remove_non_vnl",
+      "name": "CSGO 64tick Remove Non-VNL Mode Jumps",
+      "description": "CSGO 64 tick only supports VNL mode (mode 0) - remove all others",
+      "game": "csgo64",
+      "conditions": [
+        { "field": "mode", "operator": "!=", "value": 0 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo64_impossible_longjump_vnl",
+      "name": "CSGO 64tick Impossible Longjump (Vanilla)",
+      "description": "Vanilla mode longjump exceeds 252 units",
+      "game": "csgo64",
+      "jump_type": 0,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 252 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo64_impossible_bhop_vnl",
+      "name": "CSGO 64tick Impossible Bhop (Vanilla)",
+      "description": "Vanilla mode bhop exceeds 250 units",
+      "game": "csgo64",
+      "jump_type": 1,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 250 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo64_impossible_multibhop_vnl",
+      "name": "CSGO 64tick Impossible MultiBhop (Vanilla)",
+      "description": "Vanilla mode multibhop exceeds 255 units",
+      "game": "csgo64",
+      "jump_type": 2,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 255 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo64_impossible_weirdjump_vnl",
+      "name": "CSGO 64tick Impossible WeirdJump (Vanilla)",
+      "description": "Vanilla mode weirdjump exceeds 251 units",
+      "game": "csgo64",
+      "jump_type": 3,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 251 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo64_impossible_ladderjump_vnl",
+      "name": "CSGO 64tick Impossible LadderJump (Vanilla)",
+      "description": "Vanilla mode ladderjump exceeds 118 units",
+      "game": "csgo64",
+      "jump_type": 4,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 118 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo64_impossible_ladderhop_vnl",
+      "name": "CSGO 64tick Impossible LadderHop (Vanilla)",
+      "description": "Vanilla mode ladderhop exceeds 270 units",
+      "game": "csgo64",
+      "jump_type": 5,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 270 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo64_impossible_jumpbug_vnl",
+      "name": "CSGO 64tick Impossible JumpBug (Vanilla)",
+      "description": "Vanilla mode jumpbug exceeds 275 units",
+      "game": "csgo64",
+      "jump_type": 6,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 275 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo64_impossible_lowpreweirdjump_vnl",
+      "name": "CSGO 64tick Impossible LowPreWeirdJump (Vanilla)",
+      "description": "Vanilla mode lowpreweirdjump exceeds 0 units (not possible)",
+      "game": "csgo64",
+      "jump_type": 7,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 0 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo64_impossible_lowprebhop_vnl",
+      "name": "CSGO 64tick Impossible LowPreBhop (Vanilla)",
+      "description": "Vanilla mode lowprebhop exceeds 0 units (not possible)",
+      "game": "csgo64",
+      "jump_type": 8,
+      "mode": 0,
+      "conditions": [
+        { "field": "distance", "operator": ">", "value": 0 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo_suspicious_zero_strafes",
+      "name": "CSGO Suspicious Zero Strafes",
+      "description": "Jump with 1 or 0 strafes - potentially cheated",
+      "game": "csgo",
+      "jump_type": 0,
+      "conditions": [
+        { "field": "strafes", "operator": ">=", "value": 1 },
+        { "field": "distance", "operator": ">", "value": 260 }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "csgo_suspicious_strafe_count_high_skz",
+      "name": "CSGO Suspicious Strafe Count (High)",
+      "description": "Strafe count impossibly high for the distance achieved",
+      "game": "csgo",
+      "mode": 1,
+      "conditions": [
+        { "field": "strafes", "operator": ">", "value": 25 },
+        { "field": "distance", "operator": ">", "value": 287 }
+      ],
+      "enabled": false
+    },
+    {
+      "id": "csgo_suspicious_strafe_count_low_skz",
+      "name": "CSGO Suspicious Strafe Count (Low)",
+      "description": "Strafe count impossibly low for the distance achieved",
+      "game": "csgo",
+      "mode": 1,
+      "conditions": [
+        { "field": "strafes", "operator": "<=", "value": 3 },
+        { "field": "distance", "operator": ">", "value": 287 }
+      ],
+      "enabled": false
+    }
+  ]
+}

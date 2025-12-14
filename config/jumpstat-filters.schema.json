@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Jumpstat Filters Configuration",
+  "description": "Configuration schema for jumpstat cleanup filters",
+  "type": "object",
+  "required": ["filters"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Reference to this schema file"
+    },
+    "description": {
+      "type": "string",
+      "description": "Description of the filters file"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Version of the filters configuration"
+    },
+    "filters": {
+      "type": "array",
+      "description": "Array of filter definitions",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "conditions", "enabled"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$",
+            "description": "Unique identifier for the filter (lowercase, underscores allowed)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable name for the filter"
+          },
+          "description": {
+            "type": "string",
+            "description": "Detailed description of what this filter detects"
+          },
+          "game": {
+            "type": "string",
+            "enum": ["cs2", "csgo", "csgo128", "csgo64", "all"],
+            "default": "all",
+            "description": "Which game/tickrate this filter applies to (csgo128/csgo64 for tickrate-specific)"
+          },
+          "tickrate": {
+            "type": "integer",
+            "enum": [64, 102, 128],
+            "description": "Specific tickrate this filter applies to (optional, use game field for DB targeting)"
+          },
+          "jump_type": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Jump type to filter (0=longjump, 1=bhop, 2=multibhop, 3=weirdjump, 4=ladderjump, 5=ladderhop, 6=jumpbug, 7=lowprebhop, 8=lowpreweirdjump). Omit to apply to all jump types."
+          },
+          "mode": {
+            "type": "integer",
+            "enum": [0, 1, 2],
+            "description": "Mode to filter (CSGO: 0=vanilla, 1=simplekz, 2=kztimer)"
+          },
+          "conditions": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Array of conditions that must ALL match (AND logic)",
+            "items": {
+              "type": "object",
+              "required": ["field", "operator", "value"],
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "description": "Database field name to check"
+                },
+                "operator": {
+                  "type": "string",
+                  "enum": [">", "<", ">=", "<=", "=", "!=", "LIKE", "NOT LIKE", "IN", "NOT IN", "IS NULL", "IS NOT NULL"],
+                  "description": "Comparison operator"
+                },
+                "value": {
+                  "description": "Value to compare against (number, string, or array for IN operator)"
+                }
+              }
+            }
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether this filter is active"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Priority order for processing (higher = first)"
+          }
+        }
+      }
+    }
+  }
+}
