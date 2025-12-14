@@ -1144,4 +1144,119 @@ router.post("/:mapname/refresh-wr", async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /kzglobal/maps/{mapname}/courses:
+ *   get:
+ *     summary: Get available courses/stages for a map
+ *     description: Returns all available courses (stages) for a map based on record filters
+ *     tags: [KZ Global]
+ *     parameters:
+ *       - in: path
+ *         name: mapname
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Map name
+ *       - in: query
+ *         name: mode
+ *         schema:
+ *           type: string
+ *           enum: [kz_timer, kz_simple, kz_vanilla]
+ *         description: Filter by mode (optional)
+ *     responses:
+ *       200:
+ *         description: List of available courses
+ *       404:
+ *         description: Map not found
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/:mapname/courses",
+  cacheMiddleware(300, kzKeyGenerator), // Cache for 5 minutes
+  async (req, res) => {
+    try {
+      const { mapname } = req.params;
+      const { mode } = req.query;
+
+      const pool = getKzPool();
+      if (!pool) {
+        return res.status(503).json({
+          error: "KZ database service unavailable",
+        });
+      }
+
+      // Get map ID first
+      const [maps] = await pool.query(
+        "SELECT id, map_name FROM kz_maps WHERE map_name = ?",
+        [sanitizeString(mapname, 255)],
+      );
+
+      if (maps.length === 0) {
+        return res.status(404).json({ error: "Map not found" });
+      }
+
+      const mapId = maps[0].id;
+
+      // Get unique stages (courses) from record_filters
+      let coursesQuery = `
+        SELECT DISTINCT 
+          rf.stage,
+          m.name as mode_name,
+          rf.mode_id,
+          COUNT(*) as filter_count
+        FROM kz_record_filters rf
+        JOIN kz_modes m ON rf.mode_id = m.id
+        WHERE rf.map_id = ?
+      `;
+      const queryParams = [mapId];
+
+      if (mode) {
+        coursesQuery += " AND m.name = ?";
+        queryParams.push(sanitizeString(mode, 50));
+      }
+
+      coursesQuery += `
+        GROUP BY rf.stage, m.name, rf.mode_id
+        ORDER BY rf.stage ASC, m.name ASC
+      `;
+
+      const [courses] = await pool.query(coursesQuery, queryParams);
+
+      // Transform to a cleaner format
+      // Group by stage and list available modes per stage
+      const courseMap = new Map();
+
+      for (const row of courses) {
+        if (!courseMap.has(row.stage)) {
+          courseMap.set(row.stage, {
+            stage: row.stage,
+            name: row.stage === 0 ? "Main Course" : `Bonus ${row.stage}`,
+            modes: [],
+          });
+        }
+        courseMap.get(row.stage).modes.push({
+          mode: row.mode_name,
+          modeId: row.mode_id,
+          filterCount: row.filter_count,
+        });
+      }
+
+      const result = Array.from(courseMap.values());
+
+      res.json({
+        map_name: maps[0].map_name,
+        courses: result,
+        total_courses: result.length,
+      });
+    } catch (e) {
+      logger.error(
+        `Failed to get courses for map ${req.params.mapname}: ${e.message}`,
+      );
+      res.status(500).json({ error: "Failed to fetch map courses" });
+    }
+  },
+);
+
 module.exports = router;
