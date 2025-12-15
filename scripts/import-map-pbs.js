@@ -300,10 +300,14 @@ async function fetchMapTopRecords(
     return response.data;
   } catch (error) {
     // Check if it's a timeout or network error - rotate proxy
-    const isTimeout = error.code === "ECONNABORTED" || error.message?.includes("timeout");
-    const isNetworkError = error.code === "ECONNREFUSED" || error.code === "ECONNRESET" || 
-                           error.code === "ETIMEDOUT" || error.code === "ENETUNREACH";
-    
+    const isTimeout =
+      error.code === "ECONNABORTED" || error.message?.includes("timeout");
+    const isNetworkError =
+      error.code === "ECONNREFUSED" ||
+      error.code === "ECONNRESET" ||
+      error.code === "ETIMEDOUT" ||
+      error.code === "ENETUNREACH";
+
     if (isTimeout || isNetworkError) {
       forceRotateProxy();
     }
@@ -709,7 +713,9 @@ async function main() {
     const maps = await getMaps(pool, options.map);
     console.log(`Found ${maps.length} maps to process`);
     if (options.skip > 0) {
-      console.log(`Skipping first ${options.skip} maps (starting at map #${options.skip + 1})`);
+      console.log(
+        `Skipping first ${options.skip} maps (starting at map #${options.skip + 1})`,
+      );
     }
     console.log("");
 
@@ -732,12 +738,14 @@ async function main() {
 
     // Iteration loop - run through all maps multiple times with increasing offset
     for (let iteration = 0; iteration < options.iterations; iteration++) {
-      const currentOffset = baseOffset + (iteration * 1000);
+      const currentOffset = baseOffset + iteration * 1000;
       const iterationOptions = { ...options, offset: currentOffset };
-      
+
       if (options.iterations > 1) {
         console.log("");
-        console.log(`=== Iteration ${iteration + 1}/${options.iterations} (offset: ${currentOffset}) ===`);
+        console.log(
+          `=== Iteration ${iteration + 1}/${options.iterations} (offset: ${currentOffset}) ===`,
+        );
         console.log("");
       }
 
@@ -745,16 +753,21 @@ async function main() {
       for (const map of maps) {
         iterationMapCount++;
         processedMaps++;
-        
+
         // Skip maps if --skip option is used (only on first iteration)
-        if (iteration === 0 && options.skip > 0 && iterationMapCount <= options.skip) {
+        if (
+          iteration === 0 &&
+          options.skip > 0 &&
+          iterationMapCount <= options.skip
+        ) {
           skippedMaps++;
           continue;
         }
-        
-        const displayNum = options.iterations > 1 
-          ? `${iteration + 1}.${iterationMapCount}` 
-          : `${iterationMapCount}`;
+
+        const displayNum =
+          options.iterations > 1
+            ? `${iteration + 1}.${iterationMapCount}`
+            : `${iterationMapCount}`;
         console.log(
           `[${displayNum}/${maps.length}] Processing ${map.map_name}...`,
         );
@@ -782,9 +795,13 @@ async function main() {
     console.log("  Import Complete!");
     console.log("=================================================");
     if (options.iterations > 1) {
-      console.log(`  Iterations: ${options.iterations} (offsets: ${baseOffset} to ${baseOffset + (options.iterations - 1) * 1000})`);
+      console.log(
+        `  Iterations: ${options.iterations} (offsets: ${baseOffset} to ${baseOffset + (options.iterations - 1) * 1000})`,
+      );
     }
-    console.log(`  Maps processed: ${processedMaps - skippedMaps} (skipped: ${skippedMaps})`);
+    console.log(
+      `  Maps processed: ${processedMaps - skippedMaps} (skipped: ${skippedMaps})`,
+    );
     console.log(`  Total PBs: ${totalPBs}`);
     console.log(`  Unique players: ${totalPlayers}`);
     console.log(`  API calls: ${totalApiCalls}`);
