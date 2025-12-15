@@ -1259,4 +1259,189 @@ router.get(
   },
 );
 
+/**
+ * @swagger
+ * /kzglobal/maps/mode-filters:
+ *   get:
+ *     summary: Get all map mode filters
+ *     description: Returns maps that have mode-specific restrictions. Maps without entries are available for all modes.
+ *     tags: [KZ Global Maps]
+ *     parameters:
+ *       - in: query
+ *         name: mode
+ *         schema:
+ *           type: string
+ *           enum: [kz_timer, kz_simple, kz_vanilla]
+ *         description: Filter by specific mode
+ *     responses:
+ *       200:
+ *         description: Map mode filters with summary
+ *       500:
+ *         description: Server error
+ */
+router.get("/mode-filters", cacheMiddleware(300, kzKeyGenerator), async (req, res) => {
+  try {
+    const pool = getKzPool();
+    const { mode } = req.query;
+
+    // Get summary counts per mode
+    const [summary] = await pool.query(`
+      SELECT 
+        mode,
+        COUNT(*) as map_count
+      FROM kz_map_mode_filters
+      GROUP BY mode
+      ORDER BY mode
+    `);
+
+    // Get all filtered maps with their allowed modes
+    let mapsQuery = `
+      SELECT 
+        m.id as map_id,
+        m.map_name,
+        m.difficulty,
+        m.validated,
+        GROUP_CONCAT(mmf.mode ORDER BY mmf.mode) as allowed_modes
+      FROM kz_maps m
+      INNER JOIN kz_map_mode_filters mmf ON m.id = mmf.map_id
+    `;
+    const params = [];
+
+    if (mode) {
+      mapsQuery += " WHERE mmf.mode = ?";
+      params.push(sanitizeString(mode, 32));
+    }
+
+    mapsQuery += `
+      GROUP BY m.id, m.map_name, m.difficulty, m.validated
+      ORDER BY m.map_name
+    `;
+
+    const [maps] = await pool.query(mapsQuery, params);
+
+    // Get total maps count for context
+    const [[{ total_maps }]] = await pool.query(
+      "SELECT COUNT(*) as total_maps FROM kz_maps",
+    );
+
+    res.json({
+      summary: {
+        total_maps,
+        filtered_maps: maps.length,
+        unfiltered_maps: total_maps - maps.length,
+        by_mode: summary.reduce((acc, row) => {
+          acc[row.mode] = row.map_count;
+          return acc;
+        }, {}),
+      },
+      maps: maps.map((m) => ({
+        map_id: m.map_id,
+        map_name: m.map_name,
+        difficulty: m.difficulty,
+        validated: m.validated,
+        allowed_modes: m.allowed_modes ? m.allowed_modes.split(",") : [],
+      })),
+    });
+  } catch (e) {
+    logger.error(`Failed to get map mode filters: ${e.message}`);
+    res.status(500).json({ error: "Failed to fetch map mode filters" });
+  }
+});
+
+/**
+ * @swagger
+ * /kzglobal/maps/mode-filters/{mode}:
+ *   get:
+ *     summary: Get maps for a specific mode
+ *     description: Returns all maps that are allowed for the specified mode, including unrestricted maps.
+ *     tags: [KZ Global Maps]
+ *     parameters:
+ *       - in: path
+ *         name: mode
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [kz_timer, kz_simple, kz_vanilla]
+ *         description: Mode to get maps for
+ *       - in: query
+ *         name: restrictedOnly
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Only return maps that have mode restrictions
+ *     responses:
+ *       200:
+ *         description: Maps available for the specified mode
+ *       400:
+ *         description: Invalid mode
+ *       500:
+ *         description: Server error
+ */
+router.get("/mode-filters/:mode", cacheMiddleware(300, kzKeyGenerator), async (req, res) => {
+  try {
+    const pool = getKzPool();
+    const mode = sanitizeString(req.params.mode, 32);
+    const restrictedOnly = req.query.restrictedOnly === "true";
+
+    const validModes = ["kz_timer", "kz_simple", "kz_vanilla"];
+    if (!validModes.includes(mode)) {
+      return res.status(400).json({
+        error: "Invalid mode",
+        valid_modes: validModes,
+      });
+    }
+
+    let query;
+    if (restrictedOnly) {
+      // Only maps that have this mode in their filter list
+      query = `
+        SELECT 
+          m.id as map_id,
+          m.map_name,
+          m.difficulty,
+          m.validated
+        FROM kz_maps m
+        INNER JOIN kz_map_mode_filters mmf ON m.id = mmf.map_id AND mmf.mode = ?
+        ORDER BY m.map_name
+      `;
+    } else {
+      // All maps available for this mode (unrestricted + restricted with this mode)
+      query = `
+        SELECT 
+          m.id as map_id,
+          m.map_name,
+          m.difficulty,
+          m.validated,
+          CASE 
+            WHEN EXISTS (SELECT 1 FROM kz_map_mode_filters mmf WHERE mmf.map_id = m.id)
+            THEN 'restricted'
+            ELSE 'all'
+          END as mode_status
+        FROM kz_maps m
+        WHERE NOT EXISTS (
+          SELECT 1 FROM kz_map_mode_filters mmf 
+          WHERE mmf.map_id = m.id
+        )
+        OR EXISTS (
+          SELECT 1 FROM kz_map_mode_filters mmf 
+          WHERE mmf.map_id = m.id AND mmf.mode = ?
+        )
+        ORDER BY m.map_name
+      `;
+    }
+
+    const [maps] = await pool.query(query, [mode]);
+
+    res.json({
+      mode,
+      total_maps: maps.length,
+      restricted_only: restrictedOnly,
+      maps,
+    });
+  } catch (e) {
+    logger.error(`Failed to get maps for mode ${req.params.mode}: ${e.message}`);
+    res.status(500).json({ error: "Failed to fetch maps for mode" });
+  }
+});
+
 module.exports = router;

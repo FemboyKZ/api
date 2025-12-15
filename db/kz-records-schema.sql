@@ -1540,3 +1540,35 @@ CREATE TABLE IF NOT EXISTS kz_record_filters (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -------------------------------------------------------------------
+-- Map Mode Filters
+-- Defines which modes a map should be tracked for (e.g., vnl_ maps only for kz_vanilla)
+-- Maps not in this table are tracked for all modes (default behavior)
+-- Maps with entries are ONLY tracked for the specified modes
+-------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS kz_map_mode_filters (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  map_id INT UNSIGNED NOT NULL,
+  mode VARCHAR(32) NOT NULL COMMENT 'kz_timer, kz_simple, kz_vanilla',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  
+  UNIQUE KEY unique_map_mode (map_id, mode),
+  INDEX idx_mode (mode),
+  CONSTRAINT fk_map_mode_filter_map FOREIGN KEY (map_id) REFERENCES kz_maps(id) ON DELETE CASCADE
+) COMMENT = 'Defines which modes a map should be tracked for' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- View to check which maps have mode restrictions
+CREATE OR REPLACE VIEW v_map_modes AS
+SELECT 
+  m.id as map_id,
+  m.map_name,
+  m.difficulty,
+  m.validated,
+  GROUP_CONCAT(mmf.mode ORDER BY mmf.mode) as allowed_modes,
+  CASE WHEN COUNT(mmf.id) = 0 THEN 'all' ELSE 'restricted' END as mode_status
+FROM kz_maps m
+LEFT JOIN kz_map_mode_filters mmf ON m.id = mmf.map_id
+GROUP BY m.id, m.map_name, m.difficulty, m.validated
+ORDER BY m.map_name;
+
+-------------------------------------------------------------------

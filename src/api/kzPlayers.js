@@ -941,6 +941,12 @@ router.get(
  *           type: string
  *           enum: [pro, tp, any, none]
  *         description: Filter by completion type
+ *       - in: query
+ *         name: filterByMode
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Apply mode-specific map filters (e.g., vnl maps only for kz_vanilla)
  *     responses:
  *       200:
  *         description: Maps with completion status and statistics
@@ -961,6 +967,7 @@ router.get(
         validated = "true",
         difficulty,
         completed,
+        filterByMode = "false",
       } = req.query;
 
       const pool = getKzPool();
@@ -989,6 +996,7 @@ router.get(
             validated === "true" ? true : validated === "false" ? false : null,
           difficulty: difficulty ? parseInt(difficulty, 10) : null,
           completed: completed || null,
+          filterByMode: filterByMode === "true",
         });
 
         // Check if player has any completions in PBs cache
@@ -1012,6 +1020,7 @@ router.get(
       // Fallback: calculate on the fly
       const stageNum = parseInt(stage, 10) || 0;
       const modeStr = sanitizeString(mode, 32);
+      const applyModeFilter = filterByMode === "true";
 
       let query = `
         SELECT 
@@ -1045,6 +1054,17 @@ router.get(
         WHERE 1=1
       `;
       const params = [steamid64, modeStr, stageNum];
+
+      // Only apply mode filter if explicitly requested
+      if (applyModeFilter) {
+        query += `
+          AND (
+            NOT EXISTS (SELECT 1 FROM kz_map_mode_filters mmf WHERE mmf.map_id = m.id)
+            OR EXISTS (SELECT 1 FROM kz_map_mode_filters mmf WHERE mmf.map_id = m.id AND mmf.mode = ?)
+          )
+        `;
+        params.push(modeStr);
+      }
 
       if (validated === "true") {
         query += " AND m.validated = TRUE";

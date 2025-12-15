@@ -405,6 +405,7 @@ async function getPlayerMapCompletions(steamid64, options = {}) {
       validated = true,
       difficulty = null,
       completed = null, // 'pro', 'tp', 'any', 'none'
+      filterByMode = false, // Apply mode-specific map filters
     } = options;
 
     // Get all validated maps
@@ -432,6 +433,17 @@ async function getPlayerMapCompletions(steamid64, options = {}) {
       WHERE 1=1
     `;
     const params = [steamid64, mode, stage];
+
+    // Only apply mode filter if explicitly requested
+    if (filterByMode) {
+      mapQuery += `
+        AND (
+          NOT EXISTS (SELECT 1 FROM kz_map_mode_filters mmf WHERE mmf.map_id = m.id)
+          OR EXISTS (SELECT 1 FROM kz_map_mode_filters mmf WHERE mmf.map_id = m.id AND mmf.mode = ?)
+        )
+      `;
+      params.push(mode);
+    }
 
     if (validated !== null) {
       mapQuery += " AND m.validated = ?";
