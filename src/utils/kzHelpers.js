@@ -5,6 +5,15 @@
  * used across kzLocal, kzLocalCS2, kzRecords, kzPlayers, kzMaps, etc.
  */
 
+// Import shared utilities from validators to avoid duplication
+const {
+  STEAM_BASE_ID,
+  steamid32To64,
+  steamid64To32,
+  validateSortField,
+  validateSortOrder,
+} = require("./validators");
+
 // ==================== CONSTANTS ====================
 
 /**
@@ -75,31 +84,6 @@ const SCROLL_EFF_TYPES = {
   4: "timing_samples",
 };
 
-// ==================== STEAMID CONVERSION ====================
-
-/**
- * Steam base ID constant (used in all SteamID conversions)
- */
-const STEAM_BASE_ID = BigInt("76561197960265728");
-
-/**
- * Convert SteamID32 (account ID) to SteamID64
- * @param {number|string} steamid32 - SteamID32 (account ID)
- * @returns {string} SteamID64
- */
-function steamid32To64(steamid32) {
-  return (STEAM_BASE_ID + BigInt(steamid32)).toString();
-}
-
-/**
- * Convert SteamID64 to SteamID32 (account ID)
- * @param {string} steamid64 - SteamID64
- * @returns {number} SteamID32
- */
-function steamid64To32(steamid64) {
-  return Number(BigInt(steamid64) - STEAM_BASE_ID);
-}
-
 // ==================== FORMAT FUNCTIONS ====================
 
 /**
@@ -152,29 +136,7 @@ function formatAirtime(airtime, tickrate = 64) {
 }
 
 // ==================== QUERY HELPERS ====================
-
-/**
- * Validate and get sort field from allowed fields
- * @param {string} sort - Requested sort field
- * @param {string[]} validFields - Array of valid field names
- * @param {string} defaultField - Default field if invalid
- * @returns {string} Valid sort field
- */
-function validateSortField(sort, validFields, defaultField) {
-  return validFields.includes(sort) ? sort : defaultField;
-}
-
-/**
- * Validate and get sort order (ASC/DESC)
- * @param {string} order - Requested order ('asc' or 'desc')
- * @param {string} defaultOrder - Default order if not specified ('DESC')
- * @returns {string} 'ASC' or 'DESC'
- */
-function validateSortOrder(order, defaultOrder = "DESC") {
-  if (order === "asc") return "ASC";
-  if (order === "desc") return "DESC";
-  return defaultOrder;
-}
+// Note: validateSortField and validateSortOrder are imported from validators.js
 
 /**
  * Generate partition hint for yearly partitioned tables

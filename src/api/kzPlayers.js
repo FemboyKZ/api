@@ -7,35 +7,9 @@ const {
   isValidSteamID,
   convertToSteamID64,
 } = require("../utils/validators");
+const { getPlayerPartitionHint } = require("../utils/kzHelpers");
 const logger = require("../utils/logger");
 const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
-
-/**
- * Helper function to get partition hints for player queries
- * Since player records span many years, we need smart partitioning
- */
-const getPlayerPartitionHint = (yearFilter) => {
-  const currentYear = new Date().getFullYear();
-  const partitions = [];
-
-  if (!yearFilter) {
-    // For general player stats, scan all partitions (no hint - let MySQL optimize)
-    return "";
-  }
-
-  const year = parseInt(yearFilter, 10);
-  if (year < 2018) {
-    partitions.push("p_old");
-  } else if (year >= 2018 && year <= currentYear + 1) {
-    partitions.push(`p${year}`);
-  }
-
-  if (year >= currentYear) {
-    partitions.push("pfuture");
-  }
-
-  return partitions.length > 0 ? `PARTITION (${partitions.join(",")})` : "";
-};
 
 /**
  * @swagger

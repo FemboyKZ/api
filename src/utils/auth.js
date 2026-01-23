@@ -14,6 +14,7 @@
  *    - Uses same key extraction methods (Bearer, X-API-Key, query param)
  */
 
+const crypto = require("crypto");
 const logger = require("./logger");
 
 // Admin Configuration
@@ -152,18 +153,22 @@ function extractAPIKey(req) {
 }
 
 /**
- * Validate admin API key
+ * Validate admin API key (ADMIN_API_KEY)
  * Uses timing-safe comparison to prevent timing attacks
+ * @param {string} providedKey - The key to validate
+ * @returns {boolean} True if key matches ADMIN_API_KEY
  */
-function validateAPIKey(providedKey) {
+function validateAdminKey(providedKey) {
   return validateKeyAgainst(providedKey, ADMIN_API_KEY);
 }
 
 /**
- * Validate general API key (for rate limit bypass)
+ * Validate general API key (API_KEY - for rate limit bypass)
  * Uses timing-safe comparison to prevent timing attacks
+ * @param {string} providedKey - The key to validate
+ * @returns {boolean} True if key matches API_KEY
  */
-function validateApiKey(providedKey) {
+function validateGeneralApiKey(providedKey) {
   return validateKeyAgainst(providedKey, API_KEY);
 }
 
@@ -199,7 +204,7 @@ function shouldSkipRateLimit(req) {
   const apiKey = extractAPIKey(req);
 
   // Check API key (either general API_KEY or ADMIN_API_KEY)
-  if (apiKey && (validateApiKey(apiKey) || validateAPIKey(apiKey))) {
+  if (apiKey && (validateGeneralApiKey(apiKey) || validateAdminKey(apiKey))) {
     logger.debug(`Rate limit bypass: Valid API key from ${clientIP}`);
     req.apiAuth = { method: "api_key", ip: clientIP };
     return true;
@@ -230,7 +235,7 @@ function apiKeyMiddleware(req, res, next) {
   const clientIP = getClientIP(req);
   const apiKey = extractAPIKey(req);
 
-  if (apiKey && (validateApiKey(apiKey) || validateAPIKey(apiKey))) {
+  if (apiKey && (validateGeneralApiKey(apiKey) || validateAdminKey(apiKey))) {
     req.apiAuth = { method: "api_key", ip: clientIP };
   } else if (isApiWhitelisted(clientIP)) {
     req.apiAuth = { method: "ip_whitelist", ip: clientIP };
@@ -255,7 +260,7 @@ function adminAuth(req, res, next) {
 
   // Method 1: API Key authentication
   if (apiKey) {
-    if (validateAPIKey(apiKey)) {
+    if (validateAdminKey(apiKey)) {
       logger.debug(`Admin auth: API key accepted from ${clientIP}`);
       req.adminAuth = { method: "api_key", ip: clientIP };
       return next();
@@ -318,7 +323,7 @@ function optionalAdminAuth(req, res, next) {
 
   req.isAdmin = false;
 
-  if (apiKey && validateAPIKey(apiKey)) {
+  if (apiKey && validateAdminKey(apiKey)) {
     req.isAdmin = true;
     req.adminAuth = { method: "api_key", ip: clientIP };
   } else if (isWhitelisted(clientIP)) {
@@ -335,9 +340,10 @@ function optionalAdminAuth(req, res, next) {
 /**
  * Generate a secure random API key
  * Can be used to generate keys for .env file
+ * @param {number} length - Length of key in bytes (default: 32, produces 64 hex chars)
+ * @returns {string} Random hex string
  */
 function generateAPIKey(length = 32) {
-  const crypto = require("crypto");
   return crypto.randomBytes(length).toString("hex");
 }
 

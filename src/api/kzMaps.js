@@ -6,55 +6,6 @@ const logger = require("../utils/logger");
 const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
 
 /**
- * Helper function to get partition hints for kz_records_partitioned
- * Partitions: p_old (before 2018), p2018-p2027, pfuture
- * @param {string} dateFrom - Optional start date filter
- * @param {string} dateTo - Optional end date filter
- * @returns {string} Partition hint clause or empty string
- */
-const getPartitionHint = (dateFrom, dateTo) => {
-  const partitions = [];
-  const currentYear = new Date().getFullYear();
-
-  if (!dateFrom && !dateTo) {
-    // No date filter - scan all partitions (let MySQL optimize)
-    return "";
-  }
-
-  const fromYear = dateFrom ? new Date(dateFrom).getFullYear() : 2014;
-  const toYear = dateTo ? new Date(dateTo).getFullYear() : currentYear;
-
-  if (fromYear < 2018) {
-    partitions.push("p_old");
-  }
-
-  for (
-    let year = Math.max(fromYear, 2018);
-    year <= Math.min(toYear, 2027);
-    year++
-  ) {
-    partitions.push(`p${year}`);
-  }
-
-  if (toYear >= currentYear) {
-    partitions.push("pfuture");
-  }
-
-  if (partitions.length === 0) return "";
-  return `PARTITION (${partitions.join(",")})`;
-};
-
-/**
- * Get default partition hint for queries without date filters
- * Uses all partitions for complete data coverage
- */
-const getDefaultPartitionHint = () => {
-  // For aggregate queries across all data, don't use partition hints
-  // Let MySQL's partition pruning work naturally with map_id filters
-  return "";
-};
-
-/**
  * @swagger
  * /kzglobal/maps:
  *   get:
