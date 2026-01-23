@@ -154,8 +154,13 @@ const stats = {
   bansInserted: 0,
   bansUpdated: 0,
   bansSkipped: 0,
+  permanentBansCount: 0,
+  recordsArchived: 0,
   errorCount: 0,
 };
+
+// Track steamids of permanent bans for record archiving
+const permanentBanSteamIds = new Set();
 
 // ============================================================================
 // LOGGING
@@ -423,6 +428,20 @@ async function processBatch(bans) {
   stats.bansUpdated += result.updated;
   stats.bansProcessed += bans.length;
 
+  // Track permanent bans for record archiving
+  // Permanent bans have expires_on = '9999-12-31T23:59:59'
+  const permanentBanDate = "9999-12-31T23:59:59";
+  for (const ban of bans) {
+    if (
+      ban.steamid64 &&
+      ban.expires_on &&
+      ban.expires_on.startsWith("9999-12-31")
+    ) {
+      permanentBanSteamIds.add(String(ban.steamid64));
+      stats.permanentBansCount++;
+    }
+  }
+
   return result;
 }
 
@@ -524,6 +543,8 @@ function printStats() {
   log("info", `  Inserted: ${stats.bansInserted}`);
   log("info", `  Updated: ${stats.bansUpdated}`);
   log("info", `  Skipped: ${stats.bansSkipped}`);
+  log("info", `  Permanent bans: ${stats.permanentBansCount}`);
+  log("info", `  Records archived: ${stats.recordsArchived}`);
   log("info", `  Errors: ${stats.errorCount}`);
   log("info", `  Time elapsed: ${elapsed.toFixed(2)}s`);
   log("info", `  Rate: ${rate} bans/s`);
@@ -551,6 +572,119 @@ async function gracefulShutdown(signal) {
   }
 
   process.exit(0);
+}
+
+/**
+ * Update player ban status and archive records for permanent bans
+ * This is called after all bans have been scraped
+ */
+async function syncBanStatusAndArchiveRecords() {
+  if (CONFIG.dryRun) {
+    log(
+      "info",
+      `[DRY RUN] Would sync ban status for ${permanentBanSteamIds.size} permanent bans`,
+    );
+    return;
+  }
+
+  if (permanentBanSteamIds.size === 0) {
+    log("info", "No permanent bans to process for record archiving");
+    return;
+  }
+
+  log(
+    "info",
+    `Syncing ban status and archiving records for ${permanentBanSteamIds.size} permanently banned players...`,
+  );
+
+  const steamIds = Array.from(permanentBanSteamIds);
+  const batchSize = 100;
+
+  for (let i = 0; i < steamIds.length; i += batchSize) {
+    const batch = steamIds.slice(i, i + batchSize);
+
+    try {
+      // First, ensure players exist and are marked as banned
+      for (const steamid64 of batch) {
+        // Get ban info for this player (permanent bans have expires_on = '9999-12-31 23:59:59')
+        const [banRows] = await connection.query(
+          `SELECT id, player_name, steam_id FROM kz_bans 
+           WHERE steamid64 = ? AND expires_on = '9999-12-31 23:59:59' 
+           ORDER BY created_on DESC LIMIT 1`,
+          [steamid64],
+        );
+
+        if (banRows.length === 0) continue;
+
+        const ban = banRows[0];
+
+        // Ensure player exists in kz_players
+        await connection.query(
+          `INSERT INTO kz_players (steamid64, steam_id, player_name, is_banned)
+           VALUES (?, ?, ?, TRUE)
+           ON DUPLICATE KEY UPDATE
+             is_banned = TRUE,
+             updated_at = CURRENT_TIMESTAMP`,
+          [
+            steamid64,
+            ban.steam_id || `STEAM_ID_${steamid64}`,
+            ban.player_name || `Player ${steamid64}`,
+          ],
+        );
+
+        // Archive records for this player using stored procedure
+        try {
+          const [archiveResult] = await connection.query(
+            "CALL archive_banned_player_records(?, ?)",
+            [steamid64, ban.id],
+          );
+
+          const result = archiveResult[0] || {
+            records_archived: 0,
+            already_archived: 0,
+          };
+
+          if (result.records_archived > 0) {
+            stats.recordsArchived += result.records_archived;
+            log(
+              "info",
+              `Archived ${result.records_archived} records for player ${steamid64}`,
+            );
+          }
+        } catch (procError) {
+          // Stored procedure might not exist if migration wasn't run
+          if (procError.code === "ER_SP_DOES_NOT_EXIST") {
+            if (i === 0) {
+              // Only log once
+              log(
+                "warn",
+                "archive_banned_player_records procedure not found. Run migration: db/migrations/add_banned_records_archive.sql",
+              );
+            }
+            break; // Don't try again for other players
+          } else {
+            log(
+              "error",
+              `Error archiving records for ${steamid64}: ${procError.message}`,
+            );
+          }
+        }
+      }
+
+      log(
+        "info",
+        `Processed batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(steamIds.length / batchSize)}`,
+      );
+    } catch (error) {
+      log("error", `Error syncing ban status batch: ${error.message}`);
+      stats.errorCount++;
+    }
+  }
+
+  log(
+    "info",
+    `Ban status sync complete. Total records archived: ${stats.recordsArchived}`,
+  );
 }
 
 // ============================================================================
@@ -593,6 +727,9 @@ async function main() {
     // Start scraping
     stats.startTime = Date.now();
     await scrapeAllBans();
+
+    // Sync ban status and archive records for permanent bans
+    await syncBanStatusAndArchiveRecords();
 
     // Print final statistics
     printStats();

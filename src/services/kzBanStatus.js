@@ -32,6 +32,8 @@ const { getKzPool } = require("../db/kzRecords");
 const CLEANUP_INTERVAL =
   parseInt(process.env.KZ_BAN_CLEANUP_INTERVAL) || 3600000; // 1 hour
 const CLEANUP_ENABLED = process.env.KZ_BAN_CLEANUP_ENABLED !== "false"; // Default true
+const DEADLOCK_MAX_RETRIES = 5; // Increased for lock wait timeouts
+const DEADLOCK_RETRY_DELAY = 500; // ms - base delay, will use exponential backoff
 
 // State tracking
 let isCleanupRunning = false;
@@ -41,21 +43,213 @@ const stats = {
   totalBansProcessed: 0,
   totalUnbans: 0,
   totalBans: 0,
+  totalRecordsArchived: 0,
+  totalRecordsRestored: 0,
   lastCleanupDuration: 0,
   lastCleanupTime: null,
   errors: 0,
 };
 
 /**
+ * Helper to retry a query on deadlock or lock wait timeout
+ * @param {Function} queryFn - Async function that executes the query
+ * @param {number} maxRetries - Maximum number of retry attempts
+ * @param {number} delayMs - Delay between retries in milliseconds
+ * @returns {Promise<any>} Query result
+ */
+async function retryOnDeadlock(
+  queryFn,
+  maxRetries = DEADLOCK_MAX_RETRIES,
+  delayMs = DEADLOCK_RETRY_DELAY,
+) {
+  // Retryable lock-related errors
+  const RETRYABLE_ERRORS = ["ER_LOCK_DEADLOCK", "ER_LOCK_WAIT_TIMEOUT"];
+
+  let lastError;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await queryFn();
+    } catch (error) {
+      lastError = error;
+      if (RETRYABLE_ERRORS.includes(error.code) && attempt < maxRetries) {
+        // Exponential backoff with jitter
+        const jitter = Math.random() * delayMs;
+        const waitTime = delayMs * Math.pow(2, attempt - 1) + jitter;
+        logger.warn(
+          `[KZ Ban Status] Lock error (${error.code}), retrying in ${Math.round(waitTime)}ms (attempt ${attempt}/${maxRetries})`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+      } else {
+        throw error;
+      }
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * Archive records for a permanently banned player
+ * Moves records from kz_records_partitioned to kz_banned_records
+ *
+ * @param {string} steamid64 - Player's steamid64
+ * @param {number|null} banId - Ban ID from kz_bans table (optional)
+ * @returns {Promise<Object>} Archive statistics
+ */
+async function archiveBannedPlayerRecords(steamid64, banId = null) {
+  const pool = getKzPool();
+  const connection = await pool.getConnection();
+
+  try {
+    // Call the stored procedure
+    const [results] = await connection.query(
+      "CALL archive_banned_player_records(?, ?)",
+      [steamid64, banId],
+    );
+
+    const result = results[0] || { records_archived: 0, already_archived: 0 };
+
+    if (result.records_archived > 0) {
+      stats.totalRecordsArchived += result.records_archived;
+      logger.info(
+        `[KZ Ban Status] Archived ${result.records_archived} records for player ${steamid64}`,
+      );
+    } else if (result.already_archived > 0) {
+      logger.debug(
+        `[KZ Ban Status] Player ${steamid64} already has ${result.already_archived} archived records`,
+      );
+    }
+
+    return {
+      archived: result.records_archived,
+      alreadyArchived: result.already_archived,
+    };
+  } catch (error) {
+    // If stored procedure doesn't exist, log warning and continue
+    if (error.code === "ER_SP_DOES_NOT_EXIST") {
+      logger.warn(
+        "[KZ Ban Status] archive_banned_player_records procedure not found. Run the migration: db/migrations/add_banned_records_archive.sql",
+      );
+      return { archived: 0, alreadyArchived: 0, error: "procedure_not_found" };
+    }
+    logger.error(
+      `[KZ Ban Status] Error archiving records for ${steamid64}:`,
+      error,
+    );
+    stats.errors++;
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Restore records for an unbanned player
+ * Moves records back from kz_banned_records to kz_records_partitioned
+ *
+ * @param {string} steamid64 - Player's steamid64
+ * @returns {Promise<Object>} Restore statistics
+ */
+async function restoreUnbannedPlayerRecords(steamid64) {
+  const pool = getKzPool();
+  const connection = await pool.getConnection();
+
+  try {
+    // Call the stored procedure
+    const [results] = await connection.query(
+      "CALL restore_unbanned_player_records(?)",
+      [steamid64],
+    );
+
+    const result = results[0] || { records_restored: 0 };
+
+    if (result.records_restored > 0) {
+      stats.totalRecordsRestored += result.records_restored;
+      logger.info(
+        `[KZ Ban Status] Restored ${result.records_restored} records for player ${steamid64}`,
+      );
+    }
+
+    return { restored: result.records_restored };
+  } catch (error) {
+    // If stored procedure doesn't exist, log warning and continue
+    if (error.code === "ER_SP_DOES_NOT_EXIST") {
+      logger.warn(
+        "[KZ Ban Status] restore_unbanned_player_records procedure not found. Run the migration: db/migrations/add_banned_records_archive.sql",
+      );
+      return { restored: 0, error: "procedure_not_found" };
+    }
+    logger.error(
+      `[KZ Ban Status] Error restoring records for ${steamid64}:`,
+      error,
+    );
+    stats.errors++;
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Batch archive records for all permanently banned players
+ * More efficient than archiving one by one
+ *
+ * @returns {Promise<Object>} Archive statistics
+ */
+async function batchArchiveBannedRecords() {
+  const pool = getKzPool();
+  const connection = await pool.getConnection();
+
+  try {
+    logger.info("[KZ Ban Status] Starting batch archive of banned records...");
+
+    // Call the stored procedure
+    const [results] = await connection.query(
+      "CALL batch_archive_banned_records()",
+    );
+
+    const result = results[0] || { records_archived: 0, players_processed: 0 };
+
+    if (result.records_archived > 0) {
+      stats.totalRecordsArchived += result.records_archived;
+      logger.info(
+        `[KZ Ban Status] Batch archived ${result.records_archived} records for ${result.players_processed} banned players`,
+      );
+    } else {
+      logger.debug("[KZ Ban Status] No records to archive");
+    }
+
+    return {
+      archived: result.records_archived,
+      playersProcessed: result.players_processed,
+    };
+  } catch (error) {
+    // If stored procedure doesn't exist, log warning and continue
+    if (error.code === "ER_SP_DOES_NOT_EXIST") {
+      logger.warn(
+        "[KZ Ban Status] batch_archive_banned_records procedure not found. Run the migration: db/migrations/add_banned_records_archive.sql",
+      );
+      return { archived: 0, playersProcessed: 0, error: "procedure_not_found" };
+    }
+    logger.error(`[KZ Ban Status] Error in batch archive:`, error);
+    stats.errors++;
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
  * Update ban status for specific players
  * Called when new bans are inserted/updated in kz_bans table
+ * Also archives records for permanently banned players
  *
  * @param {Array<string>} steamIds - Array of steamid64 values to check
+ * @param {boolean} archiveRecords - Whether to archive records for permanent bans (default: true)
  * @returns {Promise<Object>} Update statistics
  */
-async function updatePlayerBanStatus(steamIds) {
+async function updatePlayerBanStatus(steamIds, archiveRecords = true) {
   if (!steamIds || steamIds.length === 0) {
-    return { banned: 0, unbanned: 0 };
+    return { banned: 0, unbanned: 0, recordsArchived: 0, recordsRestored: 0 };
   }
 
   const pool = getKzPool();
@@ -64,6 +258,8 @@ async function updatePlayerBanStatus(steamIds) {
   try {
     let bannedCount = 0;
     let unbannedCount = 0;
+    let recordsArchived = 0;
+    let recordsRestored = 0;
 
     // Process in batches of 100 to avoid too large IN clauses
     const batchSize = 100;
@@ -71,18 +267,25 @@ async function updatePlayerBanStatus(steamIds) {
       const batch = steamIds.slice(i, i + batchSize);
       const placeholders = batch.map(() => "?").join(",");
 
-      // Find players with active bans
+      // Find players with active bans (including permanent and temporary)
       const [activeBans] = await connection.query(
         `
-        SELECT DISTINCT steamid64
-        FROM kz_bans
-        WHERE steamid64 IN (${placeholders})
-          AND (expires_on IS NULL OR expires_on > NOW())
+        SELECT DISTINCT b.steamid64, b.id AS ban_id, b.expires_on
+        FROM kz_bans b
+        WHERE b.steamid64 IN (${placeholders})
+          AND b.expires_on > NOW()
       `,
         batch,
       );
 
       const activeSteamIds = activeBans.map((row) => row.steamid64);
+      // Permanent bans have expires_on = '9999-12-31 23:59:59'
+      const permanentBanDate = new Date("9999-12-31T23:59:59Z").getTime();
+      const permanentBans = activeBans.filter((row) => {
+        if (!row.expires_on) return false;
+        const expiresTime = new Date(row.expires_on).getTime();
+        return expiresTime === permanentBanDate;
+      });
       const inactiveSteamIds = batch.filter(
         (id) => !activeSteamIds.includes(id),
       );
@@ -90,29 +293,104 @@ async function updatePlayerBanStatus(steamIds) {
       // Update players with active bans to banned
       if (activeSteamIds.length > 0) {
         const activePlaceholders = activeSteamIds.map(() => "?").join(",");
-        const [banResult] = await connection.query(
-          `
+        const [banResult] = await retryOnDeadlock(() =>
+          connection.query(
+            `
           UPDATE kz_players
           SET is_banned = TRUE, updated_at = CURRENT_TIMESTAMP
           WHERE steamid64 IN (${activePlaceholders})
             AND is_banned = FALSE
         `,
-          activeSteamIds,
+            activeSteamIds,
+          ),
         );
         bannedCount += banResult.affectedRows;
       }
 
-      // Update players with no active bans to unbanned
+      // Archive records for permanently banned players
+      if (archiveRecords && permanentBans.length > 0) {
+        // Release connection before calling archive (it gets its own)
+        connection.release();
+
+        for (const ban of permanentBans) {
+          try {
+            const result = await archiveBannedPlayerRecords(
+              ban.steamid64,
+              ban.ban_id,
+            );
+            recordsArchived += result.archived || 0;
+          } catch (archiveError) {
+            // Log but don't fail the whole operation
+            logger.warn(
+              `[KZ Ban Status] Failed to archive records for ${ban.steamid64}: ${archiveError.message}`,
+            );
+          }
+        }
+
+        // Get a new connection for the rest of the operations
+        const newConnection = await pool.getConnection();
+
+        // Update players with no active bans to unbanned
+        if (inactiveSteamIds.length > 0) {
+          const inactivePlaceholders = inactiveSteamIds
+            .map(() => "?")
+            .join(",");
+          const [unbanResult] = await retryOnDeadlock(() =>
+            newConnection.query(
+              `
+            UPDATE kz_players
+            SET is_banned = FALSE, updated_at = CURRENT_TIMESTAMP
+            WHERE steamid64 IN (${inactivePlaceholders})
+              AND is_banned = TRUE
+          `,
+              inactiveSteamIds,
+            ),
+          );
+          unbannedCount += unbanResult.affectedRows;
+
+          // Restore records for unbanned players
+          for (const steamid64 of inactiveSteamIds) {
+            try {
+              const result = await restoreUnbannedPlayerRecords(steamid64);
+              recordsRestored += result.restored || 0;
+            } catch (restoreError) {
+              logger.warn(
+                `[KZ Ban Status] Failed to restore records for ${steamid64}: ${restoreError.message}`,
+              );
+            }
+          }
+        }
+
+        newConnection.release();
+        // Skip the finally block since we already released
+        stats.totalBans += bannedCount;
+        stats.totalUnbans += unbannedCount;
+
+        logger.debug(
+          `[KZ Ban Status] Updated ${steamIds.length} players: ${bannedCount} banned, ${unbannedCount} unbanned, ${recordsArchived} records archived, ${recordsRestored} records restored`,
+        );
+
+        return {
+          banned: bannedCount,
+          unbanned: unbannedCount,
+          recordsArchived,
+          recordsRestored,
+        };
+      }
+
+      // Update players with no active bans to unbanned (when no archiving needed)
       if (inactiveSteamIds.length > 0) {
         const inactivePlaceholders = inactiveSteamIds.map(() => "?").join(",");
-        const [unbanResult] = await connection.query(
-          `
+        const [unbanResult] = await retryOnDeadlock(() =>
+          connection.query(
+            `
           UPDATE kz_players
           SET is_banned = FALSE, updated_at = CURRENT_TIMESTAMP
           WHERE steamid64 IN (${inactivePlaceholders})
             AND is_banned = TRUE
         `,
-          inactiveSteamIds,
+            inactiveSteamIds,
+          ),
         );
         unbannedCount += unbanResult.affectedRows;
       }
@@ -125,7 +403,12 @@ async function updatePlayerBanStatus(steamIds) {
       `[KZ Ban Status] Updated ${steamIds.length} players: ${bannedCount} banned, ${unbannedCount} unbanned`,
     );
 
-    return { banned: bannedCount, unbanned: unbannedCount };
+    return {
+      banned: bannedCount,
+      unbanned: unbannedCount,
+      recordsArchived,
+      recordsRestored,
+    };
   } catch (error) {
     logger.error(`[KZ Ban Status] Error updating player ban status:`, error);
     stats.errors++;
@@ -194,7 +477,7 @@ async function cleanupExpiredBans() {
         SELECT DISTINCT steamid64
         FROM kz_bans
         WHERE steamid64 IN (${placeholders})
-          AND (expires_on IS NULL OR expires_on > NOW())
+          AND expires_on > NOW()
       `,
         batch,
       );
@@ -209,13 +492,15 @@ async function cleanupExpiredBans() {
       // Unban players with no active bans
       if (expiredSteamIds.length > 0) {
         const expiredPlaceholders = expiredSteamIds.map(() => "?").join(",");
-        const [result] = await connection.query(
-          `
+        const [result] = await retryOnDeadlock(() =>
+          connection.query(
+            `
           UPDATE kz_players
           SET is_banned = FALSE, updated_at = CURRENT_TIMESTAMP
           WHERE steamid64 IN (${expiredPlaceholders})
         `,
-          expiredSteamIds,
+            expiredSteamIds,
+          ),
         );
         unbannedCount += result.affectedRows;
       }
@@ -255,12 +540,12 @@ async function syncBannedPlayers() {
   try {
     logger.info("[KZ Ban Status] Syncing banned players...");
 
-    // Get all unique steamid64s from bans
+    // Get all unique steamid64s from active bans
     const [bannedSteamIds] = await connection.query(`
       SELECT DISTINCT steamid64, player_name, steam_id
       FROM kz_bans
       WHERE steamid64 IS NOT NULL
-        AND (expires_on IS NULL OR expires_on > NOW())
+        AND expires_on > NOW()
     `);
 
     let created = 0;
@@ -268,19 +553,21 @@ async function syncBannedPlayers() {
 
     for (const ban of bannedSteamIds) {
       // Insert player if doesn't exist, or update ban status if exists
-      const [result] = await connection.query(
-        `
+      const [result] = await retryOnDeadlock(() =>
+        connection.query(
+          `
         INSERT INTO kz_players (steamid64, steam_id, player_name, is_banned)
         VALUES (?, ?, ?, TRUE)
         ON DUPLICATE KEY UPDATE
           is_banned = TRUE,
           updated_at = CURRENT_TIMESTAMP
       `,
-        [
-          ban.steamid64,
-          ban.steam_id || `STEAM_ID_${ban.steamid64}`,
-          ban.player_name || `Player ${ban.steamid64}`,
-        ],
+          [
+            ban.steamid64,
+            ban.steam_id || `STEAM_ID_${ban.steamid64}`,
+            ban.player_name || `Player ${ban.steamid64}`,
+          ],
+        ),
       );
 
       if (result.affectedRows === 1) {
@@ -378,6 +665,8 @@ function getStats() {
     totalBansProcessed: stats.totalBansProcessed,
     totalBans: stats.totalBans,
     totalUnbans: stats.totalUnbans,
+    totalRecordsArchived: stats.totalRecordsArchived,
+    totalRecordsRestored: stats.totalRecordsRestored,
     errors: stats.errors,
     lastCleanupTime: stats.lastCleanupTime,
     lastCleanupDuration: stats.lastCleanupDuration,
@@ -416,5 +705,8 @@ module.exports = {
   cleanupExpiredBans,
   syncBannedPlayers,
   manualBanStatusUpdate,
+  archiveBannedPlayerRecords,
+  restoreUnbannedPlayerRecords,
+  batchArchiveBannedRecords,
   getStats,
 };
