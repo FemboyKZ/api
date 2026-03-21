@@ -219,7 +219,9 @@ async function updateLoop() {
     try {
       // Skip external queries if the extension is providing live data
       if (isServerLive(server.ip, server.port)) {
-        logger.debug(`Skipping external query for ${server.ip}:${server.port} (live extension data)`);
+        logger.debug(
+          `Skipping external query for ${server.ip}:${server.port} (live extension data)`,
+        );
         return;
       }
 

@@ -38,7 +38,9 @@ function isServerLive(ip, port) {
   const age = Date.now() - entry.lastReport;
   if (age > STALENESS_THRESHOLD_MS) {
     liveServers.delete(key);
-    logger.debug(`Server ${key} live data stale (${Math.round(age / 1000)}s), will resume polling`);
+    logger.debug(
+      `Server ${key} live data stale (${Math.round(age / 1000)}s), will resume polling`,
+    );
     return false;
   }
 

@@ -2,7 +2,11 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
-const { isValidIP, sanitizeMapName, sanitizePlayerName } = require("../utils/validators");
+const {
+  isValidIP,
+  sanitizeMapName,
+  sanitizePlayerName,
+} = require("../utils/validators");
 const { markServerLive } = require("../services/liveServers");
 const { deleteCache } = require("../db/redis");
 const {
@@ -71,10 +75,13 @@ router.post("/", async (req, res) => {
     const playerCount = parseInt(srv.players, 10) || 0;
     const maxPlayers = parseInt(srv.max_players, 10) || 0;
     const botCount = parseInt(srv.bot_count, 10) || 0;
-    const tickrate = parseInt(srv.tickrate, 10) || serverConfig.tickrate || null;
+    const tickrate =
+      parseInt(srv.tickrate, 10) || serverConfig.tickrate || null;
 
     // strip IPs before storing in players_list
-    const extensionPlayers = Array.isArray(payload.players) ? payload.players : [];
+    const extensionPlayers = Array.isArray(payload.players)
+      ? payload.players
+      : [];
     const playersListForStorage = extensionPlayers
       .filter((p) => p.steamid && p.in_game)
       .map((p) => ({
@@ -118,10 +125,20 @@ router.post("/", async (req, res) => {
         `INSERT INTO server_history 
          (server_ip, server_port, game, status, map, player_count, maxplayers, version)
          VALUES (?, ?, ?, 1, ?, ?, ?, ?)`,
-        [ip, port, game, sanitizedMap, playerCount, maxPlayers, srv.version || ""],
+        [
+          ip,
+          port,
+          game,
+          sanitizedMap,
+          playerCount,
+          maxPlayers,
+          srv.version || "",
+        ],
       );
     } catch (histErr) {
-      logger.error("Failed to record server history from extension", { error: histErr.message });
+      logger.error("Failed to record server history from extension", {
+        error: histErr.message,
+      });
     }
 
     // Track player sessions
@@ -142,7 +159,9 @@ router.post("/", async (req, res) => {
             [player.steamid, cleanName, ip, port],
           );
         } catch (sessErr) {
-          logger.error("Failed to track player join", { error: sessErr.message });
+          logger.error("Failed to track player join", {
+            error: sessErr.message,
+          });
         }
       }
     }
@@ -158,7 +177,9 @@ router.post("/", async (req, res) => {
             [playerId, ip, port],
           );
         } catch (sessErr) {
-          logger.error("Failed to track player leave", { error: sessErr.message });
+          logger.error("Failed to track player leave", {
+            error: sessErr.message,
+          });
         }
       }
     }
@@ -200,7 +221,9 @@ router.post("/", async (req, res) => {
           [playerCount, playerCount, ip, port],
         );
       } catch (mapErr) {
-        logger.error("Failed to update map player counts", { error: mapErr.message });
+        logger.error("Failed to update map player counts", {
+          error: mapErr.message,
+        });
       }
     }
     currentMapStates.set(serverKey, { name: sanitizedMap, playerCount });
@@ -225,7 +248,15 @@ router.post("/", async (req, res) => {
            server_ip=VALUES(server_ip), 
            server_port=VALUES(server_port), 
            last_seen=NOW()`,
-        [player.steamid, cleanName, game, PLAYTIME_INCREMENT, ip, port, PLAYTIME_INCREMENT],
+        [
+          player.steamid,
+          cleanName,
+          game,
+          PLAYTIME_INCREMENT,
+          ip,
+          port,
+          PLAYTIME_INCREMENT,
+        ],
       );
 
       // Store player IP privately (not in players table)
@@ -279,7 +310,11 @@ router.post("/", async (req, res) => {
       emitServerStatusChange({ ...serverData, statusChange: "online" });
     }
     if (previousServer && previousServer.map !== sanitizedMap) {
-      emitMapUpdate({ server: serverKey, oldMap: previousServer.map, newMap: sanitizedMap });
+      emitMapUpdate({
+        server: serverKey,
+        oldMap: previousServer.map,
+        newMap: sanitizedMap,
+      });
     }
 
     // Invalidate caches
