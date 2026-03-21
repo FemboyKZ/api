@@ -32,6 +32,10 @@ const currentMapStates = new Map();
  *   players: [{ steamid, name, ip, time_on_server, in_game, gokz?: { mode, timer_running, paused, time, course, teleports } }]
  * }
  */
+router.get("/", (req, res) => {
+  res.status(405).json({ error: "Method not allowed. Use POST." });
+});
+
 router.post("/", async (req, res) => {
   try {
     const payload = req.body;
