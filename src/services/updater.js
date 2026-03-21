@@ -11,6 +11,7 @@ const {
 } = require("./websocket");
 const { deleteCache } = require("../db/redis");
 const { updateDiscordWebhooks } = require("./discordWebhook");
+const { isServerLive } = require("./liveServers");
 
 /**
  * Server Update Service
@@ -216,6 +217,12 @@ async function updateLoop() {
   // Query all servers in parallel
   const updatePromises = serversConfig.map(async (server) => {
     try {
+      // Skip external queries if the extension is providing live data
+      if (isServerLive(server.ip, server.port)) {
+        logger.debug(`Skipping external query for ${server.ip}:${server.port} (live extension data)`);
+        return;
+      }
+
       const result = await queryServer(
         server.ip,
         server.port,

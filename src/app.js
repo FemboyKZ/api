@@ -6,6 +6,7 @@ const swaggerSpec = require("./config/swagger");
 const compression = require("compression");
 const app = express();
 
+const serverStatusRouter = require("./api/serverStatus");
 const serversRouter = require("./api/servers");
 const playersRouter = require("./api/players");
 const mapsRouter = require("./api/maps");
@@ -100,6 +101,7 @@ app.use(
   }),
 );
 
+app.use("/servers/status", adminAuth, serverStatusRouter);
 app.use("/servers", serversRouter);
 app.use("/players", playersRouter);
 app.use("/maps", mapsRouter);
