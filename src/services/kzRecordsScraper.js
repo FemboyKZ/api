@@ -153,7 +153,7 @@ async function initializeRecordId() {
     const connection = await pool.getConnection();
     try {
       const [rows] = await connection.query(
-        "SELECT MAX(original_id) as max_id FROM kz_records WHERE original_id IS NOT NULL",
+        "SELECT MAX(original_id) as max_id FROM kz_records_partitioned WHERE original_id IS NOT NULL",
       );
 
       if (rows[0].max_id) {
@@ -463,7 +463,7 @@ async function processRecord(connection, record) {
 
   // Insert record (use INSERT IGNORE to skip duplicates silently)
   const [result] = await connection.query(
-    `INSERT IGNORE INTO kz_records 
+    `INSERT IGNORE INTO kz_records_partitioned 
         (original_id, player_id, steamid64, map_id, server_id, mode, stage, time, teleports, points, 
          tickrate, record_filter_id, replay_id, updated_by, created_on, updated_on)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
