@@ -19,15 +19,17 @@ const { isServerLive } = require("./liveServers");
  * Polls all configured game servers in parallel at regular intervals (default: 30 seconds).
  *
  * For each server:
- * 1. Queries via GameDig for basic status (map, player count, online/offline)
- * 2. Queries via RCON (if configured) for Steam IDs and extended data
- * 3. Stores current status in servers table (with RCON data if available)
- * 4. Records historical snapshots in server_history table
- * 5. Tracks player sessions (join/leave) when Steam IDs available from RCON
- * 6. Tracks map changes and rotation in map_history table
- * 7. Updates player statistics (separated by game type)
- * 8. Updates map statistics (separated by game type)
- * 9. Emits WebSocket events for real-time updates
+ * 1. Queries via Steam Master Server (primary) or GameDig (fallback) for status
+ * 2. Stores current status in servers table
+ * 3. Records historical snapshots in server_history table
+ * 4. Tracks player sessions (join/leave) when Steam IDs available from plugin
+ * 5. Tracks map changes and rotation in map_history table
+ * 6. Updates player statistics (separated by game type)
+ * 7. Updates map statistics (separated by game type)
+ * 8. Emits WebSocket events for real-time updates
+ *
+ * Player details (Steam IDs, connection times) are provided by the in-game
+ * plugin via the live status endpoint, not by polling.
  *
  * Data Separation:
  * - Players and maps use composite unique keys (steamid+game, name+game)
@@ -225,13 +227,7 @@ async function updateLoop() {
         return;
       }
 
-      const result = await queryServer(
-        server.ip,
-        server.port,
-        server.game,
-        server.rconPort,
-        server.rconPassword,
-      );
+      const result = await queryServer(server.ip, server.port, server.game);
 
       // Get previous server status for comparison
       const [prevStatus] = await pool.query(

@@ -7,7 +7,7 @@ const {
   sanitizeMapName,
   sanitizePlayerName,
 } = require("../utils/validators");
-const { markServerLive } = require("../services/liveServers");
+const { markServerLive, clearServerLive } = require("../services/liveServers");
 const { deleteCache } = require("../db/redis");
 const {
   emitServerUpdate,
@@ -23,12 +23,12 @@ const currentMapStates = new Map();
 /**
  * POST /servers/status
  *
- * Receives live server data from the gokz-realtime-status extension.
+ * Receives live server data from the gokz-realtime-status plugin.
  * Authenticated via adminAuth middleware (API key, IP whitelist, or localhost).
  *
- * Expected payload (from extension BuildPayload):
+ * Expected payload (from plugin BuildPayload):
  * {
- *   server: { hostname, ip, port, os, map, players, max_players, mm_version, sm_version, gokz_loaded, plugins: [...] },
+ *   server: { hostname, ip, port, os, map, players, max_players, bot_count, version, tickrate, secure, mm_version, sm_version, gokz_loaded, plugins: [...] },
  *   players: [{ steamid, name, ip, time_on_server, in_game, gokz?: { mode, timer_running, paused, time, course, teleports } }]
  * }
  */
@@ -330,6 +330,36 @@ router.post("/", async (req, res) => {
   } catch (e) {
     logger.error(`Extension status ingest failed: ${e.message}`);
     res.status(500).json({ error: "Failed to process server status" });
+  }
+});
+
+/**
+ * POST /servers/status/hibernate
+ *
+ * Called by the plugin when the last player disconnects and the server
+ * is about to hibernate. Clears the live flag so the updater immediately
+ * resumes polling via Steam Master Server on its next cycle.
+ *
+ * Expected payload: { ip: "1.2.3.4", port: 27015 }
+ */
+router.post("/hibernate", async (req, res) => {
+  try {
+    const { ip, port } = req.body || {};
+    const portNum = parseInt(port, 10);
+
+    if (!ip || !isValidIP(ip) || !portNum || portNum < 1 || portNum > 65535) {
+      return res.status(400).json({ error: "Invalid ip/port" });
+    }
+
+    clearServerLive(ip, portNum);
+    logger.info(
+      `Server ${ip}:${portNum} hibernate signal received, updater will resume polling`,
+    );
+
+    res.json({ ok: true });
+  } catch (e) {
+    logger.error(`Hibernate signal failed: ${e.message}`);
+    res.status(500).json({ error: "Failed to process hibernate signal" });
   }
 });
 

@@ -62,4 +62,24 @@ function getLiveServerCount() {
   return liveServers.size;
 }
 
-module.exports = { markServerLive, isServerLive, getLiveServerCount };
+/**
+ * Immediately clear live status for a server (e.g. entering hibernation)
+ * @param {string} ip
+ * @param {number} port
+ * @returns {boolean} true if the server was previously live
+ */
+function clearServerLive(ip, port) {
+  const key = `${ip}:${port}`;
+  const existed = liveServers.delete(key);
+  if (existed) {
+    logger.info(`Server ${key} live status cleared (hibernate)`);
+  }
+  return existed;
+}
+
+module.exports = {
+  markServerLive,
+  isServerLive,
+  getLiveServerCount,
+  clearServerLive,
+};
