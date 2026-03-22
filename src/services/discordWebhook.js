@@ -214,9 +214,9 @@ function buildEmbeds(servers, game) {
       regionServers.forEach((server, index) => {
         const statusEmoji =
           server.status === 1 ? ":green_circle:" : ":broken_heart:";
-        const serverName =
-          `${regionFlags[server.region]} ${server.hostname}` ||
-          `${regionFlags[server.region]} ${server.ip}:${server.port}`;
+        const serverName = server.hostname
+          ? `${regionFlags[server.region]} ${server.hostname}`
+          : `${regionFlags[server.region]} ${server.ip}:${server.port}`;
 
         let fieldValue = `${statusEmoji} - Players: \`${server.players || 0}/${server.maxplayers || 0}\``;
 
