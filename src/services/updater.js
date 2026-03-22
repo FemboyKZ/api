@@ -254,7 +254,7 @@ async function updateLoop() {
             server.port,
             server.game,
             result.version || "",
-            result.hostname || null,
+            result.hostname || server.name || null,
             result.os || null,
             result.secure !== undefined ? result.secure : null,
             result.status,
