@@ -36,18 +36,23 @@ async function queryServer(ip, port, game) {
           socketTimeout: 3000,
         });
 
-        result = {
-          status: 1,
-          map: state.map || "",
-          players: state.players.map((p) => ({
+        // Filter out ghost/phantom players that have no name
+        const validPlayers = state.players
+          .map((p) => ({
             name: p.name?.trim() || null,
             score: p.raw?.score || 0,
             time: p.raw?.time || 0,
-          })),
+          }))
+          .filter((p) => p.name !== null);
+
+        result = {
+          status: 1,
+          map: state.map || "",
+          players: validPlayers,
           playersRaw: state.players.raw || {},
           maxplayers: state.maxplayers || 0,
           version: state.version || "",
-          playerCount: state.players.length || state.numplayers || 0,
+          playerCount: validPlayers.length,
           ping: state.ping || 0,
         };
         dataSource = "gamedig";
