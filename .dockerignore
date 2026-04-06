@@ -12,3 +12,7 @@ logs/*.log
 .DS_Store
 coverage
 .eslintcache
+tests
+.github
+docs
+LICENSE

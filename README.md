@@ -15,7 +15,6 @@ The documentation is automatically generated from JSDoc comments in the code usi
 - Node.js (v20 or higher)
 - MySQL/MariaDB database(s)
 - Game servers to monitor (CS:GO, CS2, etc.)
-- RCON access to servers (optional, for Steam IDs and extended data)
 - Steam API Key
 - Docker is recommended
 

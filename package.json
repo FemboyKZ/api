@@ -17,11 +17,6 @@
     "lint:fix": "npx eslint . --ext .js,.jsx,.ts,.tsx --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "docker:build": "docker build -t server-api .",
-    "docker:run": "docker run -p 3000:3000 --env-file .env server-api",
-    "docker:compose": "docker compose up -d",
-    "docker:compose:down": "docker compose down",
-    "docker:compose:logs": "docker compose logs -f api",
     "admin:aggregate": "curl -X POST http://localhost:3000/admin/aggregate-daily",
     "admin:cleanup": "curl -X POST http://localhost:3000/admin/cleanup-history?days=30"
   },
