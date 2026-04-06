@@ -248,7 +248,7 @@ async function updateLoop() {
         await pool.query(
           `INSERT INTO servers (ip, port, game, version, hostname, os, secure, status, map, player_count, maxplayers, bot_count, players_list, region, domain, api_id, kzt_id, tickrate)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE version=VALUES(version), hostname=COALESCE(VALUES(hostname), hostname), os=COALESCE(VALUES(os), os), secure=COALESCE(VALUES(secure), secure), status=VALUES(status), map=VALUES(map), player_count=VALUES(player_count), maxplayers=VALUES(maxplayers), bot_count=VALUES(bot_count), players_list=VALUES(players_list), region=VALUES(region), domain=VALUES(domain), api_id=VALUES(api_id), kzt_id=VALUES(kzt_id), tickrate=VALUES(tickrate), last_update=NOW()`,
+           ON DUPLICATE KEY UPDATE version=IF(VALUES(version)='', version, VALUES(version)), hostname=COALESCE(VALUES(hostname), hostname), os=COALESCE(VALUES(os), os), secure=COALESCE(VALUES(secure), secure), status=VALUES(status), map=VALUES(map), player_count=VALUES(player_count), maxplayers=VALUES(maxplayers), bot_count=VALUES(bot_count), players_list=VALUES(players_list), region=VALUES(region), domain=VALUES(domain), api_id=VALUES(api_id), kzt_id=VALUES(kzt_id), tickrate=VALUES(tickrate), last_update=NOW()`,
           [
             server.ip,
             server.port,

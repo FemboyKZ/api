@@ -99,7 +99,7 @@ router.post("/", async (req, res) => {
     await pool.query(
       `INSERT INTO servers (ip, port, game, version, mm_version, sm_version, gokz_loaded, cs2kz_loaded, hostname, os, secure, status, map, player_count, maxplayers, bot_count, players_list, region, domain, api_id, kzt_id, tickrate)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE version=VALUES(version), mm_version=VALUES(mm_version), sm_version=VALUES(sm_version), gokz_loaded=VALUES(gokz_loaded), cs2kz_loaded=VALUES(cs2kz_loaded), hostname=VALUES(hostname), os=VALUES(os), secure=VALUES(secure), status=1, map=VALUES(map), player_count=VALUES(player_count), maxplayers=VALUES(maxplayers), bot_count=VALUES(bot_count), players_list=VALUES(players_list), tickrate=COALESCE(VALUES(tickrate), tickrate), last_update=NOW()`,
+       ON DUPLICATE KEY UPDATE version=IF(VALUES(version)='', version, VALUES(version)), mm_version=VALUES(mm_version), sm_version=VALUES(sm_version), gokz_loaded=VALUES(gokz_loaded), cs2kz_loaded=VALUES(cs2kz_loaded), hostname=VALUES(hostname), os=VALUES(os), secure=VALUES(secure), status=1, map=VALUES(map), player_count=VALUES(player_count), maxplayers=VALUES(maxplayers), bot_count=VALUES(bot_count), players_list=VALUES(players_list), tickrate=COALESCE(VALUES(tickrate), tickrate), last_update=NOW()`,
       [
         ip,
         port,
