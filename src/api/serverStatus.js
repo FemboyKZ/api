@@ -28,8 +28,8 @@ const currentMapStates = new Map();
  *
  * Expected payload (from plugin BuildPayload):
  * {
- *   server: { hostname, ip, port, os, map, players, max_players, bot_count, version, tickrate, secure, mm_version, sm_version, gokz_loaded, plugins: [...] },
- *   players: [{ steamid, name, ip, time_on_server, in_game, gokz?: { mode, timer_running, paused, time, course, teleports } }]
+ *   server: { hostname, ip, port, os, map, players, max_players, bot_count, version, tickrate, secure, mm_version, sm_version, gokz_loaded, cs2kz_loaded, plugins: [...] },
+ *   players: [{ steamid, name, ip, time_on_server, in_game, gokz?: { mode, timer_running, paused, time, course, teleports }, cs2kz?: { ... } }]
  * }
  */
 router.get("/", (req, res) => {
@@ -93,12 +93,13 @@ router.post("/", async (req, res) => {
         steamid: p.steamid,
         time: p.time_on_server ? `${Math.floor(p.time_on_server)}s` : null,
         gokz: p.gokz || null,
+        cs2kz: p.cs2kz || null,
       }));
 
     await pool.query(
-      `INSERT INTO servers (ip, port, game, version, mm_version, sm_version, gokz_loaded, hostname, os, secure, status, map, player_count, maxplayers, bot_count, players_list, region, domain, api_id, kzt_id, tickrate)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE version=VALUES(version), mm_version=VALUES(mm_version), sm_version=VALUES(sm_version), gokz_loaded=VALUES(gokz_loaded), hostname=VALUES(hostname), os=VALUES(os), secure=VALUES(secure), status=1, map=VALUES(map), player_count=VALUES(player_count), maxplayers=VALUES(maxplayers), bot_count=VALUES(bot_count), players_list=VALUES(players_list), tickrate=COALESCE(VALUES(tickrate), tickrate), last_update=NOW()`,
+      `INSERT INTO servers (ip, port, game, version, mm_version, sm_version, gokz_loaded, cs2kz_loaded, hostname, os, secure, status, map, player_count, maxplayers, bot_count, players_list, region, domain, api_id, kzt_id, tickrate)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE version=VALUES(version), mm_version=VALUES(mm_version), sm_version=VALUES(sm_version), gokz_loaded=VALUES(gokz_loaded), cs2kz_loaded=VALUES(cs2kz_loaded), hostname=VALUES(hostname), os=VALUES(os), secure=VALUES(secure), status=1, map=VALUES(map), player_count=VALUES(player_count), maxplayers=VALUES(maxplayers), bot_count=VALUES(bot_count), players_list=VALUES(players_list), tickrate=COALESCE(VALUES(tickrate), tickrate), last_update=NOW()`,
       [
         ip,
         port,
@@ -107,6 +108,7 @@ router.post("/", async (req, res) => {
         srv.mm_version || null,
         srv.sm_version || null,
         srv.gokz_loaded != null ? (srv.gokz_loaded ? 1 : 0) : null,
+        srv.cs2kz_loaded != null ? (srv.cs2kz_loaded ? 1 : 0) : null,
         srv.hostname || null,
         srv.os || null,
         srv.secure != null ? (srv.secure ? 1 : 0) : null,

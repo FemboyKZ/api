@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS servers (
     mm_version VARCHAR(50) DEFAULT NULL COMMENT 'Metamod:Source version',
     sm_version VARCHAR(50) DEFAULT NULL COMMENT 'SourceMod version',
     gokz_loaded TINYINT DEFAULT NULL COMMENT 'Whether GOKZ plugin is loaded (1=yes, 0=no)',
+    cs2kz_loaded TINYINT DEFAULT NULL COMMENT 'Whether CS2KZ plugin is loaded (1=yes, 0=no)',
     hostname VARCHAR(255) DEFAULT NULL COMMENT 'Server hostname from RCON',
     os VARCHAR(100) DEFAULT NULL COMMENT 'Server OS/type from RCON',
     secure TINYINT DEFAULT NULL COMMENT 'VAC secure status: 1=secure, 0=insecure',
