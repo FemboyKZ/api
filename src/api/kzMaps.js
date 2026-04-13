@@ -147,8 +147,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
         m.global_created_on,
         m.global_updated_on,
         COALESCE(ms.total_records, 0) as records,
-        COALESCE(ms.unique_players, 0) as unique_players,
-        ms.world_record_time
+        COALESCE(ms.unique_players, 0) as unique_players
       FROM kz_maps m
       LEFT JOIN kz_map_statistics ms ON m.id = ms.map_id
       WHERE ${whereClause}
@@ -722,12 +721,32 @@ router.get(
           m.*,
           COALESCE(ms.total_records, 0) as total_records,
           COALESCE(ms.unique_players, 0) as unique_players,
-          ms.world_record_time as world_record,
           ms.avg_time as average_time,
           ms.pro_records,
           ms.tp_records,
           ms.first_record_date as first_record,
-          ms.last_record_date as last_record
+          ms.last_record_date as last_record,
+          ms.wr_kz_timer_pro_time,
+          ms.wr_kz_timer_pro_steamid64,
+          ms.wr_kz_timer_pro_player_name,
+          ms.wr_kz_timer_overall_time,
+          ms.wr_kz_timer_overall_teleports,
+          ms.wr_kz_timer_overall_steamid64,
+          ms.wr_kz_timer_overall_player_name,
+          ms.wr_kz_simple_pro_time,
+          ms.wr_kz_simple_pro_steamid64,
+          ms.wr_kz_simple_pro_player_name,
+          ms.wr_kz_simple_overall_time,
+          ms.wr_kz_simple_overall_teleports,
+          ms.wr_kz_simple_overall_steamid64,
+          ms.wr_kz_simple_overall_player_name,
+          ms.wr_kz_vanilla_pro_time,
+          ms.wr_kz_vanilla_pro_steamid64,
+          ms.wr_kz_vanilla_pro_player_name,
+          ms.wr_kz_vanilla_overall_time,
+          ms.wr_kz_vanilla_overall_teleports,
+          ms.wr_kz_vanilla_overall_steamid64,
+          ms.wr_kz_vanilla_overall_player_name
         FROM kz_maps m
         LEFT JOIN kz_map_statistics ms ON m.id = ms.map_id
         WHERE m.map_name = ?`,
@@ -756,11 +775,51 @@ router.get(
         {
           total_records: map.total_records,
           unique_players: map.unique_players,
-          world_record: map.world_record,
           average_time: map.average_time,
           worst_time: worstTime[0]?.worst_time,
           first_record: map.first_record,
           last_record: map.last_record,
+          world_records: {
+            kz_timer: {
+              pro: {
+                time: map.wr_kz_timer_pro_time,
+                steamid64: map.wr_kz_timer_pro_steamid64,
+                player_name: map.wr_kz_timer_pro_player_name,
+              },
+              overall: {
+                time: map.wr_kz_timer_overall_time,
+                teleports: map.wr_kz_timer_overall_teleports,
+                steamid64: map.wr_kz_timer_overall_steamid64,
+                player_name: map.wr_kz_timer_overall_player_name,
+              },
+            },
+            kz_simple: {
+              pro: {
+                time: map.wr_kz_simple_pro_time,
+                steamid64: map.wr_kz_simple_pro_steamid64,
+                player_name: map.wr_kz_simple_pro_player_name,
+              },
+              overall: {
+                time: map.wr_kz_simple_overall_time,
+                teleports: map.wr_kz_simple_overall_teleports,
+                steamid64: map.wr_kz_simple_overall_steamid64,
+                player_name: map.wr_kz_simple_overall_player_name,
+              },
+            },
+            kz_vanilla: {
+              pro: {
+                time: map.wr_kz_vanilla_pro_time,
+                steamid64: map.wr_kz_vanilla_pro_steamid64,
+                player_name: map.wr_kz_vanilla_pro_player_name,
+              },
+              overall: {
+                time: map.wr_kz_vanilla_overall_time,
+                teleports: map.wr_kz_vanilla_overall_teleports,
+                steamid64: map.wr_kz_vanilla_overall_steamid64,
+                player_name: map.wr_kz_vanilla_overall_player_name,
+              },
+            },
+          },
         },
       ];
 

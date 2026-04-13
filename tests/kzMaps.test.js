@@ -37,7 +37,6 @@ describe("KZ Maps Endpoints", () => {
               workshop_url: "https://steamcommunity.com/sharedfiles/123",
               records: 1500,
               unique_players: 850,
-              world_record_time: 125.456,
             },
           ],
         ]);
@@ -170,19 +169,20 @@ describe("KZ Maps Endpoints", () => {
               map_name: "kz_synergy_x",
               difficulty: 5,
               validated: true,
-            },
-          ],
-        ])
-        .mockResolvedValueOnce([
-          [
-            {
               total_records: 1500,
               unique_players: 850,
-              world_record: 125.456,
               average_time: 180.5,
+              pro_records: 1000,
+              tp_records: 500,
+              first_record: "2023-01-01",
+              last_record: "2024-01-01",
+              wr_kz_timer_pro_time: 125.456,
+              wr_kz_timer_pro_steamid64: "76561198000000000",
+              wr_kz_timer_pro_player_name: "TestPlayer",
             },
           ],
         ])
+        .mockResolvedValueOnce([[{ worst_time: 999.999 }]])
         .mockResolvedValueOnce([
           [
             {
