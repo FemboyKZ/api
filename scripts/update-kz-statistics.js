@@ -292,7 +292,7 @@ async function showStatistics(connection) {
             m.map_name,
             ms.total_records,
             ms.unique_players,
-            ms.world_record_time
+            ms.wr_kz_timer_pro_time
         FROM kz_map_statistics ms
         JOIN kz_maps m ON ms.map_id = m.id
         ORDER BY ms.total_records DESC
@@ -300,8 +300,8 @@ async function showStatistics(connection) {
     `);
 
   topMaps.forEach((map, index) => {
-    const wrTime = map.world_record_time
-      ? parseFloat(map.world_record_time).toFixed(3) + "s"
+    const wrTime = map.wr_kz_timer_pro_time
+      ? parseFloat(map.wr_kz_timer_pro_time).toFixed(3) + "s"
       : "N/A";
     console.log(
       `  ${(index + 1).toString().padStart(2)}. ${(map.map_name || "Unknown").padEnd(30)} ` +
