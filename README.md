@@ -6,7 +6,7 @@ For tracking game servers, players and more.
 
 Interactive API documentation is available at `/docs` when the server is running:
 
-- **Production**: [api.femboy.kz/docs](https://api.femboy.kz/docs)
+- **Production**: [api.femboy.kz/docs](https://api.femboykz.com/docs)
 
 The documentation is automatically generated from JSDoc comments in the code using Swagger/OpenAPI 3.0.
 
