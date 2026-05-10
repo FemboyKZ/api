@@ -206,7 +206,7 @@ function buildEmbeds(servers, game) {
         },
         timestamp: new Date().toISOString(),
         image: {
-          url: "https://femboykz.com/images/wide.png",
+          url: "https://files.femboykz.com/web/images/wide.png?raw=1",
         },
       };
 
@@ -224,7 +224,7 @@ function buildEmbeds(servers, game) {
           fieldValue += ` - Map: \`${server.map || "Unknown"}\``;
 
           if (server.domain) {
-            fieldValue += `\n[connect ${server.domain}:${server.port}](<https://${gameLower}.femboykz.com/connect?ip=${server.ip}:${server.port}>)`;
+            fieldValue += `\n[connect ${server.domain}:${server.port}](<https://${gameLower}.femboykz.com/connect.php?ip=${server.ip}:${server.port}>)`;
           }
 
           if (server.playersList.length > 0) {
