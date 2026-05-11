@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS player_meta (
     id INT AUTO_INCREMENT PRIMARY KEY,
     steamid VARCHAR(20) NOT NULL,
     discord_id VARCHAR(30) DEFAULT NULL COMMENT 'Discord user ID (snowflake)',
-    permissions JSON DEFAULT NULL COMMENT 'Null if no permissions, else {roles:[], customRole:str|null, customTag:str|null}',
+    permissions JSON DEFAULT NULL COMMENT 'Null if no permissions, else {roles:[], customRole:{id,color,name}|null, customTag:{color,name}|null}',
     whitelisted BOOLEAN DEFAULT FALSE COMMENT 'Whether the player is whitelisted',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

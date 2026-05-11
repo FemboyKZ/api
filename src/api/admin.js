@@ -15,6 +15,23 @@ const VALID_ROLES = [
   "og",
   "gmc",
 ];
+const VALID_TAG_COLORS = [
+  "default",
+  "darkred",
+  "purple",
+  "green",
+  "olive",
+  "lime",
+  "red",
+  "grey",
+  "yellow",
+  "bluegrey",
+  "blue",
+  "darkblue",
+  "orchid",
+  "lightred",
+  "gold",
+];
 const { getStats: getScraperStats } = require("../services/kzRecordsScraper");
 const {
   getStats: getBanStatusStats,
@@ -640,8 +657,13 @@ router.delete("/players/:steamid/discord", async (req, res) => {
 /**
  * PUT /admin/players/:steamid/permissions
  * Set or update a player's permissions
- * Body: { roles: string[], customRole: string|null, customTag: string|null }
+ * Body: {
+ *   roles: string[],
+ *   customRole: { id: string, color: string, name: string } | null,
+ *   customTag:  { color: string, name: string } | null
+ * }
  * Valid roles: owner, admin, mod, dev, vip, vip+, contributor, og, gmc
+ * Valid tag colors: default darkred purple green olive lime red grey yellow bluegrey blue darkblue orchid lightred gold
  */
 router.put("/players/:steamid/permissions", async (req, res) => {
   try {
@@ -661,26 +683,72 @@ router.put("/players/:steamid/permissions", async (req, res) => {
     }
     const invalidRoles = roles.filter((r) => !VALID_ROLES.includes(r));
     if (invalidRoles.length) {
-      return res
-        .status(400)
-        .json({
-          error: `Invalid roles: ${invalidRoles.join(", ")}. Valid: ${VALID_ROLES.join(", ")}`,
-        });
+      return res.status(400).json({
+        error: `Invalid roles: ${invalidRoles.join(", ")}. Valid: ${VALID_ROLES.join(", ")}`,
+      });
     }
-    if (
-      customTag !== null &&
-      customTag !== undefined &&
-      String(customTag).length > 50
-    ) {
-      return res
-        .status(400)
-        .json({ error: "customTag too long (max 50 chars)" });
+
+    // Validate customRole object
+    let validatedCustomRole = null;
+    if (customRole !== null && customRole !== undefined) {
+      if (typeof customRole !== "object" || Array.isArray(customRole)) {
+        return res
+          .status(400)
+          .json({
+            error: "customRole must be an object { id, color, name } or null",
+          });
+      }
+      const { id, color, name } = customRole;
+      if (!id || typeof id !== "string") {
+        return res
+          .status(400)
+          .json({ error: "customRole.id is required and must be a string" });
+      }
+      if (!color || typeof color !== "string") {
+        return res
+          .status(400)
+          .json({ error: "customRole.color is required and must be a string" });
+      }
+      if (!name || typeof name !== "string") {
+        return res
+          .status(400)
+          .json({ error: "customRole.name is required and must be a string" });
+      }
+      validatedCustomRole = {
+        id: String(id),
+        color: String(color),
+        name: String(name),
+      };
+    }
+
+    // Validate customTag object
+    let validatedCustomTag = null;
+    if (customTag !== null && customTag !== undefined) {
+      if (typeof customTag !== "object" || Array.isArray(customTag)) {
+        return res
+          .status(400)
+          .json({
+            error: "customTag must be an object { color, name } or null",
+          });
+      }
+      const { color, name } = customTag;
+      if (!color || !VALID_TAG_COLORS.includes(color)) {
+        return res.status(400).json({
+          error: `customTag.color must be one of: ${VALID_TAG_COLORS.join(", ")}`,
+        });
+      }
+      if (typeof name !== "string") {
+        return res
+          .status(400)
+          .json({ error: "customTag.name must be a string" });
+      }
+      validatedCustomTag = { color: String(color), name: String(name) };
     }
 
     const permissions = {
       roles,
-      customRole: customRole || null,
-      customTag: customTag || null,
+      customRole: validatedCustomRole,
+      customTag: validatedCustomTag,
     };
 
     await pool.query(
