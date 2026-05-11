@@ -46,6 +46,7 @@ const {
   populateAllStatistics,
   getStatisticsSummary,
 } = require("../services/kzStatistics");
+const { deleteCache, flushCache } = require("../db/redis");
 const {
   runCleanup: runJumpstatCleanup,
   getQuarantinedJumpstats,
@@ -831,6 +832,29 @@ router.put("/players/:steamid/whitelist", async (req, res) => {
   } catch (error) {
     logger.error("Failed to set whitelist", { error: error.message });
     res.status(500).json({ error: "Failed to set whitelist" });
+  }
+});
+
+/**
+ * POST /admin/cache/invalidate
+ * Invalidate Redis cache keys by pattern. Use "*" to flush everything.
+ * Body: { pattern: "cache:kz:*" }
+ */
+router.post("/cache/invalidate", async (req, res) => {
+  const { pattern } = req.body;
+  if (!pattern || typeof pattern !== "string") {
+    return res.status(400).json({ error: "pattern is required" });
+  }
+  try {
+    if (pattern === "*") {
+      await flushCache();
+      return res.json({ success: true, message: "All cache flushed" });
+    }
+    await deleteCache(pattern);
+    res.json({ success: true, pattern });
+  } catch (error) {
+    logger.error("Cache invalidation failed", { error: error.message });
+    res.status(500).json({ error: "Cache invalidation failed" });
   }
 });
 

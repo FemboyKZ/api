@@ -231,9 +231,8 @@ describe("KZ Players Endpoints", () => {
       };
 
       mockPool.query
-        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query for kz_player_statistics
-        .mockResolvedValueOnce([[{ total: 1 }]])
-        .mockResolvedValueOnce([[recordData]]);
+        .mockResolvedValueOnce([[{ total: 1 }]])  // COUNT(*) live count
+        .mockResolvedValueOnce([[recordData]]);   // records query
 
       const response = await request(app)
         .get("/kzglobal/players/76561198000000001/records")
@@ -261,7 +260,7 @@ describe("KZ Players Endpoints", () => {
 
     it("should filter by mode", async () => {
       mockPool.query
-        .mockResolvedValueOnce([[{ total: 0 }]])
+        .mockResolvedValueOnce([[{ total: 0 }]]) // COUNT(*) live count
         .mockResolvedValueOnce([[]]);
 
       const response = await request(app)
@@ -275,8 +274,7 @@ describe("KZ Players Endpoints", () => {
 
     it("should sort by time ascending", async () => {
       mockPool.query
-        .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists query for kz_player_statistics
-        .mockResolvedValueOnce([[{ total: 0 }]])
+        .mockResolvedValueOnce([[{ total: 0 }]]) // COUNT(*) live count
         .mockResolvedValueOnce([[]]);
 
       const response = await request(app)
@@ -284,7 +282,7 @@ describe("KZ Players Endpoints", () => {
         .expect(200);
 
       expect(response.body).toHaveProperty("data");
-      const call = mockPool.query.mock.calls[2];
+      const call = mockPool.query.mock.calls[1];
       expect(call[0]).toMatch(/ORDER BY r\.time ASC/);
     });
 

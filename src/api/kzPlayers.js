@@ -292,7 +292,7 @@ router.get(
 
       const player = players[0];
 
-      // Check if we have cached statistics
+      // Check if we have cached statistics - but verify against live count first
       if (await tableExists("kz_player_statistics")) {
         const [cachedStats] = await pool.query(
           `
@@ -314,7 +314,23 @@ router.get(
           [player.id],
         );
 
+        // Verify cache is accurate by checking live total
+        // Use player_id (not steamid64) since records are indexed by player_id
+        let liveTotal = null;
         if (cachedStats.length > 0 && cachedStats[0].total_records > 0) {
+          const [[liveCount]] = await pool.query(
+            "SELECT COUNT(*) as cnt FROM kz_records_partitioned WHERE player_id = ?",
+            [player.id],
+          );
+          liveTotal = liveCount.cnt;
+        }
+
+        if (
+          cachedStats.length > 0 &&
+          cachedStats[0].total_records > 0 &&
+          liveTotal !== null &&
+          cachedStats[0].total_records === liveTotal
+        ) {
           // Use cached stats and get additional real-time data for recent activity
           const currentYear = new Date().getFullYear();
           const [realtimeStats] = await pool.query(
@@ -595,20 +611,13 @@ router.get(
       const sortField = validSortFields.includes(sort) ? sort : "created_on";
       const sortOrder = order === "asc" ? "ASC" : "DESC";
 
-      // Determine partition hint based on year filter or sort order
+      // Determine partition hint based on year filter ONLY
       let partitionHint = "";
       if (year) {
         partitionHint = getPlayerPartitionHint(year);
-      } else if (
-        sortField === "created_on" &&
-        sortOrder === "DESC" &&
-        !map &&
-        !mode
-      ) {
-        // For recent records without filters, only scan recent partitions
-        const currentYear = new Date().getFullYear();
-        partitionHint = `PARTITION (p${currentYear}, p${currentYear - 1}, pfuture)`;
       }
+      // Note: do NOT restrict to recent partitions for sorted-by-date queries —
+      // older records would be missed, producing wrong counts.
 
       let query = `
         SELECT 
@@ -649,20 +658,8 @@ router.get(
       const pool = getKzPool();
       let total;
 
-      if (
-        !map &&
-        !mode &&
-        !year &&
-        (await tableExists("kz_player_statistics"))
-      ) {
-        // Use cached total from statistics table if available
-        const [statsResult] = await pool.query(
-          "SELECT total_records FROM kz_player_statistics WHERE player_id = (SELECT id FROM kz_players WHERE steamid64 = ? LIMIT 1)",
-          [steamid64],
-        );
-        total = statsResult[0]?.total_records || 0;
-      } else {
-        // Calculate exact count for filtered results
+      // Always count from live data - kz_player_statistics may be stale
+      {
         const countQuery = query.replace(
           /SELECT.*FROM/s,
           "SELECT COUNT(*) as total FROM",
