@@ -179,35 +179,39 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
     // Optimized: Use SQL aggregation with JSON functions for better performance
     let query = `
       SELECT 
-        steamid,
-        MAX(latest_name) as name,
-        MAX(avatar) as avatar,
+        p.steamid,
+        MAX(p.latest_name) as name,
+        MAX(p.avatar) as avatar,
         JSON_OBJECT(
-          'total_playtime', SUM(CASE WHEN game = 'csgo' THEN playtime ELSE 0 END),
-          'last_seen', MAX(CASE WHEN game = 'csgo' THEN last_seen END)
+          'total_playtime', SUM(CASE WHEN p.game = 'csgo' THEN p.playtime ELSE 0 END),
+          'last_seen', MAX(CASE WHEN p.game = 'csgo' THEN p.last_seen END)
         ) as csgo,
         JSON_OBJECT(
-          'total_playtime', SUM(CASE WHEN game = 'counterstrike2' THEN playtime ELSE 0 END),
-          'last_seen', MAX(CASE WHEN game = 'counterstrike2' THEN last_seen END)
+          'total_playtime', SUM(CASE WHEN p.game = 'counterstrike2' THEN p.playtime ELSE 0 END),
+          'last_seen', MAX(CASE WHEN p.game = 'counterstrike2' THEN p.last_seen END)
         ) as counterstrike2,
-        SUM(playtime) as _total_playtime,
-        MAX(last_seen) as _last_seen
-      FROM players 
+        SUM(p.playtime) as _total_playtime,
+        MAX(p.last_seen) as _last_seen,
+        MAX(pm.discord_id) as discord_id,
+        MAX(pm.permissions) as _permissions,
+        MAX(pm.whitelisted) as whitelisted
+      FROM players p
+      LEFT JOIN player_meta pm ON p.steamid = pm.steamid
       WHERE 1=1
     `;
     const params = [];
 
     if (game) {
-      query += " AND game = ?";
+      query += " AND p.game = ?";
       params.push(sanitizeString(game, 50));
     }
 
     if (name) {
-      query += " AND latest_name LIKE ?";
+      query += " AND p.latest_name LIKE ?";
       params.push(`%${sanitizeString(name, 100)}%`);
     }
 
-    query += " GROUP BY steamid";
+    query += " GROUP BY p.steamid";
 
     // Add SQL-based sorting instead of JavaScript sorting
     if (sortField === "total_playtime") {
@@ -215,7 +219,7 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
     } else if (sortField === "last_seen") {
       query += ` ORDER BY _last_seen ${sortOrder}`;
     } else {
-      query += ` ORDER BY steamid ${sortOrder}`;
+      query += ` ORDER BY p.steamid ${sortOrder}`;
     }
 
     // Add pagination in SQL
@@ -226,7 +230,13 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
 
     // Parse JSON fields from SQL (MariaDB/MySQL returns JSON as strings or buffers)
     const players = rawPlayers.map((row) => {
-      const { _total_playtime, _last_seen, ...player } = row;
+      const {
+        _total_playtime,
+        _last_seen,
+        _permissions,
+        whitelisted,
+        ...player
+      } = row;
 
       // Helper to parse JSON from various formats
       const parseJson = (value) => {
@@ -239,6 +249,9 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
 
       player.csgo = parseJson(row.csgo);
       player.counterstrike2 = parseJson(row.counterstrike2);
+      player.discord_id = player.discord_id || null;
+      player.permissions = _permissions ? parseJson(_permissions) : null;
+      player.whitelisted = Boolean(whitelisted);
 
       return player;
     });
@@ -568,6 +581,8 @@ router.get("/:steamid", async (req, res) => {
         steamid: steamid64,
         name: steamPlayer.name,
         avatar: steamPlayer.avatar,
+        discord_id: null,
+        permissions: null,
         csgo: {
           total_playtime: 0,
           last_seen: null,
@@ -599,11 +614,28 @@ router.get("/:steamid", async (req, res) => {
 
     const [stats] = await pool.query(statsQuery, statsParams);
 
+    // Fetch discord_id, permissions, and whitelisted from player_meta
+    const [[meta]] = await pool.query(
+      "SELECT discord_id, permissions, whitelisted FROM player_meta WHERE steamid = ?",
+      [steamid64],
+    );
+
+    const parseMetaJson = (value) => {
+      if (!value) return null;
+      if (typeof value === "string") return JSON.parse(value);
+      if (Buffer.isBuffer(value)) return JSON.parse(value.toString("utf8"));
+      if (typeof value === "object") return value;
+      return null;
+    };
+
     // Structure response by game type
     const response = {
       steamid: steamid64, // Always return SteamID64 format
       name: null,
       avatar: null,
+      discord_id: meta?.discord_id || null,
+      permissions: parseMetaJson(meta?.permissions),
+      whitelisted: Boolean(meta?.whitelisted),
       csgo: {},
       counterstrike2: {},
     };

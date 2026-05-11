@@ -2,6 +2,19 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
+const { isValidSteamID, convertToSteamID64 } = require("../utils/validators");
+
+const VALID_ROLES = [
+  "owner",
+  "admin",
+  "mod",
+  "dev",
+  "vip",
+  "vip+",
+  "contributor",
+  "og",
+  "gmc",
+];
 const { getStats: getScraperStats } = require("../services/kzRecordsScraper");
 const {
   getStats: getBanStatusStats,
@@ -547,6 +560,209 @@ router.post("/restore-all-jumpstats", async (req, res) => {
   } catch (error) {
     logger.error("Failed to restore all jumpstats", { error: error.message });
     res.status(500).json({ error: "Failed to restore all jumpstats" });
+  }
+});
+
+/**
+ * PUT /admin/players/:steamid/discord
+ * Set or update a player's Discord ID
+ * Body: { discord_id: "snowflake_string" }
+ */
+router.put("/players/:steamid/discord", async (req, res) => {
+  try {
+    const { steamid } = req.params;
+    const { discord_id } = req.body || {};
+
+    if (!isValidSteamID(steamid)) {
+      return res.status(400).json({ error: "Invalid SteamID format" });
+    }
+    const steamid64 = convertToSteamID64(steamid);
+    if (!steamid64) {
+      return res.status(400).json({ error: "Failed to convert SteamID" });
+    }
+
+    if (!discord_id || !/^\d{17,19}$/.test(String(discord_id))) {
+      return res
+        .status(400)
+        .json({ error: "Invalid Discord ID (must be 17-19 digit snowflake)" });
+    }
+
+    await pool.query(
+      `INSERT INTO player_meta (steamid, discord_id)
+       VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE discord_id = VALUES(discord_id), updated_at = CURRENT_TIMESTAMP`,
+      [steamid64, String(discord_id)],
+    );
+
+    logger.info(`Discord ID set for ${steamid64}: ${discord_id}`);
+    res.json({
+      success: true,
+      steamid: steamid64,
+      discord_id: String(discord_id),
+    });
+  } catch (error) {
+    logger.error("Failed to set discord_id", { error: error.message });
+    res.status(500).json({ error: "Failed to set discord_id" });
+  }
+});
+
+/**
+ * DELETE /admin/players/:steamid/discord
+ * Remove a player's linked Discord ID
+ */
+router.delete("/players/:steamid/discord", async (req, res) => {
+  try {
+    const { steamid } = req.params;
+
+    if (!isValidSteamID(steamid)) {
+      return res.status(400).json({ error: "Invalid SteamID format" });
+    }
+    const steamid64 = convertToSteamID64(steamid);
+    if (!steamid64) {
+      return res.status(400).json({ error: "Failed to convert SteamID" });
+    }
+
+    await pool.query(
+      `INSERT INTO player_meta (steamid, discord_id)
+       VALUES (?, NULL)
+       ON DUPLICATE KEY UPDATE discord_id = NULL, updated_at = CURRENT_TIMESTAMP`,
+      [steamid64],
+    );
+
+    logger.info(`Discord ID removed for ${steamid64}`);
+    res.json({ success: true, steamid: steamid64, discord_id: null });
+  } catch (error) {
+    logger.error("Failed to remove discord_id", { error: error.message });
+    res.status(500).json({ error: "Failed to remove discord_id" });
+  }
+});
+
+/**
+ * PUT /admin/players/:steamid/permissions
+ * Set or update a player's permissions
+ * Body: { roles: string[], customRole: string|null, customTag: string|null }
+ * Valid roles: owner, admin, mod, dev, vip, vip+, contributor, og, gmc
+ */
+router.put("/players/:steamid/permissions", async (req, res) => {
+  try {
+    const { steamid } = req.params;
+    const { roles, customRole = null, customTag = null } = req.body || {};
+
+    if (!isValidSteamID(steamid)) {
+      return res.status(400).json({ error: "Invalid SteamID format" });
+    }
+    const steamid64 = convertToSteamID64(steamid);
+    if (!steamid64) {
+      return res.status(400).json({ error: "Failed to convert SteamID" });
+    }
+
+    if (!Array.isArray(roles)) {
+      return res.status(400).json({ error: "roles must be an array" });
+    }
+    const invalidRoles = roles.filter((r) => !VALID_ROLES.includes(r));
+    if (invalidRoles.length) {
+      return res
+        .status(400)
+        .json({
+          error: `Invalid roles: ${invalidRoles.join(", ")}. Valid: ${VALID_ROLES.join(", ")}`,
+        });
+    }
+    if (
+      customTag !== null &&
+      customTag !== undefined &&
+      String(customTag).length > 50
+    ) {
+      return res
+        .status(400)
+        .json({ error: "customTag too long (max 50 chars)" });
+    }
+
+    const permissions = {
+      roles,
+      customRole: customRole || null,
+      customTag: customTag || null,
+    };
+
+    await pool.query(
+      `INSERT INTO player_meta (steamid, permissions)
+       VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE permissions = VALUES(permissions), updated_at = CURRENT_TIMESTAMP`,
+      [steamid64, JSON.stringify(permissions)],
+    );
+
+    logger.info(`Permissions set for ${steamid64}`, { permissions });
+    res.json({ success: true, steamid: steamid64, permissions });
+  } catch (error) {
+    logger.error("Failed to set permissions", { error: error.message });
+    res.status(500).json({ error: "Failed to set permissions" });
+  }
+});
+
+/**
+ * DELETE /admin/players/:steamid/permissions
+ * Remove a player's permissions (set to null)
+ */
+router.delete("/players/:steamid/permissions", async (req, res) => {
+  try {
+    const { steamid } = req.params;
+
+    if (!isValidSteamID(steamid)) {
+      return res.status(400).json({ error: "Invalid SteamID format" });
+    }
+    const steamid64 = convertToSteamID64(steamid);
+    if (!steamid64) {
+      return res.status(400).json({ error: "Failed to convert SteamID" });
+    }
+
+    await pool.query(
+      `INSERT INTO player_meta (steamid, permissions)
+       VALUES (?, NULL)
+       ON DUPLICATE KEY UPDATE permissions = NULL, updated_at = CURRENT_TIMESTAMP`,
+      [steamid64],
+    );
+
+    logger.info(`Permissions removed for ${steamid64}`);
+    res.json({ success: true, steamid: steamid64, permissions: null });
+  } catch (error) {
+    logger.error("Failed to remove permissions", { error: error.message });
+    res.status(500).json({ error: "Failed to remove permissions" });
+  }
+});
+
+/**
+ * PUT /admin/players/:steamid/whitelist
+ * Set or clear the whitelisted flag for a player
+ * Body: { whitelisted: boolean }
+ */
+router.put("/players/:steamid/whitelist", async (req, res) => {
+  try {
+    const { steamid } = req.params;
+    const { whitelisted } = req.body || {};
+
+    if (!isValidSteamID(steamid)) {
+      return res.status(400).json({ error: "Invalid SteamID format" });
+    }
+    const steamid64 = convertToSteamID64(steamid);
+    if (!steamid64) {
+      return res.status(400).json({ error: "Failed to convert SteamID" });
+    }
+
+    if (typeof whitelisted !== "boolean") {
+      return res.status(400).json({ error: "whitelisted must be a boolean" });
+    }
+
+    await pool.query(
+      `INSERT INTO player_meta (steamid, whitelisted)
+       VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE whitelisted = VALUES(whitelisted), updated_at = CURRENT_TIMESTAMP`,
+      [steamid64, whitelisted],
+    );
+
+    logger.info(`Whitelist set for ${steamid64}: ${whitelisted}`);
+    res.json({ success: true, steamid: steamid64, whitelisted });
+  } catch (error) {
+    logger.error("Failed to set whitelist", { error: error.message });
+    res.status(500).json({ error: "Failed to set whitelist" });
   }
 });
 

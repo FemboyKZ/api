@@ -297,7 +297,8 @@ describe("Players Endpoints", () => {
               last_seen: "2025-10-26T14:00:00Z",
             },
           ],
-        ]);
+        ])
+        .mockResolvedValueOnce([[]]);
 
       const response = await request(app)
         .get("/players/76561198000000001")
@@ -360,7 +361,8 @@ describe("Players Endpoints", () => {
               last_seen: "2025-10-26T12:00:00Z",
             },
           ],
-        ]);
+        ])
+        .mockResolvedValueOnce([[]]);
 
       const response = await request(app)
         .get("/players/STEAM_0:1:12345")
@@ -400,7 +402,8 @@ describe("Players Endpoints", () => {
               last_seen: "2025-10-26T14:00:00Z",
             },
           ],
-        ]);
+        ])
+        .mockResolvedValueOnce([[]]);
 
       const response = await request(app)
         .get("/players/[U:1:24691]")
