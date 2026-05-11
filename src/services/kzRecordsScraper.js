@@ -221,12 +221,31 @@ function convertTimestamp(isoString) {
 }
 
 /**
+ * Convert SteamID2 string (STEAM_X:Y:Z) to SteamID64 string.
+ * Uses BigInt to avoid float64 precision loss on large account IDs.
+ */
+function steamId2ToSteamId64(steamId) {
+  const match = steamId && steamId.match(/^STEAM_\d+:(\d+):(\d+)$/);
+  if (!match) return null;
+  const authBit = BigInt(match[1]);
+  const accountId = BigInt(match[2]);
+  return String(76561197960265728n + accountId * 2n + authBit);
+}
+
+/**
  * Get or create player ID (returns auto-increment ID from kz_players table)
  * Also returns steamid64 for denormalized storage in kz_records
  */
 async function getOrCreatePlayer(connection, record) {
-  // Keep steamid64 as string to preserve precision (no parseInt)
-  let steamid64 = record.steamid64 ? String(record.steamid64) : null;
+  // Derive steamid64 from steam_id string first to avoid float64 precision loss.
+  // JSON numbers like 76561198268569118 exceed Number.MAX_SAFE_INTEGER and get
+  // rounded by JS (e.g. to ...120), so we can't trust record.steamid64 directly.
+  let steamid64 = steamId2ToSteamId64(record.steam_id);
+
+  // Fall back to the raw field only if steam_id is missing/invalid
+  if (!steamid64) {
+    steamid64 = record.steamid64 ? String(record.steamid64) : null;
+  }
 
   if (!steamid64) {
     const recordId = record.id || Math.floor(Math.random() * 1000000);
