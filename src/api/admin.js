@@ -656,6 +656,47 @@ router.delete("/players/:steamid/discord", async (req, res) => {
 });
 
 /**
+ * POST /admin/players/register
+ * Create or update a player entry with zero playtime.
+ * Used when a player visits their profile before ever playing on a server.
+ * Body: { steamid, name, avatar }
+ */
+router.post("/players/register", async (req, res) => {
+  try {
+    const { steamid, name, avatar } = req.body || {};
+
+    if (!isValidSteamID(steamid)) {
+      return res.status(400).json({ error: "Invalid SteamID format" });
+    }
+    const steamid64 = convertToSteamID64(steamid);
+    if (!steamid64) {
+      return res.status(400).json({ error: "Failed to convert SteamID" });
+    }
+
+    const safeName = typeof name === "string" ? name.slice(0, 255) : null;
+    const safeAvatar = typeof avatar === "string" ? avatar.slice(0, 255) : null;
+
+    // Upsert a placeholder row (game='csgo') so the player appears in the DB.
+    // The real playtime rows will be created when they first play on a server.
+    await pool.query(
+      `INSERT INTO players (steamid, latest_name, avatar, avatar_updated_at, game, playtime, server_ip, server_port, last_seen)
+       VALUES (?, ?, ?, NOW(), 'csgo', 0, '0.0.0.0', 0, NOW())
+       ON DUPLICATE KEY UPDATE
+         latest_name = COALESCE(VALUES(latest_name), latest_name),
+         avatar = COALESCE(VALUES(avatar), avatar),
+         avatar_updated_at = NOW()`,
+      [steamid64, safeName, safeAvatar],
+    );
+
+    logger.info(`Registered player ${steamid64} (${safeName}) via profile visit`);
+    res.json({ success: true, steamid: steamid64 });
+  } catch (error) {
+    logger.error("Failed to register player", { error: error.message });
+    res.status(500).json({ error: "Failed to register player" });
+  }
+});
+
+/**
  * PUT /admin/players/:steamid/permissions
  * Set or update a player's permissions
  * Body: {
