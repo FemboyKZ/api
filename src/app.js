@@ -20,6 +20,7 @@ const kzServersRouter = require("./api/kzServers");
 const kzBansRouter = require("./api/kzBans");
 const kzLocalRouter = require("./api/kzLocal");
 const kzLocalCS2Router = require("./api/kzLocalCS2");
+const chatRouter = require("./api/chat");
 const errorHandler = require("./utils/errorHandler");
 const logger = require("./utils/logger");
 const {
@@ -108,6 +109,8 @@ app.use("/maps", mapsRouter);
 app.use("/health", healthRouter);
 app.use("/history", historyRouter);
 app.use("/admin", adminAuth, adminRouter);
+
+app.use("/chat", adminAuth, chatRouter);
 
 // KZ Global endpoints
 app.use("/kzglobal/records", kzRecordsRouter);

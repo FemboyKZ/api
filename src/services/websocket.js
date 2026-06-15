@@ -133,6 +133,20 @@ function emitStatsUpdate(stats) {
 }
 
 /**
+ * Emit a cross-server chat message to web subscribers
+ * @param {Object} data - { alias, game, region, name, message, team }
+ */
+function emitChatMessage(data) {
+  if (!io) return;
+
+  io.to("chat").to("all").emit("chat:message", {
+    type: "chat:message",
+    data,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+/**
  * Broadcast message to all connected clients
  * @param {string} event - Event name
  * @param {Object} data - Event data
@@ -179,6 +193,7 @@ module.exports = {
   emitPlayerUpdate,
   emitMapUpdate,
   emitStatsUpdate,
+  emitChatMessage,
   broadcast,
   getWebSocketStats,
   closeWebSocket,
