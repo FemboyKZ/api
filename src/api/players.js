@@ -45,6 +45,11 @@ const { getPlayerSummary } = require("../services/steamQuery");
  *               type: string
  *               format: date-time
  *               example: "2025-10-26T12:00:00Z"
+ *             playtime_modes:
+ *               type: object
+ *               nullable: true
+ *               description: Per-gamemode playtime in seconds (gokz keys kz_vanilla/kz_simple/kz_timer). Null if the player has no row for this game.
+ *               example: { "kz_vanilla": 1200, "kz_simple": 8400, "kz_timer": 2850 }
  *         counterstrike2:
  *           type: object
  *           description: CS2 statistics (empty object if player hasn't played CS2)
@@ -57,6 +62,11 @@ const { getPlayerSummary } = require("../services/steamQuery");
  *               type: string
  *               format: date-time
  *               example: "2025-10-26T14:30:00Z"
+ *             playtime_modes:
+ *               type: object
+ *               nullable: true
+ *               description: Per-gamemode playtime in seconds (cs2kz keys cs2kz_vnl/cs2kz_ckz). Null if the player has no row for this game.
+ *               example: { "cs2kz_vnl": null, "cs2kz_ckz": null }
  *     PlayerDetails:
  *       type: object
  *       properties:
@@ -76,6 +86,10 @@ const { getPlayerSummary } = require("../services/steamQuery");
  *             last_seen:
  *               type: string
  *               format: date-time
+ *             playtime_modes:
+ *               type: object
+ *               nullable: true
+ *               description: Per-gamemode playtime in seconds. gokz keys kz_vanilla/kz_simple/kz_timer; cs2kz keys cs2kz_vnl/cs2kz_ckz.
  *             sessions:
  *               type: array
  *               items:
@@ -88,6 +102,10 @@ const { getPlayerSummary } = require("../services/steamQuery");
  *             last_seen:
  *               type: string
  *               format: date-time
+ *             playtime_modes:
+ *               type: object
+ *               nullable: true
+ *               description: Per-gamemode playtime in seconds. gokz keys kz_vanilla/kz_simple/kz_timer; cs2kz keys cs2kz_vnl/cs2kz_ckz.
  *             sessions:
  *               type: array
  *               items:
@@ -190,6 +208,8 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
           'total_playtime', SUM(CASE WHEN p.game = 'counterstrike2' THEN p.playtime ELSE 0 END),
           'last_seen', MAX(CASE WHEN p.game = 'counterstrike2' THEN p.last_seen END)
         ) as counterstrike2,
+        MAX(CASE WHEN p.game = 'csgo' THEN CAST(p.playtime_modes AS CHAR) END) as _csgo_modes,
+        MAX(CASE WHEN p.game = 'counterstrike2' THEN CAST(p.playtime_modes AS CHAR) END) as _cs2_modes,
         SUM(p.playtime) as _total_playtime,
         MAX(p.last_seen) as _last_seen,
         MAX(pm.discord_id) as discord_id,
@@ -235,6 +255,8 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
         _last_seen,
         _permissions,
         whitelisted,
+        _csgo_modes,
+        _cs2_modes,
         ...player
       } = row;
 
@@ -247,8 +269,24 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
         return {};
       };
 
+      // Per-mode playtime is null when the player has no row for that game.
+      const parseModes = (value) => {
+        if (!value) return null;
+        if (typeof value === "string") return JSON.parse(value);
+        if (Buffer.isBuffer(value)) return JSON.parse(value.toString("utf8"));
+        if (typeof value === "object") return value;
+        return null;
+      };
+
       player.csgo = parseJson(row.csgo);
       player.counterstrike2 = parseJson(row.counterstrike2);
+      // Annotate only a game the player has actually played (leave {} otherwise).
+      if (Object.keys(player.csgo).length > 0) {
+        player.csgo.playtime_modes = parseModes(_csgo_modes);
+      }
+      if (Object.keys(player.counterstrike2).length > 0) {
+        player.counterstrike2.playtime_modes = parseModes(_cs2_modes);
+      }
       player.discord_id = player.discord_id || null;
       player.permissions = _permissions ? parseJson(_permissions) : null;
       player.whitelisted = Boolean(whitelisted);
