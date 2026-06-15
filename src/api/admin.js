@@ -688,7 +688,9 @@ router.post("/players/register", async (req, res) => {
       [steamid64, safeName, safeAvatar],
     );
 
-    logger.info(`Registered player ${steamid64} (${safeName}) via profile visit`);
+    logger.info(
+      `Registered player ${steamid64} (${safeName}) via profile visit`,
+    );
     res.json({ success: true, steamid: steamid64 });
   } catch (error) {
     logger.error("Failed to register player", { error: error.message });
@@ -734,11 +736,9 @@ router.put("/players/:steamid/permissions", async (req, res) => {
     let validatedCustomRole = null;
     if (customRole !== null && customRole !== undefined) {
       if (typeof customRole !== "object" || Array.isArray(customRole)) {
-        return res
-          .status(400)
-          .json({
-            error: "customRole must be an object { id, color, name } or null",
-          });
+        return res.status(400).json({
+          error: "customRole must be an object { id, color, name } or null",
+        });
       }
       const { id, color, name } = customRole;
       if (!id || typeof id !== "string") {
@@ -767,11 +767,9 @@ router.put("/players/:steamid/permissions", async (req, res) => {
     let validatedCustomTag = null;
     if (customTag !== null && customTag !== undefined) {
       if (typeof customTag !== "object" || Array.isArray(customTag)) {
-        return res
-          .status(400)
-          .json({
-            error: "customTag must be an object { color, name } or null",
-          });
+        return res.status(400).json({
+          error: "customTag must be an object { color, name } or null",
+        });
       }
       const { color, name } = customTag;
       if (!color || !VALID_TAG_COLORS.includes(color)) {

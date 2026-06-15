@@ -231,8 +231,8 @@ describe("KZ Players Endpoints", () => {
       };
 
       mockPool.query
-        .mockResolvedValueOnce([[{ total: 1 }]])  // COUNT(*) live count
-        .mockResolvedValueOnce([[recordData]]);   // records query
+        .mockResolvedValueOnce([[{ total: 1 }]]) // COUNT(*) live count
+        .mockResolvedValueOnce([[recordData]]); // records query
 
       const response = await request(app)
         .get("/kzglobal/players/76561198000000001/records")
