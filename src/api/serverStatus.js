@@ -293,10 +293,11 @@ router.post("/", async (req, res) => {
             );
             setVals.push(delta);
           } else {
-            // No data yet:
-            // show the mode key with null, but never clobber a value already accrued.
+            // No data yet: show the mode key with null, but never clobber a
+            // value already accrued. JSON_EXTRACT returns the existing value, or
+            // SQL NULL (-> JSON null) when the key is absent.
             setExprs.push(
-              `'$."${key}"', COALESCE(JSON_EXTRACT(playtime_modes, '$."${key}"'), CAST('null' AS JSON))`,
+              `'$."${key}"', JSON_EXTRACT(playtime_modes, '$."${key}"')`,
             );
           }
         }

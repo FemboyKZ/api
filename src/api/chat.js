@@ -70,6 +70,14 @@ router.post("/messages", (req, res) => {
  * Response: { cursor, messages: [{ id, alias, game, name, message, team }] }
  */
 router.get("/stream", (req, res) => {
+  // Long-poll responses repeat (e.g. an empty {messages:[]} on timeout), so
+  // Express' ETag would make the client's next request 304 Not Modified. Drop
+  // the conditional request headers and disable caching so every poll gets a
+  // fresh 200 the plugin can parse.
+  delete req.headers["if-none-match"];
+  delete req.headers["if-modified-since"];
+  res.set("Cache-Control", "no-store");
+
   const after = parseInt(req.query.after, 10);
   const cursor = Number.isFinite(after) ? after : -1;
 
