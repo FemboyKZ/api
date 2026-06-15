@@ -29,7 +29,7 @@ const currentMapStates = new Map();
  * Expected payload (from plugin BuildPayload):
  * {
  *   server: { hostname, ip, port, os, map, players, max_players, bot_count, version, tickrate, secure, mm_version, sm_version, gokz_loaded, cs2kz_loaded, plugins: [...] },
- *   players: [{ steamid, name, ip, time_on_server, in_game, gokz?: { mode, timer_running, paused, time, course, teleports }, cs2kz?: { ... }, playtime_modes?: { kz_vanilla, kz_simple, kz_timer } }]
+ *   players: [{ steamid, name, ip, time_on_server, in_game, gokz?: { mode, timer_running, paused, time, course, teleports }, cs2kz?: { ... }, playtime_modes?: { kz_vanilla, kz_simple, kz_timer } | { cs2kz_vnl, cs2kz_ckz } }]
  * }
  */
 router.get("/", (req, res) => {
@@ -271,10 +271,19 @@ router.post("/", async (req, res) => {
       // cs2kz servers send no breakdown, so they keep total-only.
       const modeDeltas = player.playtime_modes;
       if (modeDeltas && typeof modeDeltas === "object") {
-        const ALLOWED_MODES = ["kz_vanilla", "kz_simple", "kz_timer"];
+        // gokz (csgo): kz_vanilla / kz_simple / kz_timer.
+        // cs2kz (counterstrike2): vnl / ckz.
+        const ALLOWED_MODES = [
+          "kz_vanilla",
+          "kz_simple",
+          "kz_timer",
+          "cs2kz_vnl",
+          "cs2kz_ckz",
+        ];
         const setExprs = [];
         const setVals = [];
         for (const key of ALLOWED_MODES) {
+          if (!(key in modeDeltas)) continue; // only modes the plugin reported
           const raw = Number(modeDeltas[key]);
           if (Number.isFinite(raw) && raw > 0) {
             // Clamp per report to guard against a buggy/abusive delta.
@@ -283,6 +292,12 @@ router.post("/", async (req, res) => {
               `'$."${key}"', COALESCE(JSON_EXTRACT(playtime_modes, '$."${key}"'), 0) + ?`,
             );
             setVals.push(delta);
+          } else {
+            // No data yet:
+            // show the mode key with null, but never clobber a value already accrued.
+            setExprs.push(
+              `'$."${key}"', COALESCE(JSON_EXTRACT(playtime_modes, '$."${key}"'), CAST('null' AS JSON))`,
+            );
           }
         }
         if (setExprs.length > 0) {

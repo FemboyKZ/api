@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS players (
     latest_name VARCHAR(255) DEFAULT NULL COMMENT 'Most recent name seen',
     game VARCHAR(50) NOT NULL COMMENT 'Game type: csgo, counterstrike2, etc.',
     playtime INT DEFAULT 0 COMMENT 'Total playtime in seconds (all modes)',
-    playtime_modes JSON DEFAULT NULL COMMENT 'Per-gamemode playtime in seconds, e.g. {"kz_vanilla":123,"kz_simple":45,"kz_timer":6}. Null for cs2kz (no mode data yet).',
+    playtime_modes JSON DEFAULT NULL COMMENT 'Per-gamemode playtime in seconds. gokz: {kz_vanilla,kz_simple,kz_timer}; cs2kz: {cs2kz_vnl,cs2kz_ckz}',
     server_ip VARCHAR(45),
     server_port INT,
     latest_ip VARCHAR(45) DEFAULT NULL COMMENT 'Most recent IP address seen (private)',
