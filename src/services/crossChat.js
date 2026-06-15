@@ -200,6 +200,19 @@ function wakeWaiters() {
  * client went away and no response should be written.
  */
 function wait(after, excludeKey, timeoutMs) {
+  // Handshake: a fresh reader (after < 0) just syncs to the current cursor with no backlog,
+  // so a server joining mid-session never replays old chat.
+  if (after < 0) {
+    return {
+      promise: Promise.resolve({
+        cursor: headId(),
+        messages: [],
+        aborted: false,
+      }),
+      cancel: () => {},
+    };
+  }
+
   const backlog = getSince(after, excludeKey);
   if (backlog.length > 0) {
     return {
