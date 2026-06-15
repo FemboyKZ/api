@@ -16,7 +16,10 @@ const { startBanCleanupJob } = require("./services/kzBanStatus");
 const { startWorldRecordsSyncJob } = require("./services/wrSync");
 const { startPlayerPBsSyncJob } = require("./services/playerPBsSync");
 const { initWebSocket } = require("./services/websocket");
-const { loadServerLookup } = require("./services/crossChat");
+const {
+  loadServerLookup,
+  startChatCleanupJob,
+} = require("./services/crossChat");
 const { initRedis, closeRedis } = require("./db/redis");
 const { loadMessageIds } = require("./services/discordWebhook");
 const { startWorldRecordsCacheJob } = require("./services/worldRecordsCache");
@@ -60,6 +63,9 @@ async function startServer() {
 
     // Load ip:port -> alias map for the cross-server chat relay
     loadServerLookup();
+
+    // Prune chat history past the retention window (daily)
+    startChatCleanupJob();
 
     // Step 6: Load Discord message IDs from database (before starting server)
     if (process.env.DISCORD_WEBHOOK_ENABLED === "true") {

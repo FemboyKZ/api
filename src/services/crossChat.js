@@ -29,6 +29,7 @@ const { emitChatMessage } = require("./websocket");
 const RING_CAPACITY = 300; // messages kept in memory for late readers
 const MAX_MESSAGE_LEN = 512;
 const MAX_NAME_LEN = 64;
+const RETENTION_DAYS = 30; // chat_messages older than this are pruned
 
 // ip:port -> { alias, game, region }
 let serverLookup = new Map();
@@ -200,9 +201,11 @@ function wakeWaiters() {
  * client went away and no response should be written.
  */
 function wait(after, excludeKey, timeoutMs) {
-  // Handshake: a fresh reader (after < 0) just syncs to the current cursor with no backlog,
-  // so a server joining mid-session never replays old chat.
-  if (after < 0) {
+  // Handshake: a fresh reader (after < 0) or one whose cursor is ahead of
+  // ours because the API restarted and the in-memory cursor reset (after > head)
+  // just syncs to the current cursor with no backlog, so a server never
+  // replays old chat and never gets stuck waiting for an id we'll never reach.
+  if (after < 0 || after > headId()) {
     return {
       promise: Promise.resolve({
         cursor: headId(),
@@ -245,8 +248,37 @@ function wait(after, excludeKey, timeoutMs) {
   return { promise, cancel };
 }
 
+/** Delete chat_messages older than the retention window. */
+async function purgeOldMessages() {
+  try {
+    const [result] = await pool.query(
+      `DELETE FROM chat_messages WHERE created_at < (NOW() - INTERVAL ${RETENTION_DAYS} DAY)`,
+    );
+    if (result.affectedRows > 0) {
+      logger.info(
+        `Cross-chat: pruned ${result.affectedRows} message(s) older than ${RETENTION_DAYS}d`,
+      );
+    }
+  } catch (e) {
+    logger.error(`Cross-chat prune failed: ${e.message}`);
+  }
+}
+
+/**
+ * Start the retention job: prune once now, then on a fixed interval.
+ * @param {number} intervalMs - how often to prune (default: daily)
+ */
+function startChatCleanupJob(intervalMs = 24 * 60 * 60 * 1000) {
+  purgeOldMessages();
+  setInterval(purgeOldMessages, intervalMs);
+  logger.info(
+    `Cross-chat retention job started (${RETENTION_DAYS}d, every ${intervalMs / 1000 / 60 / 60}h)`,
+  );
+}
+
 module.exports = {
   loadServerLookup,
+  startChatCleanupJob,
   addMessage,
   wait,
   headId,
