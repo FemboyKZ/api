@@ -29,7 +29,7 @@ const currentMapStates = new Map();
  * Expected payload (from plugin BuildPayload):
  * {
  *   server: { hostname, ip, port, os, map, players, max_players, bot_count, version, tickrate, secure, mm_version, sm_version, gokz_loaded, cs2kz_loaded, plugins: [...] },
- *   players: [{ steamid, name, ip, time_on_server, in_game, gokz?: { mode, timer_running, paused, time, course, teleports }, cs2kz?: { ... } }]
+ *   players: [{ steamid, name, ip, time_on_server, in_game, gokz?: { mode, timer_running, paused, time, course, teleports }, cs2kz?: { ... }, playtime_modes?: { kz_vanilla, kz_simple, kz_timer } }]
  * }
  */
 router.get("/", (req, res) => {
@@ -264,6 +264,36 @@ router.post("/", async (req, res) => {
           PLAYTIME_INCREMENT,
         ],
       );
+
+      // Per-gamemode playtime:
+      // merge-add the deltas the plugin reports for this interval.
+      // `playtime` above stays the total.
+      // cs2kz servers send no breakdown, so they keep total-only.
+      const modeDeltas = player.playtime_modes;
+      if (modeDeltas && typeof modeDeltas === "object") {
+        const ALLOWED_MODES = ["kz_vanilla", "kz_simple", "kz_timer"];
+        const setExprs = [];
+        const setVals = [];
+        for (const key of ALLOWED_MODES) {
+          const raw = Number(modeDeltas[key]);
+          if (Number.isFinite(raw) && raw > 0) {
+            // Clamp per report to guard against a buggy/abusive delta.
+            const delta = Math.min(Math.round(raw), 3600);
+            setExprs.push(
+              `'$."${key}"', COALESCE(JSON_EXTRACT(playtime_modes, '$."${key}"'), 0) + ?`,
+            );
+            setVals.push(delta);
+          }
+        }
+        if (setExprs.length > 0) {
+          await pool.query(
+            `UPDATE players
+             SET playtime_modes = JSON_SET(COALESCE(playtime_modes, JSON_OBJECT()), ${setExprs.join(", ")})
+             WHERE steamid = ? AND game = ?`,
+            [...setVals, player.steamid, game],
+          );
+        }
+      }
 
       // Store player IP privately (not in players table)
       if (player.ip) {

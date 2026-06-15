@@ -585,11 +585,13 @@ router.get("/:steamid", async (req, res) => {
         permissions: null,
         csgo: {
           total_playtime: 0,
+          playtime_modes: null,
           last_seen: null,
           sessions: [],
         },
         counterstrike2: {
           total_playtime: 0,
+          playtime_modes: null,
           last_seen: null,
           sessions: [],
         },
@@ -602,7 +604,7 @@ router.get("/:steamid", async (req, res) => {
     }
 
     let statsQuery =
-      "SELECT game, SUM(playtime) as total_playtime, MAX(last_seen) as last_seen FROM players WHERE steamid = ?";
+      "SELECT game, SUM(playtime) as total_playtime, ANY_VALUE(playtime_modes) as playtime_modes, MAX(last_seen) as last_seen FROM players WHERE steamid = ?";
     const statsParams = [steamid64];
 
     if (game) {
@@ -655,12 +657,14 @@ router.get("/:steamid", async (req, res) => {
         const gameSessions = rows
           .filter((row) => row.game === gameKey)
           .map((session) => {
-            const { latest_ip, name, ...sessionWithoutIp } = session;
+            const { latest_ip, name, playtime_modes, ...sessionWithoutIp } =
+              session;
             return sessionWithoutIp;
           });
 
         response[gameKey] = {
           total_playtime: parseInt(stat.total_playtime, 10) || 0,
+          playtime_modes: parseMetaJson(stat.playtime_modes),
           last_seen: stat.last_seen,
           sessions: gameSessions,
         };
