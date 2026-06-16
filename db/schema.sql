@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS player_meta (
     id INT AUTO_INCREMENT PRIMARY KEY,
     steamid VARCHAR(20) NOT NULL,
     discord_id VARCHAR(30) DEFAULT NULL COMMENT 'Discord user ID (snowflake)',
+    discord_username VARCHAR(64) DEFAULT NULL COMMENT 'Discord display name (cached for UI)',
     email VARCHAR(255) DEFAULT NULL COMMENT 'Verified contact email (lowercased), private',
     email_verified_at TIMESTAMP NULL DEFAULT NULL COMMENT 'When email was verified',
     total_spent_eur DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'Lifetime EUR credited (claimed + gifted-in)',

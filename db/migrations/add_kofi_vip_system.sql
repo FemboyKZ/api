@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS kofi_transactions (
 -- MySQL UNIQUE permits multiple NULLs, so unlinked players are unaffected.
 -- ---------------------------------------------------------------------------
 ALTER TABLE player_meta
+  ADD COLUMN discord_username VARCHAR(64) DEFAULT NULL COMMENT 'Discord display name (cached for UI)',
   ADD COLUMN email VARCHAR(255) DEFAULT NULL COMMENT 'Verified contact email (lowercased), private',
   ADD COLUMN email_verified_at TIMESTAMP NULL DEFAULT NULL COMMENT 'When email was verified',
   ADD COLUMN total_spent_eur DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'Lifetime EUR credited (claimed + gifted-in)',

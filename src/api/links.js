@@ -216,11 +216,11 @@ router.delete("/email", async (req, res) => {
 /**
  * PUT /links/discord
  * Link/replace a player's Discord ID (ownership assumed proven upstream).
- * Body: { steamid, discordId }
+ * Body: { steamid, discordId, discordUsername? }
  */
 router.put("/discord", async (req, res) => {
   try {
-    const { steamid, discordId } = req.body || {};
+    const { steamid, discordId, discordUsername } = req.body || {};
     const steamid64 = resolveSteamID(steamid);
     if (!steamid64) {
       return res.status(400).json({ error: "Invalid SteamID format" });
@@ -228,6 +228,10 @@ router.put("/discord", async (req, res) => {
     if (!DISCORD_ID_RE.test(String(discordId || ""))) {
       return res.status(400).json({ error: "Invalid Discord ID" });
     }
+    const username =
+      typeof discordUsername === "string" && discordUsername.trim()
+        ? discordUsername.trim().slice(0, 64)
+        : null;
 
     const [rows] = await pool.query(
       "SELECT discord_id FROM player_meta WHERE steamid = ?",
@@ -238,14 +242,21 @@ router.put("/discord", async (req, res) => {
       await logContact(steamid64, "discord", old, "replaced");
     }
     await pool.query(
-      `INSERT INTO player_meta (steamid, discord_id)
-       VALUES (?, ?)
-       ON DUPLICATE KEY UPDATE discord_id = VALUES(discord_id), updated_at = CURRENT_TIMESTAMP`,
-      [steamid64, discordId],
+      `INSERT INTO player_meta (steamid, discord_id, discord_username)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE discord_id = VALUES(discord_id),
+                               discord_username = VALUES(discord_username),
+                               updated_at = CURRENT_TIMESTAMP`,
+      [steamid64, discordId, username],
     );
     await logContact(steamid64, "discord", discordId, "linked");
     logger.info(`Contacts: discord linked for ${steamid64}`);
-    res.json({ success: true, steamid: steamid64, discordId });
+    res.json({
+      success: true,
+      steamid: steamid64,
+      discordId,
+      discordUsername: username,
+    });
   } catch (error) {
     logger.error("Contacts: discord link failed", { error: error.message });
     res.status(500).json({ error: "Failed to link discord" });
@@ -271,7 +282,7 @@ router.delete("/discord", async (req, res) => {
       return res.status(404).json({ error: "No discord linked" });
     }
     await pool.query(
-      "UPDATE player_meta SET discord_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE steamid = ?",
+      "UPDATE player_meta SET discord_id = NULL, discord_username = NULL, updated_at = CURRENT_TIMESTAMP WHERE steamid = ?",
       [steamid64],
     );
     await logContact(steamid64, "discord", old, "unlinked");
@@ -343,7 +354,7 @@ router.get("/:steamid", async (req, res) => {
       return res.status(400).json({ error: "Invalid SteamID format" });
     }
     const [meta] = await pool.query(
-      `SELECT steamid, email, email_verified_at, discord_id
+      `SELECT steamid, email, email_verified_at, discord_id, discord_username
        FROM player_meta WHERE steamid = ?`,
       [steamid64],
     );
