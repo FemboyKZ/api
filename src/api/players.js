@@ -620,6 +620,7 @@ router.get("/:steamid", async (req, res) => {
         name: steamPlayer.name,
         avatar: steamPlayer.avatar,
         discord_id: null,
+        discord_username: null,
         permissions: null,
         csgo: {
           total_playtime: 0,
@@ -656,7 +657,7 @@ router.get("/:steamid", async (req, res) => {
 
     // Fetch discord_id, permissions, and whitelisted from player_meta
     const [[meta]] = await pool.query(
-      "SELECT discord_id, permissions, whitelisted FROM player_meta WHERE steamid = ?",
+      "SELECT discord_id, discord_username, permissions, whitelisted FROM player_meta WHERE steamid = ?",
       [steamid64],
     );
 
@@ -674,6 +675,7 @@ router.get("/:steamid", async (req, res) => {
       name: null,
       avatar: null,
       discord_id: meta?.discord_id || null,
+      discord_username: meta?.discord_username || null,
       permissions: parseMetaJson(meta?.permissions),
       whitelisted: Boolean(meta?.whitelisted),
       csgo: {},
