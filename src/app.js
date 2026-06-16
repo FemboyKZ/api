@@ -21,6 +21,9 @@ const kzBansRouter = require("./api/kzBans");
 const kzLocalRouter = require("./api/kzLocal");
 const kzLocalCS2Router = require("./api/kzLocalCS2");
 const chatRouter = require("./api/chat");
+const kofiRouter = require("./api/kofi");
+const linksRouter = require("./api/links");
+const vipRouter = require("./api/vip");
 const errorHandler = require("./utils/errorHandler");
 const logger = require("./utils/logger");
 const {
@@ -111,6 +114,16 @@ app.use("/history", historyRouter);
 app.use("/admin", adminAuth, adminRouter);
 
 app.use("/chat", adminAuth, chatRouter);
+
+// Ko-fi webhooks + donation tracking (router applies adminAuth per-route,
+// the public /kofi/webhook is verified by Ko-fi's verification_token)
+app.use("/kofi", kofiRouter);
+
+// Player contact linking (email verification + discord), private/admin-authed
+app.use("/links", linksRouter);
+
+// VIP status, gift-token redemption, self-serve custom role/tag (admin-authed)
+app.use("/vip", vipRouter);
 
 // KZ Global endpoints
 app.use("/kzglobal/records", kzRecordsRouter);

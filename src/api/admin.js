@@ -4,34 +4,7 @@ const pool = require("../db");
 const logger = require("../utils/logger");
 const { isValidSteamID, convertToSteamID64 } = require("../utils/validators");
 
-const VALID_ROLES = [
-  "owner",
-  "admin",
-  "mod",
-  "dev",
-  "vip",
-  "vip+",
-  "contributor",
-  "og",
-  "gmc",
-];
-const VALID_TAG_COLORS = [
-  "default",
-  "darkred",
-  "purple",
-  "green",
-  "olive",
-  "lime",
-  "red",
-  "grey",
-  "yellow",
-  "bluegrey",
-  "blue",
-  "darkblue",
-  "orchid",
-  "lightred",
-  "gold",
-];
+const { VALID_ROLES, VALID_TAG_COLORS } = require("../config/permissions");
 const { getStats: getScraperStats } = require("../services/kzRecordsScraper");
 const {
   getStats: getBanStatusStats,

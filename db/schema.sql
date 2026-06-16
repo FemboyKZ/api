@@ -95,6 +95,11 @@ CREATE TABLE IF NOT EXISTS player_meta (
     id INT AUTO_INCREMENT PRIMARY KEY,
     steamid VARCHAR(20) NOT NULL,
     discord_id VARCHAR(30) DEFAULT NULL COMMENT 'Discord user ID (snowflake)',
+    email VARCHAR(255) DEFAULT NULL COMMENT 'Verified contact email (lowercased), private',
+    email_verified_at TIMESTAMP NULL DEFAULT NULL COMMENT 'When email was verified',
+    total_spent_eur DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'Lifetime EUR credited (claimed + gifted-in)',
+    gift_tokens INT NOT NULL DEFAULT 0 COMMENT 'Available VIP gift tokens to redeem to others',
+    gift_tokens_granted INT NOT NULL DEFAULT 0 COMMENT 'Lifetime gift tokens granted (prevents re-grant)',
     permissions JSON DEFAULT NULL COMMENT 'Null if no permissions, else {roles:[], customRole:{id,color,name}|null, customTag:{color,name}|null}',
     whitelisted BOOLEAN DEFAULT FALSE COMMENT 'Whether the player is whitelisted',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -102,7 +107,90 @@ CREATE TABLE IF NOT EXISTS player_meta (
     UNIQUE KEY unique_steamid (steamid),
     INDEX idx_steamid (steamid),
     INDEX idx_discord_id (discord_id),
+    UNIQUE KEY uniq_email (email),
     INDEX idx_whitelisted (whitelisted)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Pending email verifications (raw token returned once to caller; only hash stored)
+CREATE TABLE IF NOT EXISTS player_email_verifications (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    steamid VARCHAR(20) NOT NULL,
+    email VARCHAR(255) NOT NULL COMMENT 'Email being verified (lowercased)',
+    token_hash CHAR(64) NOT NULL COMMENT 'SHA-256 hex of the verification token',
+    expires_at TIMESTAMP NOT NULL,
+    consumed_at TIMESTAMP NULL DEFAULT NULL COMMENT 'When the token was used (null = unused)',
+    attempts INT NOT NULL DEFAULT 0 COMMENT 'Failed verify attempts against this record',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_token (token_hash),
+    INDEX idx_steamid (steamid),
+    INDEX idx_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Contact history: every email/discord ever linked/replaced/unlinked (fraud detection, PRIVATE)
+CREATE TABLE IF NOT EXISTS player_contact_history (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    steamid VARCHAR(20) NOT NULL,
+    type VARCHAR(16) NOT NULL COMMENT 'email | discord',
+    value VARCHAR(255) NOT NULL COMMENT 'The email or discord_id (lowercased for email)',
+    action VARCHAR(16) NOT NULL COMMENT 'linked | unlinked | replaced',
+    note VARCHAR(255) DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_steamid (steamid),
+    INDEX idx_value (value),
+    INDEX idx_type_value (type, value),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Ko-fi transactions: webhook events (tips, subscriptions, commissions, shop orders)
+CREATE TABLE IF NOT EXISTS kofi_transactions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    message_id VARCHAR(64) NOT NULL COMMENT 'Ko-fi message_id (uuid) - used for idempotent dedupe',
+    kofi_transaction_id VARCHAR(64) DEFAULT NULL COMMENT 'Ko-fi internal transaction id',
+    type VARCHAR(32) NOT NULL COMMENT 'Tip | Subscription | Commission | Shop Order',
+    from_name VARCHAR(255) DEFAULT NULL,
+    email VARCHAR(255) DEFAULT NULL COMMENT 'Buyer email from Ko-fi (private)',
+    message TEXT DEFAULT NULL COMMENT 'Buyer message/note (may contain SteamID)',
+    is_public BOOLEAN DEFAULT FALSE COMMENT 'If false, message must be hidden when displayed publicly',
+    amount DECIMAL(10,2) DEFAULT 0,
+    amount_eur DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'amount converted to EUR at processing time',
+    currency VARCHAR(8) DEFAULT NULL,
+    is_subscription_payment BOOLEAN DEFAULT FALSE,
+    is_first_subscription_payment BOOLEAN DEFAULT FALSE,
+    tier_name VARCHAR(255) DEFAULT NULL COMMENT 'Membership tier (subscriptions)',
+    shop_items JSON DEFAULT NULL COMMENT 'Array of {direct_link_code, variation_name, quantity}',
+    url VARCHAR(512) DEFAULT NULL,
+    steamid VARCHAR(20) DEFAULT NULL COMMENT 'Resolved buyer SteamID64, NULL if unmatched',
+    status VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT 'resolution: pending | matched | ignored',
+    claim_status VARCHAR(16) NOT NULL DEFAULT 'unclaimed' COMMENT 'unclaimed | claimed | gifted',
+    beneficiary_steamid VARCHAR(20) DEFAULT NULL COMMENT 'SteamID credited (self or gift recipient)',
+    claimed_at TIMESTAMP NULL DEFAULT NULL,
+    kofi_timestamp TIMESTAMP NULL DEFAULT NULL COMMENT 'Ko-fi event timestamp',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_message (message_id),
+    INDEX idx_steamid (steamid),
+    INDEX idx_status (status),
+    INDEX idx_claim_status (claim_status),
+    INDEX idx_beneficiary (beneficiary_steamid),
+    INDEX idx_type (type),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Gifts targeted at an as-yet-unregistered email/SteamID (redeemed on link)
+CREATE TABLE IF NOT EXISTS pending_gifts (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    kind VARCHAR(16) NOT NULL COMMENT 'credit (adds EUR to total) | vip (grants base VIP only)',
+    target_type VARCHAR(16) NOT NULL DEFAULT 'email' COMMENT 'email | steamid',
+    target_value VARCHAR(255) NOT NULL COMMENT 'email (lowercased) or SteamID64',
+    amount_eur DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'EUR credited (kind=credit)',
+    source_steamid VARCHAR(20) DEFAULT NULL COMMENT 'Gifter SteamID',
+    source_transaction_id BIGINT DEFAULT NULL COMMENT 'Originating kofi_transactions.id',
+    redeemed_steamid VARCHAR(20) DEFAULT NULL,
+    redeemed_at TIMESTAMP NULL DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_target (target_type, target_value),
+    INDEX idx_redeemed (redeemed_at),
+    INDEX idx_source (source_steamid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Maps table: tracks map playtime statistics
