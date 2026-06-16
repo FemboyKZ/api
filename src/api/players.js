@@ -642,7 +642,7 @@ router.get("/:steamid", async (req, res) => {
     }
 
     let statsQuery =
-      "SELECT game, SUM(playtime) as total_playtime, ANY_VALUE(playtime_modes) as playtime_modes, MAX(last_seen) as last_seen FROM players WHERE steamid = ?";
+      "SELECT game, SUM(playtime) as total_playtime, MAX(CAST(playtime_modes AS CHAR)) as playtime_modes, MAX(last_seen) as last_seen FROM players WHERE steamid = ?";
     const statsParams = [steamid64];
 
     if (game) {
