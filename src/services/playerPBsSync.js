@@ -46,11 +46,11 @@ async function refreshPlayerPBs(playerId) {
       `
       INSERT INTO kz_player_map_pbs (
         player_id, steamid64, map_id, map_name, mode, stage,
-        pro_time, pro_teleports, pro_points, pro_record_id, pro_created_on,
-        tp_time, tp_teleports, tp_points, tp_record_id, tp_created_on,
+        pro_time, pro_teleports, pro_points, pro_record_id, pro_created_on, pro_server_id,
+        tp_time, tp_teleports, tp_points, tp_record_id, tp_created_on, tp_server_id,
         map_difficulty, map_validated
       )
-      SELECT 
+      SELECT
         ? as player_id,
         ? as steamid64,
         combos.map_id,
@@ -62,11 +62,13 @@ async function refreshPlayerPBs(playerId) {
         COALESCE(pro.points, 0) as pro_points,
         pro.id as pro_record_id,
         pro.created_on as pro_created_on,
+        pro.server_id as pro_server_id,
         tp.time as tp_time,
         COALESCE(tp.teleports, 0) as tp_teleports,
         COALESCE(tp.points, 0) as tp_points,
         tp.id as tp_record_id,
         tp.created_on as tp_created_on,
+        tp.server_id as tp_server_id,
         m.difficulty as map_difficulty,
         m.validated as map_validated
       FROM (
@@ -76,14 +78,14 @@ async function refreshPlayerPBs(playerId) {
       ) combos
       INNER JOIN kz_maps m ON combos.map_id = m.id
       LEFT JOIN LATERAL (
-        SELECT id, time, teleports, points, created_on
+        SELECT id, time, teleports, points, created_on, server_id
         FROM kz_records_partitioned
         WHERE player_id = ? AND map_id = combos.map_id AND mode = combos.mode AND stage = combos.stage AND teleports = 0
         ORDER BY time ASC
         LIMIT 1
       ) pro ON TRUE
       LEFT JOIN LATERAL (
-        SELECT id, time, teleports, points, created_on
+        SELECT id, time, teleports, points, created_on, server_id
         FROM kz_records_partitioned
         WHERE player_id = ? AND map_id = combos.map_id AND mode = combos.mode AND stage = combos.stage AND teleports > 0
         ORDER BY time ASC
@@ -150,8 +152,8 @@ async function refreshPlayerPBsFallback(playerId) {
     // Get best pro times
     const [proTimes] = await pool.query(
       `
-      SELECT 
-        r.map_id, r.mode, r.stage, r.id, r.time, r.points, r.created_on
+      SELECT
+        r.map_id, r.mode, r.stage, r.id, r.time, r.points, r.created_on, r.server_id
       FROM kz_records_partitioned r
       INNER JOIN (
         SELECT map_id, mode, stage, MIN(time) as min_time
@@ -167,8 +169,8 @@ async function refreshPlayerPBsFallback(playerId) {
     // Get best TP times
     const [tpTimes] = await pool.query(
       `
-      SELECT 
-        r.map_id, r.mode, r.stage, r.id, r.time, r.teleports, r.points, r.created_on
+      SELECT
+        r.map_id, r.mode, r.stage, r.id, r.time, r.teleports, r.points, r.created_on, r.server_id
       FROM kz_records_partitioned r
       INNER JOIN (
         SELECT map_id, mode, stage, MIN(time) as min_time
@@ -213,11 +215,13 @@ async function refreshPlayerPBsFallback(playerId) {
         pro?.points || 0,
         pro?.id || null,
         pro?.created_on || null,
+        pro?.server_id || null,
         tp?.time || null,
         tp?.teleports || 0,
         tp?.points || 0,
         tp?.id || null,
         tp?.created_on || null,
+        tp?.server_id || null,
         combo.difficulty,
         combo.validated,
       ]);
@@ -229,8 +233,8 @@ async function refreshPlayerPBsFallback(playerId) {
       `
       INSERT INTO kz_player_map_pbs (
         player_id, steamid64, map_id, map_name, mode, stage,
-        pro_time, pro_teleports, pro_points, pro_record_id, pro_created_on,
-        tp_time, tp_teleports, tp_points, tp_record_id, tp_created_on,
+        pro_time, pro_teleports, pro_points, pro_record_id, pro_created_on, pro_server_id,
+        tp_time, tp_teleports, tp_points, tp_record_id, tp_created_on, tp_server_id,
         map_difficulty, map_validated
       ) VALUES ?
     `,
@@ -417,19 +421,25 @@ async function getPlayerMapCompletions(steamid64, options = {}) {
         m.validated,
         pb.pro_time,
         pb.pro_points,
+        pb.pro_created_on,
+        ps.server_name as pro_server,
         pb.tp_time,
         pb.tp_teleports,
         pb.tp_points,
-        CASE 
+        pb.tp_created_on,
+        ts.server_name as tp_server,
+        CASE
           WHEN pb.pro_time IS NOT NULL THEN 'pro'
           WHEN pb.tp_time IS NOT NULL THEN 'tp'
           ELSE 'none'
         END as completion_status
       FROM kz_maps m
-      LEFT JOIN kz_player_map_pbs pb ON m.id = pb.map_id 
+      LEFT JOIN kz_player_map_pbs pb ON m.id = pb.map_id
         AND pb.steamid64 = ?
         AND pb.mode = ?
         AND pb.stage = ?
+      LEFT JOIN kz_servers ps ON ps.id = pb.pro_server_id
+      LEFT JOIN kz_servers ts ON ts.id = pb.tp_server_id
       WHERE 1=1
     `;
     const params = [steamid64, mode, stage];

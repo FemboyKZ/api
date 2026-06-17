@@ -19,13 +19,15 @@ CREATE TABLE IF NOT EXISTS kz_player_map_pbs (
   pro_points INT NOT NULL DEFAULT 0,
   pro_record_id BIGINT UNSIGNED NULL,
   pro_created_on DATETIME NULL,
-  
+  pro_server_id INT UNSIGNED NULL,
+
   -- TP run (with teleports)
   tp_time DECIMAL(10,3) NULL,
   tp_teleports SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   tp_points INT NOT NULL DEFAULT 0,
   tp_record_id BIGINT UNSIGNED NULL,
   tp_created_on DATETIME NULL,
+  tp_server_id INT UNSIGNED NULL,
   
   -- Map metadata for fast filtering
   map_difficulty TINYINT NULL,

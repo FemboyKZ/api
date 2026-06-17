@@ -1139,6 +1139,103 @@ router.get(
  *       500:
  *         description: Server error
  */
+/**
+ * GET /kzglobal/players/:steamid/overview
+ * Lightweight profile extras: global leaderboard rank (by total points) and
+ * map-completion totals broken down by difficulty tier (1-7).
+ */
+router.get(
+  "/:steamid/overview",
+  cacheMiddleware(120, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const { steamid } = req.params;
+      if (!isValidSteamID(steamid)) {
+        return res.status(400).json({ error: "Invalid SteamID format" });
+      }
+      const steamid64 = convertToSteamID64(steamid);
+      if (!steamid64) {
+        return res.status(400).json({ error: "Failed to convert SteamID" });
+      }
+
+      const pool = getKzPool();
+      const [players] = await pool.query(
+        "SELECT id FROM kz_players WHERE steamid64 = ?",
+        [steamid64],
+      );
+      if (players.length === 0) {
+        return res.status(404).json({ error: "Player not found" });
+      }
+      const playerId = players[0].id;
+
+      // Global rank by total points
+      let rank = null;
+      let totalPlayers = null;
+      let points = 0;
+      if (await tableExists("kz_player_statistics")) {
+        const [[me]] = await pool.query(
+          "SELECT total_points FROM kz_player_statistics WHERE player_id = ?",
+          [playerId],
+        );
+        points = me?.total_points || 0;
+        if (points > 0) {
+          const [[{ ahead }]] = await pool.query(
+            "SELECT COUNT(*) AS ahead FROM kz_player_statistics WHERE total_points > ?",
+            [points],
+          );
+          rank = ahead + 1;
+        }
+        const [[{ cnt }]] = await pool.query(
+          "SELECT COUNT(*) AS cnt FROM kz_player_statistics WHERE total_points > 0",
+        );
+        totalPlayers = cnt;
+      }
+
+      // Completion totals + per-tier (any mode counts a map as completed)
+      const [totals] = await pool.query(
+        "SELECT difficulty AS tier, COUNT(*) AS total FROM kz_maps WHERE validated = 1 GROUP BY difficulty",
+      );
+      const [done] = await pool.query(
+        `SELECT m.difficulty AS tier, COUNT(DISTINCT r.map_id) AS completed
+         FROM kz_records_partitioned r
+         JOIN kz_maps m ON r.map_id = m.id
+         WHERE r.steamid64 = ? AND m.validated = 1
+         GROUP BY m.difficulty`,
+        [steamid64],
+      );
+
+      const doneByTier = new Map(done.map((d) => [d.tier, d.completed]));
+      const byTier = totals
+        .map((t) => ({
+          tier: t.tier,
+          total: t.total,
+          completed: doneByTier.get(t.tier) || 0,
+        }))
+        .sort((a, b) => a.tier - b.tier);
+      const totalMaps = byTier.reduce((n, t) => n + t.total, 0);
+      const completedMaps = byTier.reduce((n, t) => n + t.completed, 0);
+
+      res.json({
+        steamid64,
+        rank,
+        totalPlayers,
+        points,
+        completion: {
+          total: totalMaps,
+          completed: completedMaps,
+          percent: totalMaps
+            ? Math.round((completedMaps / totalMaps) * 1000) / 10
+            : 0,
+          byTier,
+        },
+      });
+    } catch (error) {
+      logger.error(`KZ player overview error: ${error.message}`);
+      res.status(500).json({ error: "Failed to fetch overview" });
+    }
+  },
+);
+
 router.post("/:steamid/refresh-pbs", async (req, res) => {
   try {
     const { steamid } = req.params;
