@@ -101,6 +101,7 @@ function toWire(m) {
     name: m.name,
     message: m.message,
     team: m.team,
+    muted: m.muted,
   };
 }
 
@@ -115,7 +116,7 @@ function removeWaiter(w) {
  * Ingest a chat line. Returns the stored record, or null when the message is
  * unusable, or { error } when the origin server is unknown.
  */
-function addMessage({ ip, port, steamid, name, message, team }) {
+function addMessage({ ip, port, steamid, name, message, team, muted }) {
   const serverKey = `${ip}:${port}`;
   const cfg = serverLookup.get(serverKey);
   if (!cfg) return { error: "Server not registered" };
@@ -139,6 +140,7 @@ function addMessage({ ip, port, steamid, name, message, team }) {
     name: cleanName,
     message: cleanMsg,
     team: team ? 1 : 0,
+    muted: !!muted,
     ts: Date.now(),
   };
 
@@ -155,6 +157,7 @@ function addMessage({ ip, port, steamid, name, message, team }) {
     name: record.name,
     message: record.message,
     team: record.team,
+    muted: record.muted,
   });
 
   return record;

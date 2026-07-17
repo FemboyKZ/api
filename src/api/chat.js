@@ -28,10 +28,10 @@ function parsePort(value) {
 
 /**
  * POST /chat/messages
- * Body: { ip, port, steamid?, name, message, team? }
+ * Body: { ip, port, steamid?, name, message, team?, muted? }
  */
 router.post("/messages", (req, res) => {
-  const { ip, port, steamid, name, message, team } = req.body || {};
+  const { ip, port, steamid, name, message, team, muted } = req.body || {};
   const portNum = parsePort(port);
 
   if (!ip || !isValidIP(ip) || !portNum) {
@@ -67,7 +67,7 @@ router.post("/messages", (req, res) => {
  * `after`     last cursor the caller has seen (-1 / omitted => handshake: get the current cursor with no backlog).
  * `ip`,`port` identify the caller so its own messages are excluded from the relay (it already printed them locally).
  *
- * Response: { cursor, messages: [{ id, alias, game, name, message, team }] }
+ * Response: { cursor, messages: [{ id, alias, game, name, message, team, muted }] }
  */
 router.get("/stream", (req, res) => {
   // Long-poll responses repeat (e.g. an empty {messages:[]} on timeout), so

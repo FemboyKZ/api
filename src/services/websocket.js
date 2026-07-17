@@ -134,7 +134,7 @@ function emitStatsUpdate(stats) {
 
 /**
  * Emit a cross-server chat message to web subscribers
- * @param {Object} data - { alias, game, region, name, message, team }
+ * @param {Object} data - { alias, game, region, name, message, team, muted }
  */
 function emitChatMessage(data) {
   if (!io) return;
