@@ -5,7 +5,10 @@ const logger = require("../utils/logger");
 const { isValidSteamID, convertToSteamID64 } = require("../utils/validators");
 
 const { VALID_ROLES, VALID_TAG_COLORS } = require("../config/permissions");
-const { getStats: getScraperStats } = require("../services/kzRecordsScraper");
+const {
+  getStats: getScraperStats,
+  processBansFullSweep,
+} = require("../services/kzRecordsScraper");
 const {
   getStats: getBanStatusStats,
   manualBanStatusUpdate,
@@ -261,6 +264,32 @@ router.post("/cleanup-expired-bans", async (req, res) => {
   } catch (error) {
     logger.error("Failed to cleanup expired bans", { error: error.message });
     res.status(500).json({ error: "Failed to cleanup expired bans" });
+  }
+});
+
+/**
+ * POST /admin/sweep-bans
+ * Re-read every ban page and log what changed since the last sweep.
+ * This is the only way to catch unbans: GlobalKZ has no query for changed bans.
+ */
+router.post("/sweep-bans", async (req, res) => {
+  const startTime = Date.now();
+  try {
+    logger.info("Manual full ban sweep triggered");
+
+    const result = await processBansFullSweep(true);
+
+    logger.info("Full ban sweep complete", result);
+    logger.logRequest(req, res, Date.now() - startTime);
+
+    res.json({
+      success: true,
+      result,
+      message: "Ban sweep complete",
+    });
+  } catch (error) {
+    logger.error("Failed to sweep bans", { error: error.message });
+    res.status(500).json({ error: "Failed to sweep bans" });
   }
 });
 

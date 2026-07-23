@@ -53,8 +53,11 @@ const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
  *         name: sort
  *         schema:
  *           type: string
- *           enum: [created_on, expires_on]
+ *           enum: [created_on, expires_on, updated_on, updated_at]
  *           default: created_on
+ *         description: >
+ *           updated_on is the GlobalKZ timestamp, updated_at is when we last saw
+ *           a field on the ban actually change
  *       - in: query
  *         name: order
  *         schema:
@@ -81,7 +84,12 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
     } = req.query;
     const { limit: validLimit, offset } = validatePagination(page, limit, 100);
 
-    const validSortFields = ["created_on", "expires_on"];
+    const validSortFields = [
+      "created_on",
+      "expires_on",
+      "updated_on",
+      "updated_at",
+    ];
     const sortField = validSortFields.includes(sort) ? sort : "created_on";
     const sortOrder = order === "asc" ? "ASC" : "DESC";
 
@@ -99,7 +107,9 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
         b.updated_by_id,
         b.created_on,
         b.updated_on,
-        CASE 
+        b.updated_at,
+        b.last_seen_at,
+        CASE
           WHEN b.expires_on IS NULL THEN TRUE
           WHEN b.expires_on > NOW() THEN TRUE
           ELSE FALSE
@@ -326,6 +336,164 @@ router.get("/stats", cacheMiddleware(300, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
+ * /kzglobal/bans/changes:
+ *   get:
+ *     summary: Get recent ban changes
+ *     description: >
+ *       Returns changes detected on already-known bans (unbans, rebans, expiry
+ *       changes and edits). GlobalKZ exposes no way to query bans by update time,
+ *       so these rows come from diffing each full ban sweep against stored data.
+ *     tags: [KZ Global]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *           maximum: 100
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: [unban, reban, expiry_change, edit]
+ *         description: Filter by change type
+ *       - in: query
+ *         name: steamid
+ *         schema:
+ *           type: string
+ *         description: Filter by player SteamID
+ *       - in: query
+ *         name: ban_id
+ *         schema:
+ *           type: integer
+ *         description: Filter by ban ID
+ *       - in: query
+ *         name: since
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Only changes detected at or after this timestamp
+ *     responses:
+ *       200:
+ *         description: Ban change list
+ *       400:
+ *         description: Invalid parameter
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/changes",
+  cacheMiddleware(30, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const { page, limit, type, steamid, ban_id, since } = req.query;
+      const { limit: validLimit, offset } = validatePagination(
+        page,
+        limit,
+        100,
+      );
+
+      const validTypes = ["unban", "reban", "expiry_change", "edit"];
+
+      let where = "WHERE 1=1";
+      const params = [];
+
+      if (type) {
+        if (!validTypes.includes(type)) {
+          return res.status(400).json({
+            error: `Invalid change type. Valid types: ${validTypes.join(", ")}`,
+          });
+        }
+        where += " AND c.change_type = ?";
+        params.push(type);
+      }
+
+      if (steamid) {
+        if (!isValidSteamID(steamid)) {
+          return res.status(400).json({ error: "Invalid SteamID format" });
+        }
+        where += " AND c.steamid64 = ?";
+        params.push(convertToSteamID64(steamid));
+      }
+
+      if (ban_id) {
+        const parsedBanId = parseInt(ban_id, 10);
+        if (isNaN(parsedBanId)) {
+          return res.status(400).json({ error: "Invalid ban ID" });
+        }
+        where += " AND c.ban_id = ?";
+        params.push(parsedBanId);
+      }
+
+      if (since) {
+        const sinceDate = new Date(since);
+        if (isNaN(sinceDate.getTime())) {
+          return res.status(400).json({ error: "Invalid since timestamp" });
+        }
+        where += " AND c.detected_at >= ?";
+        params.push(sinceDate);
+      }
+
+      const pool = getKzPool();
+
+      const [countResult] = await pool.query(
+        `SELECT COUNT(*) as total FROM kz_ban_changes c ${where}`,
+        params,
+      );
+      const total = countResult[0].total;
+
+      const [changes] = await pool.query(
+        `SELECT
+         c.id,
+         c.ban_id,
+         c.steamid64,
+         c.player_name,
+         c.change_type,
+         c.field,
+         c.old_value,
+         c.new_value,
+         c.api_updated_on,
+         c.detected_at,
+         b.ban_type,
+         b.expires_on,
+         b.server_id
+       FROM kz_ban_changes c
+       LEFT JOIN kz_bans b ON c.ban_id = b.id
+       ${where}
+       ORDER BY c.detected_at DESC, c.id DESC
+       LIMIT ? OFFSET ?`,
+        [...params, validLimit, offset],
+      );
+
+      res.json({
+        data: changes,
+        pagination: {
+          page: parseInt(page, 10) || 1,
+          limit: validLimit,
+          total: total,
+          totalPages: Math.ceil(total / validLimit),
+        },
+      });
+    } catch (e) {
+      if (e.code === "ER_NO_SUCH_TABLE") {
+        return res.status(503).json({
+          error:
+            "Ban change tracking not initialized. Run db/migrations/add_ban_change_tracking.sql",
+        });
+      }
+      logger.error(`Failed to fetch ban changes: ${e.message}`);
+      res.status(500).json({ error: "Failed to fetch ban changes" });
+    }
+  },
+);
+
+/**
+ * @swagger
  * /kzglobal/bans/{id}:
  *   get:
  *     summary: Get ban details
@@ -376,6 +544,7 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
         b.updated_on,
         b.created_at,
         b.updated_at,
+        b.last_seen_at,
         CASE 
           WHEN b.expires_on IS NULL THEN TRUE
           WHEN b.expires_on > NOW() THEN TRUE

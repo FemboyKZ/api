@@ -20,6 +20,8 @@
  *   KZ_SCRAPER_CONCURRENCY=5          # Records per batch - default 5
  *   KZ_SCRAPER_REQUEST_DELAY=100      # Delay between requests (ms) - default 100ms
  *   KZ_SCRAPER_BANS_INTERVAL=300000   # How often to check bans (ms) - default 5min
+ *   KZ_SCRAPER_BANS_FULL_INTERVAL=21600000  # How often to sweep every ban page (ms) - default 6h
+ *   KZ_SCRAPER_BANS_FULL_ENABLED=true       # Enable/disable the full ban sweep
  *
  * Rate Limiting:
  *   The GlobalKZ API has a rate limit of 500 requests per 5 minutes per IP.
@@ -48,6 +50,7 @@ const path = require("path");
 const logger = require("../utils/logger");
 const { getKzPool } = require("../db/kzRecords");
 const { updatePlayerBanStatus } = require("./kzBanStatus");
+const { upsertBansWithChangeTracking } = require("./kzBanChanges");
 
 // Configuration
 const GOKZ_API_URL =
@@ -60,6 +63,12 @@ const STATE_FILE = path.join(__dirname, "../../logs/kz-scraper-state.json");
 const REQUEST_TIMEOUT = 10000;
 const BANS_CHECK_INTERVAL =
   parseInt(process.env.KZ_SCRAPER_BANS_INTERVAL) || 300000; // 5 minutes
+const BANS_FULL_SWEEP_INTERVAL =
+  parseInt(process.env.KZ_SCRAPER_BANS_FULL_INTERVAL) || 21600000; // 6 hours
+const BANS_FULL_SWEEP_ENABLED =
+  process.env.KZ_SCRAPER_BANS_FULL_ENABLED !== "false"; // Default true
+const BANS_FULL_SWEEP_PAGE_SIZE = 1000;
+const BANS_FULL_SWEEP_PAGE_DELAY = 1500; // ms between pages
 
 // Caches for normalized data
 const playerCache = new Map();
@@ -69,8 +78,10 @@ const serverCache = new Map();
 // State tracking
 let isRunning = false;
 let isBansRunning = false;
+let isBanSweepRunning = false;
 let currentRecordId = 0;
 let lastBanCheck = 0;
+let lastBanFullSweep = 0;
 let scraperTimeout = null;
 const stats = {
   startTime: null,
@@ -83,6 +94,9 @@ const stats = {
   bansChecked: 0,
   bansInserted: 0,
   bansUpdated: 0,
+  bansChanged: 0,
+  banUnbansDetected: 0,
+  lastSweepDuration: 0,
   playersUpdated: 0,
 };
 
@@ -95,6 +109,7 @@ function loadState() {
       const state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
       currentRecordId = state.lastRecordId || 0;
       lastBanCheck = state.lastBanCheck || 0;
+      lastBanFullSweep = state.lastBanFullSweep || 0;
       logger.info(
         `[KZ Scraper] Loaded state: Starting from record ID ${currentRecordId}`,
       );
@@ -122,6 +137,7 @@ function saveState() {
     const state = {
       lastRecordId: stats.lastSuccessfulId || currentRecordId,
       lastBanCheck,
+      lastBanFullSweep,
       lastUpdate: new Date().toISOString(),
       stats: {
         recordsProcessed: stats.recordsProcessed,
@@ -130,6 +146,8 @@ function saveState() {
         bansChecked: stats.bansChecked,
         bansInserted: stats.bansInserted,
         bansUpdated: stats.bansUpdated,
+        bansChanged: stats.bansChanged,
+        banUnbansDetected: stats.banUnbansDetected,
         playersUpdated: stats.playersUpdated,
       },
     };
@@ -997,19 +1015,6 @@ async function scrapeBatch(startId, batchSize) {
 }
 
 /**
- * Format datetime for MySQL
- */
-function formatDateTime(isoString) {
-  if (!isoString) return null;
-  try {
-    const date = new Date(isoString);
-    return date.toISOString().slice(0, 19).replace("T", " ");
-  } catch (error) {
-    return null;
-  }
-}
-
-/**
  * Fetch bans from API
  */
 async function fetchBans(limit = 200, offset = 0, attempt = 1) {
@@ -1058,6 +1063,15 @@ async function processBans() {
     return;
   }
 
+  // A sweep covers everything this check would look at, and running both at once
+  // would diff the same rows twice
+  if (isBanSweepRunning) {
+    logger.debug(
+      "[KZ Scraper] Full ban sweep in progress, skipping bans check",
+    );
+    return;
+  }
+
   const now = Date.now();
   if (now - lastBanCheck < BANS_CHECK_INTERVAL) {
     return; // Not time yet
@@ -1084,61 +1098,25 @@ async function processBans() {
       if (bans.length > 0) {
         // Batch insert/update bans
         if (bans.length > 0) {
-          const values = bans.map((ban) => [
-            ban.id,
-            ban.ban_type || "none",
-            formatDateTime(ban.expires_on),
-            ban.ip || null,
-            ban.steamid64 ? String(ban.steamid64) : null,
-            ban.player_name || null,
-            ban.steam_id || null,
-            ban.notes || null,
-            ban.stats || null,
-            ban.server_id || null,
-            ban.updated_by_id ? String(ban.updated_by_id) : null,
-            formatDateTime(ban.created_on),
-            formatDateTime(ban.updated_on),
-          ]);
-
-          const [result] = await connection.query(
-            `INSERT INTO kz_bans (
-              id, ban_type, expires_on, ip, steamid64, player_name, steam_id,
-              notes, stats, server_id, updated_by_id, created_on, updated_on
-            ) VALUES ?
-            ON DUPLICATE KEY UPDATE
-              ban_type = VALUES(ban_type),
-              expires_on = VALUES(expires_on),
-              ip = VALUES(ip),
-              steamid64 = VALUES(steamid64),
-              player_name = VALUES(player_name),
-              steam_id = VALUES(steam_id),
-              notes = VALUES(notes),
-              stats = VALUES(stats),
-              server_id = VALUES(server_id),
-              updated_by_id = VALUES(updated_by_id),
-              updated_on = VALUES(updated_on),
-              updated_at = CURRENT_TIMESTAMP`,
-            [values],
+          const upsertResult = await upsertBansWithChangeTracking(
+            connection,
+            bans,
           );
 
-          // Calculate inserts vs updates
-          const totalBans = bans.length;
-          let inserted, updated;
-
-          if (result.affectedRows === totalBans) {
-            inserted = totalBans;
-            updated = 0;
-          } else if (result.affectedRows > totalBans) {
-            inserted = 2 * totalBans - result.affectedRows;
-            updated = totalBans - inserted;
-          } else {
-            inserted = 0;
-            updated = totalBans;
-          }
+          const inserted = upsertResult.inserted;
+          const updated = upsertResult.changed;
 
           totalInserted += inserted;
           totalUpdated += updated;
           totalProcessed += bans.length;
+          stats.bansChanged += upsertResult.changed;
+          stats.banUnbansDetected += upsertResult.unbans;
+
+          if (upsertResult.changes > 0) {
+            logger.info(
+              `[KZ Scraper] Ban changes detected: ${upsertResult.changed} bans, ${upsertResult.changes} field changes, ${upsertResult.unbans} unbans`,
+            );
+          }
 
           // Update player ban status for all steamid64s in this batch
           const steamIds = bans
@@ -1208,6 +1186,113 @@ async function processBans() {
 }
 
 /**
+ * Full ban sweep
+ *
+ * The periodic check above only ever reads offset 0, so it sees new bans and
+ * never sees an edit to an older one. GlobalAPI offers no way to ask for changed
+ * bans (`updated_since` is accepted but always returns nothing), so the only way
+ * to catch an unban is to re-read every page and diff locally.
+ */
+async function processBansFullSweep(force = false) {
+  if (!BANS_FULL_SWEEP_ENABLED && !force) return;
+
+  if (isBanSweepRunning) {
+    logger.debug("[KZ Scraper] Ban sweep already running, skipping");
+    return { pages: 0, seen: 0, changed: 0, unbans: 0 };
+  }
+
+  const now = Date.now();
+  if (!force && now - lastBanFullSweep < BANS_FULL_SWEEP_INTERVAL) {
+    return { pages: 0, seen: 0, changed: 0, unbans: 0 };
+  }
+
+  isBanSweepRunning = true;
+  lastBanFullSweep = now;
+  const startTime = Date.now();
+
+  const totals = { pages: 0, seen: 0, inserted: 0, changed: 0, unbans: 0 };
+
+  try {
+    logger.info("[KZ Scraper] Starting full ban sweep...");
+
+    const pool = getKzPool();
+    const connection = await pool.getConnection();
+
+    try {
+      let offset = 0;
+
+      for (;;) {
+        const bans = await fetchBans(BANS_FULL_SWEEP_PAGE_SIZE, offset);
+        if (bans.length === 0) break;
+
+        const result = await upsertBansWithChangeTracking(connection, bans);
+
+        totals.pages++;
+        totals.seen += result.seen;
+        totals.inserted += result.inserted;
+        totals.changed += result.changed;
+        totals.unbans += result.unbans;
+
+        if (result.changed > 0) {
+          logger.info(
+            `[KZ Scraper] Sweep page at offset ${offset}: ${result.changed} bans changed, ${result.unbans} unbans`,
+          );
+        }
+
+        if (bans.length < BANS_FULL_SWEEP_PAGE_SIZE) break;
+
+        offset += BANS_FULL_SWEEP_PAGE_SIZE;
+        await new Promise((resolve) =>
+          setTimeout(resolve, BANS_FULL_SWEEP_PAGE_DELAY),
+        );
+      }
+
+      // Any ban whose expiry moved needs its player's is_banned re-evaluated
+      if (totals.changed > 0) {
+        const [changedPlayers] = await connection.query(
+          `SELECT DISTINCT steamid64
+           FROM kz_ban_changes
+           WHERE steamid64 IS NOT NULL
+             AND detected_at >= ?
+             AND change_type IN ('unban', 'reban', 'expiry_change')`,
+          [new Date(startTime)],
+        );
+
+        if (changedPlayers.length > 0) {
+          const steamIds = changedPlayers.map((row) => row.steamid64);
+          const banStatusResult = await updatePlayerBanStatus(steamIds);
+          stats.playersUpdated +=
+            banStatusResult.banned + banStatusResult.unbanned;
+        }
+      }
+    } finally {
+      connection.release();
+    }
+
+    stats.bansChecked += totals.seen;
+    stats.bansInserted += totals.inserted;
+    stats.bansChanged += totals.changed;
+    stats.banUnbansDetected += totals.unbans;
+    stats.lastSweepDuration = Date.now() - startTime;
+
+    logger.info(
+      `[KZ Scraper] Full ban sweep complete in ${Math.round(stats.lastSweepDuration / 1000)}s: ` +
+        `${totals.seen} bans over ${totals.pages} pages, ${totals.inserted} new, ` +
+        `${totals.changed} changed, ${totals.unbans} unbans`,
+    );
+
+    saveState();
+    return totals;
+  } catch (error) {
+    logger.error(`[KZ Scraper] Error during full ban sweep: ${error.message}`);
+    stats.errorCount++;
+    throw error;
+  } finally {
+    isBanSweepRunning = false;
+  }
+}
+
+/**
  * Main scraper loop
  */
 async function runScraper(normalIntervalMs, idleIntervalMs) {
@@ -1225,6 +1310,11 @@ async function runScraper(normalIntervalMs, idleIntervalMs) {
     // Check bans periodically (non-blocking)
     processBans().catch((error) => {
       logger.error(`[KZ Scraper] Bans check failed: ${error.message}`);
+    });
+
+    // Full sweep on its own, much longer interval (non-blocking)
+    processBansFullSweep().catch((error) => {
+      logger.error(`[KZ Scraper] Full ban sweep failed: ${error.message}`);
     });
 
     const batchResult = await scrapeBatch(currentRecordId + 1, CONCURRENCY);
@@ -1314,6 +1404,11 @@ async function startScraperJob(intervalMs = 3750, idleIntervalMs = 30000) {
   logger.info(
     `[KZ Scraper] Bans check enabled (interval: ${BANS_CHECK_INTERVAL / 1000}s)`,
   );
+  logger.info(
+    BANS_FULL_SWEEP_ENABLED
+      ? `[KZ Scraper] Full ban sweep enabled (interval: ${BANS_FULL_SWEEP_INTERVAL / 1000}s, page size: ${BANS_FULL_SWEEP_PAGE_SIZE})`
+      : "[KZ Scraper] Full ban sweep disabled",
+  );
 
   // Test database connection first
   try {
@@ -1355,9 +1450,13 @@ function getStats() {
   const timeSinceLastBanCheck =
     lastBanCheck > 0 ? Date.now() - lastBanCheck : null;
 
+  const timeSinceLastSweep =
+    lastBanFullSweep > 0 ? Date.now() - lastBanFullSweep : null;
+
   return {
     isRunning,
     isBansRunning,
+    isBanSweepRunning,
     currentRecordId,
     uptime: Math.round(uptime),
     recordsProcessed: stats.recordsProcessed,
@@ -1370,12 +1469,21 @@ function getStats() {
     bansChecked: stats.bansChecked,
     bansInserted: stats.bansInserted,
     bansUpdated: stats.bansUpdated,
+    bansChanged: stats.bansChanged,
+    banUnbansDetected: stats.banUnbansDetected,
     playersUpdated: stats.playersUpdated,
     lastBanCheck:
       lastBanCheck > 0 ? new Date(lastBanCheck).toISOString() : null,
     timeSinceLastBanCheck: timeSinceLastBanCheck
       ? Math.round(timeSinceLastBanCheck / 1000)
       : null,
+    banSweepInterval: BANS_FULL_SWEEP_INTERVAL / 1000,
+    lastBanFullSweep:
+      lastBanFullSweep > 0 ? new Date(lastBanFullSweep).toISOString() : null,
+    timeSinceLastBanSweep: timeSinceLastSweep
+      ? Math.round(timeSinceLastSweep / 1000)
+      : null,
+    lastSweepDuration: stats.lastSweepDuration,
     cacheSize: {
       players: playerCache.size,
       maps: mapCache.size,
@@ -1386,5 +1494,6 @@ function getStats() {
 
 module.exports = {
   startScraperJob,
+  processBansFullSweep,
   getStats,
 };

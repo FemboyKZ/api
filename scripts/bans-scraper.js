@@ -55,6 +55,9 @@ const axios = require("axios");
 const mysql = require("mysql2/promise");
 const { HttpsProxyAgent } = require("https-proxy-agent");
 const { HttpProxyAgent } = require("http-proxy-agent");
+const {
+  upsertBansWithChangeTracking,
+} = require("../src/services/kzBanChanges");
 
 // ============================================================================
 // CONFIGURATION
@@ -154,6 +157,8 @@ const stats = {
   bansInserted: 0,
   bansUpdated: 0,
   bansSkipped: 0,
+  fieldChanges: 0,
+  unbansDetected: 0,
   permanentBansCount: 0,
   recordsArchived: 0,
   errorCount: 0,
@@ -241,19 +246,6 @@ async function connectDatabase() {
 }
 
 /**
- * Convert ISO 8601 datetime string to MySQL DATETIME format
- */
-function formatDateTime(isoString) {
-  if (!isoString) return null;
-  try {
-    const date = new Date(isoString);
-    return date.toISOString().slice(0, 19).replace("T", " ");
-  } catch (error) {
-    return null;
-  }
-}
-
-/**
  * Batch upsert bans (more efficient for large batches)
  */
 async function batchUpsertBans(bans) {
@@ -272,77 +264,23 @@ async function batchUpsertBans(bans) {
   }
 
   try {
-    // Build batch INSERT ... ON DUPLICATE KEY UPDATE
-    const query = `
-      INSERT INTO kz_bans (
-        id, ban_type, expires_on, ip, steamid64, player_name, steam_id,
-        notes, stats, server_id, updated_by_id, created_on, updated_on
-      ) VALUES ?
-      ON DUPLICATE KEY UPDATE
-        ban_type = VALUES(ban_type),
-        expires_on = VALUES(expires_on),
-        ip = VALUES(ip),
-        steamid64 = VALUES(steamid64),
-        player_name = VALUES(player_name),
-        steam_id = VALUES(steam_id),
-        notes = VALUES(notes),
-        stats = VALUES(stats),
-        server_id = VALUES(server_id),
-        updated_by_id = VALUES(updated_by_id),
-        updated_on = VALUES(updated_on),
-        updated_at = CURRENT_TIMESTAMP
-    `;
+    // Shared upsert: diffs against stored rows, writes kz_ban_changes,
+    // bumps updated_at only on a real change
+    const result = await upsertBansWithChangeTracking(connection, bans);
 
-    const values = bans.map((ban) => [
-      ban.id,
-      ban.ban_type || "none",
-      formatDateTime(ban.expires_on),
-      ban.ip || null,
-      ban.steamid64 ? String(ban.steamid64) : null, // Convert to string for precision
-      ban.player_name || null,
-      ban.steam_id || null,
-      ban.notes || null,
-      ban.stats || null,
-      ban.server_id || null,
-      ban.updated_by_id ? String(ban.updated_by_id) : null, // Convert to string
-      formatDateTime(ban.created_on),
-      formatDateTime(ban.updated_on),
-    ]);
-
-    const [result] = await connection.query(query, [values]);
-
-    // MySQL affectedRows behavior with ON DUPLICATE KEY UPDATE:
-    // - INSERT: affectedRows = 1
-    // - UPDATE (with changes): affectedRows = 2
-    // - UPDATE (no changes): affectedRows = 0
-    //
-    // For batch inserts, if all are new: affectedRows = bans.length
-    // For batch with mix: affectedRows = inserts + (updates * 2)
-    //
-    // We can't perfectly distinguish inserts vs updates from affectedRows alone,
-    // but we can estimate: if affectedRows == bans.length, likely all inserts
-    const totalBans = bans.length;
-    let inserted, updated;
-
-    if (result.affectedRows === totalBans) {
-      // All rows were inserted (no duplicates)
-      inserted = totalBans;
-      updated = 0;
-    } else if (result.affectedRows > totalBans) {
-      // Some updates occurred (affectedRows = 2 per update)
-      // Formula: affectedRows = inserts + (updates * 2)
-      // And: inserts + updates = totalBans
-      // Solving: inserts = (2 * totalBans) - affectedRows
-      inserted = 2 * totalBans - result.affectedRows;
-      updated = totalBans - inserted;
-    } else {
-      // affectedRows < totalBans means some updates had no changes
-      // This is ambiguous, so we'll report conservatively
-      inserted = 0;
-      updated = totalBans;
+    if (result.changes > 0) {
+      log(
+        "info",
+        `Changes detected: ${result.changed} bans, ${result.changes} fields, ${result.unbans} unbans`,
+      );
     }
 
-    return { inserted, updated };
+    return {
+      inserted: result.inserted,
+      updated: result.changed,
+      changes: result.changes,
+      unbans: result.unbans,
+    };
   } catch (error) {
     log("error", `Failed to batch upsert bans: ${error.message}`);
     throw error;
@@ -426,6 +364,8 @@ async function processBatch(bans) {
 
   stats.bansInserted += result.inserted;
   stats.bansUpdated += result.updated;
+  stats.fieldChanges += result.changes || 0;
+  stats.unbansDetected += result.unbans || 0;
   stats.bansProcessed += bans.length;
 
   // Track permanent bans for record archiving
@@ -541,7 +481,9 @@ function printStats() {
   log("info", "Scraper completed!");
   log("info", `  Total processed: ${stats.bansProcessed}`);
   log("info", `  Inserted: ${stats.bansInserted}`);
-  log("info", `  Updated: ${stats.bansUpdated}`);
+  log("info", `  Changed: ${stats.bansUpdated}`);
+  log("info", `  Field changes logged: ${stats.fieldChanges}`);
+  log("info", `  Unbans detected: ${stats.unbansDetected}`);
   log("info", `  Skipped: ${stats.bansSkipped}`);
   log("info", `  Permanent bans: ${stats.permanentBansCount}`);
   log("info", `  Records archived: ${stats.recordsArchived}`);

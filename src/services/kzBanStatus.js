@@ -273,16 +273,17 @@ async function updatePlayerBanStatus(steamIds, archiveRecords = true) {
         SELECT DISTINCT b.steamid64, b.id AS ban_id, b.expires_on
         FROM kz_bans b
         WHERE b.steamid64 IN (${placeholders})
-          AND b.expires_on > NOW()
+          AND (b.expires_on IS NULL OR b.expires_on > NOW())
       `,
         batch,
       );
 
       const activeSteamIds = activeBans.map((row) => row.steamid64);
-      // Permanent bans have expires_on = '9999-12-31 23:59:59'
+      // GlobalKZ writes permanent bans as expires_on = '9999-12-31 23:59:59'.
+      // A NULL expiry never expires either, so it counts as permanent too.
       const permanentBanDate = new Date("9999-12-31T23:59:59Z").getTime();
       const permanentBans = activeBans.filter((row) => {
-        if (!row.expires_on) return false;
+        if (!row.expires_on) return true;
         const expiresTime = new Date(row.expires_on).getTime();
         return expiresTime === permanentBanDate;
       });
@@ -477,7 +478,7 @@ async function cleanupExpiredBans() {
         SELECT DISTINCT steamid64
         FROM kz_bans
         WHERE steamid64 IN (${placeholders})
-          AND expires_on > NOW()
+          AND (expires_on IS NULL OR expires_on > NOW())
       `,
         batch,
       );
@@ -545,7 +546,7 @@ async function syncBannedPlayers() {
       SELECT DISTINCT steamid64, player_name, steam_id
       FROM kz_bans
       WHERE steamid64 IS NOT NULL
-        AND expires_on > NOW()
+        AND (expires_on IS NULL OR expires_on > NOW())
     `);
 
     let created = 0;

@@ -1457,15 +1457,45 @@ CREATE TABLE IF NOT EXISTS kz_bans (
   created_on DATETIME NULL,
   updated_on DATETIME NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  
+  -- Set by the scraper only when a tracked field changes, so it stays a real
+  -- change signal. last_seen_at is the "a scrape touched this row" timestamp.
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  last_seen_at TIMESTAMP NULL DEFAULT NULL,
+
   INDEX idx_steamid64 (steamid64),
   INDEX idx_ban_lookup (ban_type, expires_on, created_on DESC),
   INDEX idx_server_bans (server_id, created_on DESC),
-  
+  INDEX idx_ban_updated_at (updated_at),
+
   CONSTRAINT fk_ban_player FOREIGN KEY (steamid64) REFERENCES kz_players(steamid64) ON DELETE CASCADE,
   CONSTRAINT fk_ban_server FOREIGN KEY (server_id) REFERENCES kz_servers(id) ON DELETE SET NULL,
   CONSTRAINT fk_ban_updater FOREIGN KEY (updated_by_id) REFERENCES kz_players(steamid64) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-------------------------------------------------------------------
+
+-- Per-field audit of ban changes seen between full ban sweeps.
+-- GlobalKZ cannot be queried by update time, so unbans are only visible by
+-- re-reading every ban page and diffing against what is stored here.
+-- No FK to kz_bans: the log has to outlive the row it describes.
+CREATE TABLE IF NOT EXISTS kz_ban_changes (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  ban_id INT NOT NULL,
+  steamid64 VARCHAR(20) NULL,
+  player_name VARCHAR(255) NULL,
+  -- unban | reban | expiry_change | edit
+  change_type VARCHAR(24) NOT NULL,
+  field VARCHAR(32) NOT NULL,
+  old_value TEXT NULL,
+  new_value TEXT NULL,
+  api_updated_on DATETIME NULL,
+  detected_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (id),
+  INDEX idx_change_detected (detected_at),
+  INDEX idx_change_type (change_type, detected_at),
+  INDEX idx_change_ban (ban_id, detected_at),
+  INDEX idx_change_steamid (steamid64, detected_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -------------------------------------------------------------------
