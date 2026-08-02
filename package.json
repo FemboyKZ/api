@@ -21,16 +21,16 @@
     "admin:cleanup": "curl -X POST http://localhost:3000/admin/cleanup-history?days=30"
   },
   "dependencies": {
-    "axios": "^1.18.1",
+    "axios": "^1.19.0",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.6.0",
+    "express-rate-limit": "^8.6.1",
     "gamedig": "^5.3.3",
     "http-proxy-agent": "^9.1.0",
     "https-proxy-agent": "^9.1.0",
-    "mysql2": "^3.23.1",
+    "mysql2": "^3.23.2",
     "rcon-srcds": "^2.1.1",
     "redis": "^6.1.0",
     "socket.io": "^4.8.3",
@@ -41,7 +41,7 @@
   "devDependencies": {
     "eslint": "^10.8.0",
     "jest": "^30.4.2",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.1",
     "nodemon": "^3.1.14",
     "prettier": "^3.9.6",
     "supertest": "^7.2.2"
