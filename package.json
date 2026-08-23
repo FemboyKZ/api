@@ -30,7 +30,7 @@
     "gamedig": "^5.3.3",
     "http-proxy-agent": "^9.1.0",
     "https-proxy-agent": "^9.1.0",
-    "mysql2": "^3.23.3",
+    "mysql2": "^3.23.4",
     "rcon-srcds": "^2.1.1",
     "redis": "^6.2.1",
     "socket.io": "^4.8.3",
