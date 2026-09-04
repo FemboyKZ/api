@@ -11,6 +11,7 @@ const logger = require("../utils/logger");
 const {
   cacheMiddleware,
   playersKeyGenerator,
+  onlinePlayersKeyGenerator,
 } = require("../utils/cacheMiddleware");
 const { getPlayerSummary } = require("../services/steamQuery");
 
@@ -422,7 +423,7 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
 // Cache for 10 seconds (shorter since it's real-time data)
 router.get(
   "/online",
-  cacheMiddleware(10, playersKeyGenerator),
+  cacheMiddleware(10, onlinePlayersKeyGenerator),
   async (req, res) => {
     try {
       const { game, server } = req.query;

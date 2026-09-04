@@ -61,6 +61,18 @@ function playersKeyGenerator(req) {
 }
 
 /**
+ * Cache key generator for the online-players endpoint
+ *
+ * Deliberately distinct from playersKeyGenerator: /players and /players/online
+ * take different query parameters, so sharing a generator made both routes
+ * produce the same key and serve each other's cached (differently shaped) body.
+ */
+function onlinePlayersKeyGenerator(req) {
+  const { game, server } = req.query;
+  return `cache:players:online:${game || "all"}:${server || "all"}`;
+}
+
+/**
  * Cache key generator for maps endpoint
  */
 function mapsKeyGenerator(req) {
@@ -108,6 +120,7 @@ module.exports = {
   cacheMiddleware,
   serversKeyGenerator,
   playersKeyGenerator,
+  onlinePlayersKeyGenerator,
   mapsKeyGenerator,
   kzKeyGenerator,
   generateCacheKey,
