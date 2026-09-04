@@ -181,7 +181,9 @@ async function refreshAllStatistics() {
   };
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  const successCount = Object.values(results).filter(Boolean).length;
+  // refreshPlayerStatistics resolves to an object ({ success, ... }), the other two to a boolean.
+  const succeeded = (r) => (typeof r === "object" && r !== null ? r.success : r);
+  const successCount = Object.values(results).filter(succeeded).length;
 
   if (successCount === 3) {
     logger.info(`All statistics refreshed successfully in ${elapsed}s`);
