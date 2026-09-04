@@ -148,6 +148,18 @@ async function getServersByGame(game) {
   }
 }
 
+// Discord rejects the whole message (400) if any embed field exceeds these.
+const FIELD_NAME_LIMIT = 256;
+const FIELD_VALUE_LIMIT = 1024;
+
+/**
+ * Clamp a field to Discord's limit, marking that it was cut.
+ */
+function truncateField(text, limit) {
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit - 1)}…`;
+}
+
 /**
  * Build Discord embeds for servers grouped by region
  */
@@ -163,9 +175,15 @@ function buildEmbeds(servers, game) {
     const naServers = servers
       .filter((s) => s.region === "na")
       .sort((a, b) => a.port - b.port);
+    // Regions are strings, so `a.region - b.region` was NaN and left the list unsorted.
+    // Group by region name, then by port like the EU/NA lists.
     const otherServers = servers
       .filter((s) => s.region !== "eu" && s.region !== "na")
-      .sort((a, b) => a.region - b.region);
+      .sort(
+        (a, b) =>
+          String(a.region ?? "").localeCompare(String(b.region ?? "")) ||
+          a.port - b.port,
+      );
 
     const embeds = [];
 
@@ -195,6 +213,7 @@ function buildEmbeds(servers, game) {
         au: ":flag_au:",
         za: ":flag_za:",
       };
+      const flagFor = (region) => regionFlags[region] ?? "";
 
       const embed = {
         title: `${regionFlag} FKZ ${gameTitle} ${regionName} Servers`,
@@ -214,9 +233,11 @@ function buildEmbeds(servers, game) {
       regionServers.forEach((server, index) => {
         const statusEmoji =
           server.status === 1 ? ":green_circle:" : ":broken_heart:";
-        const serverName = server.hostname
-          ? `${regionFlags[server.region]} ${server.hostname}`
-          : `${regionFlags[server.region]} ${server.ip}:${server.port}`;
+        const serverName = (
+          server.hostname
+            ? `${flagFor(server.region)} ${server.hostname}`
+            : `${flagFor(server.region)} ${server.ip}:${server.port}`
+        ).trim();
 
         let fieldValue = `${statusEmoji} - Players: \`${server.players || 0}/${server.maxplayers || 0}\``;
 
@@ -259,8 +280,8 @@ function buildEmbeds(servers, game) {
         }
 
         embed.fields.push({
-          name: serverName,
-          value: fieldValue,
+          name: truncateField(serverName, FIELD_NAME_LIMIT),
+          value: truncateField(fieldValue, FIELD_VALUE_LIMIT),
           inline: false,
         });
       });
