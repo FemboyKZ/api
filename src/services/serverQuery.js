@@ -49,7 +49,6 @@ async function queryServer(ip, port, game) {
           status: 1,
           map: state.map || "",
           players: validPlayers,
-          playersRaw: state.players.raw || {},
           maxplayers: state.maxplayers || 0,
           version: state.version || "",
           playerCount: validPlayers.length,
