@@ -48,6 +48,7 @@ router.post("/messages", (req, res) => {
     name,
     message,
     team,
+    muted,
   });
 
   if (result && result.error) {
