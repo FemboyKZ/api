@@ -308,78 +308,7 @@ async function updatePlayerBanStatus(steamIds, archiveRecords = true) {
         bannedCount += banResult.affectedRows;
       }
 
-      // Archive records for permanently banned players
-      if (archiveRecords && permanentBans.length > 0) {
-        // Release connection before calling archive (it gets its own)
-        connection.release();
-
-        for (const ban of permanentBans) {
-          try {
-            const result = await archiveBannedPlayerRecords(
-              ban.steamid64,
-              ban.ban_id,
-            );
-            recordsArchived += result.archived || 0;
-          } catch (archiveError) {
-            // Log but don't fail the whole operation
-            logger.warn(
-              `[KZ Ban Status] Failed to archive records for ${ban.steamid64}: ${archiveError.message}`,
-            );
-          }
-        }
-
-        // Get a new connection for the rest of the operations
-        const newConnection = await pool.getConnection();
-
-        // Update players with no active bans to unbanned
-        if (inactiveSteamIds.length > 0) {
-          const inactivePlaceholders = inactiveSteamIds
-            .map(() => "?")
-            .join(",");
-          const [unbanResult] = await retryOnDeadlock(() =>
-            newConnection.query(
-              `
-            UPDATE kz_players
-            SET is_banned = FALSE, updated_at = CURRENT_TIMESTAMP
-            WHERE steamid64 IN (${inactivePlaceholders})
-              AND is_banned = TRUE
-          `,
-              inactiveSteamIds,
-            ),
-          );
-          unbannedCount += unbanResult.affectedRows;
-
-          // Restore records for unbanned players
-          for (const steamid64 of inactiveSteamIds) {
-            try {
-              const result = await restoreUnbannedPlayerRecords(steamid64);
-              recordsRestored += result.restored || 0;
-            } catch (restoreError) {
-              logger.warn(
-                `[KZ Ban Status] Failed to restore records for ${steamid64}: ${restoreError.message}`,
-              );
-            }
-          }
-        }
-
-        newConnection.release();
-        // Skip the finally block since we already released
-        stats.totalBans += bannedCount;
-        stats.totalUnbans += unbannedCount;
-
-        logger.debug(
-          `[KZ Ban Status] Updated ${steamIds.length} players: ${bannedCount} banned, ${unbannedCount} unbanned, ${recordsArchived} records archived, ${recordsRestored} records restored`,
-        );
-
-        return {
-          banned: bannedCount,
-          unbanned: unbannedCount,
-          recordsArchived,
-          recordsRestored,
-        };
-      }
-
-      // Update players with no active bans to unbanned (when no archiving needed)
+      // Update players with no active bans to unbanned
       if (inactiveSteamIds.length > 0) {
         const inactivePlaceholders = inactiveSteamIds.map(() => "?").join(",");
         const [unbanResult] = await retryOnDeadlock(() =>
@@ -395,13 +324,44 @@ async function updatePlayerBanStatus(steamIds, archiveRecords = true) {
         );
         unbannedCount += unbanResult.affectedRows;
       }
+
+      // Archive records for permanently banned players, and restore records for players in this batch whose bans are gone.
+      // archiveBannedPlayerRecords/restoreUnbannedPlayerRecords each check out their own pooled connection;
+      // ours stays checked out for the whole call so it is released exactly once, in the finally block below.
+      if (archiveRecords && permanentBans.length > 0) {
+        for (const ban of permanentBans) {
+          try {
+            const result = await archiveBannedPlayerRecords(
+              ban.steamid64,
+              ban.ban_id,
+            );
+            recordsArchived += result.archived || 0;
+          } catch (archiveError) {
+            // Log but don't fail the whole operation
+            logger.warn(
+              `[KZ Ban Status] Failed to archive records for ${ban.steamid64}: ${archiveError.message}`,
+            );
+          }
+        }
+
+        for (const steamid64 of inactiveSteamIds) {
+          try {
+            const result = await restoreUnbannedPlayerRecords(steamid64);
+            recordsRestored += result.restored || 0;
+          } catch (restoreError) {
+            logger.warn(
+              `[KZ Ban Status] Failed to restore records for ${steamid64}: ${restoreError.message}`,
+            );
+          }
+        }
+      }
     }
 
     stats.totalBans += bannedCount;
     stats.totalUnbans += unbannedCount;
 
     logger.debug(
-      `[KZ Ban Status] Updated ${steamIds.length} players: ${bannedCount} banned, ${unbannedCount} unbanned`,
+      `[KZ Ban Status] Updated ${steamIds.length} players: ${bannedCount} banned, ${unbannedCount} unbanned, ${recordsArchived} records archived, ${recordsRestored} records restored`,
     );
 
     return {
@@ -423,9 +383,11 @@ async function updatePlayerBanStatus(steamIds, archiveRecords = true) {
  * Clean up expired bans - unban players whose bans have expired
  * This runs periodically to ensure is_banned stays accurate
  *
+ * @param {boolean} [force=false] - Run even if the last run was less than CLEANUP_INTERVAL ago.
+ *   Manual triggers pass true; without it an on-demand call between scheduled runs silently returns zeros without doing anything.
  * @returns {Promise<Object>} Cleanup statistics
  */
-async function cleanupExpiredBans() {
+async function cleanupExpiredBans(force = false) {
   if (isCleanupRunning) {
     logger.debug(
       "[KZ Ban Status] Cleanup already running, skipping this iteration",
@@ -434,7 +396,7 @@ async function cleanupExpiredBans() {
   }
 
   const now = Date.now();
-  if (now - lastCleanupRun < CLEANUP_INTERVAL) {
+  if (!force && now - lastCleanupRun < CLEANUP_INTERVAL) {
     return { unbanned: 0, stillBanned: 0 }; // Not time yet
   }
 
@@ -696,7 +658,7 @@ async function manualBanStatusUpdate(steamIds = null) {
     return await updatePlayerBanStatus(steamIds);
   } else {
     // Update all currently banned players
-    return await cleanupExpiredBans();
+    return await cleanupExpiredBans(true);
   }
 }
 
