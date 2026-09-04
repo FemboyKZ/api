@@ -117,8 +117,7 @@ async function grantBaseVip(conn, steamid) {
  * @returns {Promise<{ redeemed: number, creditedEur: number }>}
  */
 async function redeemPendingGifts(conn, steamid, email) {
-  const targets = [steamid];
-  const params = ["steamid", steamid];
+  const params = [steamid];
   let emailClause = "";
   if (email) {
     emailClause = " OR (target_type = 'email' AND target_value = ?)";
@@ -132,7 +131,6 @@ async function redeemPendingGifts(conn, steamid, email) {
      FOR UPDATE`,
     params,
   );
-  void targets;
 
   let creditedEur = 0;
   for (const g of gifts) {
