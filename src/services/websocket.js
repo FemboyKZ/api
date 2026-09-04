@@ -1,7 +1,18 @@
 const { Server } = require("socket.io");
 const logger = require("../utils/logger");
 require("dotenv").config();
-const VALID_CHANNELS = process.env.WS_VALID_CHANNELS || "";
+
+// Rooms this server actually emits to (see the emit* helpers below).
+// WS_VALID_CHANNELS overrides the list; membership is an exact match.
+const DEFAULT_CHANNELS = ["servers", "players", "maps", "chat", "all"];
+const VALID_CHANNELS = new Set(
+  (process.env.WS_VALID_CHANNELS
+    ? process.env.WS_VALID_CHANNELS.split(",")
+    : DEFAULT_CHANNELS
+  )
+    .map((c) => c.trim())
+    .filter(Boolean),
+);
 
 let io = null;
 
@@ -24,7 +35,7 @@ function initWebSocket(httpServer) {
 
     // Handle client subscription to specific channels
     socket.on("subscribe", (channel) => {
-      if (VALID_CHANNELS.includes(channel)) {
+      if (VALID_CHANNELS.has(channel)) {
         socket.join(channel);
         logger.debug(`Client ${socket.id} subscribed to ${channel}`);
         socket.emit("subscribed", { channel, success: true });
