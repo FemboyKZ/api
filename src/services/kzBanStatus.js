@@ -267,10 +267,13 @@ async function updatePlayerBanStatus(steamIds, archiveRecords = true) {
       const batch = steamIds.slice(i, i + batchSize);
       const placeholders = batch.map(() => "?").join(",");
 
-      // Find players with active bans (including permanent and temporary)
+      // Find players with active bans (including permanent and temporary).
+      // GlobalKZ writes permanent bans as expires_on = '9999-12-31 23:59:59';
+      // a NULL expiry never expires either, so it counts as permanent too.
       const [activeBans] = await connection.query(
         `
-        SELECT DISTINCT b.steamid64, b.id AS ban_id, b.expires_on
+        SELECT DISTINCT b.steamid64, b.id AS ban_id, b.expires_on,
+          (b.expires_on IS NULL OR YEAR(b.expires_on) >= 9999) AS is_permanent
         FROM kz_bans b
         WHERE b.steamid64 IN (${placeholders})
           AND (b.expires_on IS NULL OR b.expires_on > NOW())
@@ -279,14 +282,7 @@ async function updatePlayerBanStatus(steamIds, archiveRecords = true) {
       );
 
       const activeSteamIds = activeBans.map((row) => row.steamid64);
-      // GlobalKZ writes permanent bans as expires_on = '9999-12-31 23:59:59'.
-      // A NULL expiry never expires either, so it counts as permanent too.
-      const permanentBanDate = new Date("9999-12-31T23:59:59Z").getTime();
-      const permanentBans = activeBans.filter((row) => {
-        if (!row.expires_on) return true;
-        const expiresTime = new Date(row.expires_on).getTime();
-        return expiresTime === permanentBanDate;
-      });
+      const permanentBans = activeBans.filter((row) => Boolean(row.is_permanent));
       const inactiveSteamIds = batch.filter(
         (id) => !activeSteamIds.includes(id),
       );
