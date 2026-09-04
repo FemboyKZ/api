@@ -145,12 +145,19 @@ async function updateMapWorldRecords(mapId, wrsByType) {
     setClauses.push("world_records_synced_at = NOW()");
     values.push(mapId);
 
-    await pool.query(
+    const [result] = await pool.query(
       `UPDATE kz_map_statistics 
        SET ${setClauses.join(", ")}
        WHERE map_id = ?`,
       values,
     );
+
+    if (result.affectedRows === 0) {
+      logger.warn(
+        `No kz_map_statistics row for map ID ${mapId}, world records not stored`,
+      );
+      return false;
+    }
 
     return true;
   } catch (error) {
@@ -177,7 +184,7 @@ async function getMapsNeedingWRSync(limit = 100) {
         m.map_name,
         ms.world_records_synced_at
        FROM kz_maps m
-       LEFT JOIN kz_map_statistics ms ON m.id = ms.map_id
+       INNER JOIN kz_map_statistics ms ON m.id = ms.map_id
        WHERE m.validated = TRUE
          AND ms.world_records_synced_at IS NULL
        ORDER BY m.map_name ASC
