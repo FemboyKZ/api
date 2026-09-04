@@ -102,30 +102,46 @@ function isIpInWhitelist(ip, whitelist) {
 }
 
 /**
- * Basic CIDR matching for /24 and /16 subnets
+ * Convert a dotted-quad IPv4 string to an unsigned 32-bit integer.
+ * Returns null if the input is not four valid octets.
+ */
+function ipv4ToInt(ip) {
+  const parts = ip.split(".");
+  if (parts.length !== 4) return null;
+
+  let value = 0;
+  for (const part of parts) {
+    if (!/^[0-9]{1,3}$/.test(part)) return null;
+    const octet = Number(part);
+    if (octet > 255) return null;
+    value = value * 256 + octet;
+  }
+  return value;
+}
+
+/**
+ * CIDR matching for IPv4, honouring the full prefix length.
  */
 function matchCIDR(ip, cidr) {
   const [network, bits] = cidr.split("/");
   const maskBits = parseInt(bits, 10);
 
-  // Only support IPv4 for CIDR matching
-  if (!ip.includes(".") || !network.includes(".")) {
+  if (!Number.isInteger(maskBits) || maskBits < 0 || maskBits > 32) {
     return false;
   }
 
-  const ipParts = ip.split(".").map(Number);
-  const networkParts = network.split(".").map(Number);
-
-  // Calculate how many octets to compare
-  const octetsToCompare = Math.floor(maskBits / 8);
-
-  for (let i = 0; i < octetsToCompare; i++) {
-    if (ipParts[i] !== networkParts[i]) {
-      return false;
-    }
+  // Only support IPv4 for CIDR matching
+  const ipInt = ipv4ToInt(ip);
+  const networkInt = ipv4ToInt(network);
+  if (ipInt === null || networkInt === null) {
+    return false;
   }
 
-  return true;
+  // /0 matches everything; shifting by 32 is a no-op in JS, so special-case it.
+  if (maskBits === 0) return true;
+
+  const mask = (0xffffffff << (32 - maskBits)) >>> 0;
+  return (ipInt & mask) >>> 0 === (networkInt & mask) >>> 0;
 }
 
 /**
