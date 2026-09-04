@@ -15,10 +15,10 @@ const {
   emitPlayerUpdate,
   emitMapUpdate,
 } = require("../services/websocket");
-
-// In-memory state for session/map tracking (mirrors updater's tracking)
-const previousServerStates = new Map();
-const currentMapStates = new Map();
+const {
+  trackPlayerSessions,
+  trackMapChange,
+} = require("../services/serverTracking");
 
 /**
  * POST /servers/status
@@ -147,92 +147,14 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // Track player sessions
+    // Track player sessions and map rotation.
     const serverKey = `${ip}:${port}`;
-    const previousPlayers = previousServerStates.get(serverKey) || new Set();
-    const currentPlayerIds = new Set();
-
-    for (const player of extensionPlayers) {
-      if (!player.steamid || !player.in_game) continue;
-      currentPlayerIds.add(player.steamid);
-
-      if (!previousPlayers.has(player.steamid)) {
-        try {
-          const cleanName = sanitizePlayerName(player.name) || "Unknown";
-          await pool.query(
-            `INSERT INTO player_sessions (steamid, name, server_ip, server_port, joined_at)
-             VALUES (?, ?, ?, ?, NOW())`,
-            [player.steamid, cleanName, ip, port],
-          );
-        } catch (sessErr) {
-          logger.error("Failed to track player join", {
-            error: sessErr.message,
-          });
-        }
-      }
-    }
-
-    // Players who left
-    for (const playerId of previousPlayers) {
-      if (!currentPlayerIds.has(playerId)) {
-        try {
-          await pool.query(
-            `UPDATE player_sessions 
-             SET left_at = NOW(), duration = TIMESTAMPDIFF(SECOND, joined_at, NOW())
-             WHERE steamid = ? AND server_ip = ? AND server_port = ? AND left_at IS NULL`,
-            [playerId, ip, port],
-          );
-        } catch (sessErr) {
-          logger.error("Failed to track player leave", {
-            error: sessErr.message,
-          });
-        }
-      }
-    }
-    previousServerStates.set(serverKey, currentPlayerIds);
-
-    // Track map changes
-    const currentMap = currentMapStates.get(serverKey);
-    if (currentMap && currentMap.name !== sanitizedMap) {
-      try {
-        await pool.query(
-          `UPDATE map_history SET ended_at = NOW(), duration = TIMESTAMPDIFF(SECOND, started_at, NOW())
-           WHERE server_ip = ? AND server_port = ? AND ended_at IS NULL`,
-          [ip, port],
-        );
-        await pool.query(
-          `INSERT INTO map_history (server_ip, server_port, map_name, started_at, player_count_avg, player_count_peak)
-           VALUES (?, ?, ?, NOW(), ?, ?)`,
-          [ip, port, sanitizedMap, playerCount, playerCount],
-        );
-      } catch (mapErr) {
-        logger.error("Failed to track map change", { error: mapErr.message });
-      }
-    } else if (!currentMap && sanitizedMap) {
-      try {
-        await pool.query(
-          `INSERT INTO map_history (server_ip, server_port, map_name, started_at, player_count_avg, player_count_peak)
-           VALUES (?, ?, ?, NOW(), ?, ?)`,
-          [ip, port, sanitizedMap, playerCount, playerCount],
-        );
-      } catch (mapErr) {
-        logger.error("Failed to init map tracking", { error: mapErr.message });
-      }
-    } else if (currentMap && currentMap.name === sanitizedMap) {
-      try {
-        await pool.query(
-          `UPDATE map_history 
-           SET player_count_peak = GREATEST(player_count_peak, ?), player_count_avg = (player_count_avg + ?) / 2
-           WHERE server_ip = ? AND server_port = ? AND ended_at IS NULL`,
-          [playerCount, playerCount, ip, port],
-        );
-      } catch (mapErr) {
-        logger.error("Failed to update map player counts", {
-          error: mapErr.message,
-        });
-      }
-    }
-    currentMapStates.set(serverKey, { name: sanitizedMap, playerCount });
+    await trackPlayerSessions(
+      ip,
+      port,
+      extensionPlayers.filter((p) => p.steamid && p.in_game),
+    );
+    await trackMapChange(ip, port, sanitizedMap, playerCount);
 
     // Update individual player stats
     // Use a reasonable increment, extension reports every ~10s, but we don't

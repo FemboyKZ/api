@@ -12,6 +12,11 @@ const {
 const { deleteCache } = require("../db/redis");
 const { updateDiscordWebhooks } = require("./discordWebhook");
 const { isServerLive } = require("./liveServers");
+const {
+  trackPlayerSessions,
+  closeServerSessions,
+  trackMapChange,
+} = require("./serverTracking");
 
 /**
  * Server Update Service
@@ -24,6 +29,7 @@ const { isServerLive } = require("./liveServers");
  * 3. Records historical snapshots in server_history table
  * 4. Tracks player sessions (join/leave) when Steam IDs available from plugin
  * 5. Tracks map changes and rotation in map_history table
+ *    (4 and 5 live in services/serverTracking.js, shared with the plugin ingest)
  * 6. Updates player statistics (separated by game type)
  * 7. Updates map statistics (separated by game type)
  * 8. Emits WebSocket events for real-time updates
@@ -40,12 +46,12 @@ const { isServerLive } = require("./liveServers");
  * - All servers queried in parallel using Promise.all()
  * - Update time = slowest server response, not sum of all servers
  * - Cache invalidated once after all updates complete
+ * - Cycles never overlap: a tick is skipped while the previous one is running
  */
 
 let serversConfig = [];
-const previousServerStates = new Map(); // Track previous state for session tracking
-const currentMapStates = new Map(); // Track current maps for map history
 let UPDATE_INTERVAL_SECONDS = 30; // Default interval in seconds
+let isUpdating = false; // Guards against overlapping update cycles
 
 function loadConfig() {
   serversConfig = JSON.parse(fs.readFileSync("config/servers.json", "utf8"));
@@ -79,141 +85,21 @@ async function recordServerHistory(server, result) {
   }
 }
 
-/**
- * Track player sessions (join/leave)
- */
-async function trackPlayerSessions(server, currentPlayers) {
-  const serverKey = `${server.ip}:${server.port}`;
-  const previousPlayers = previousServerStates.get(serverKey) || new Set();
-  const currentPlayerIds = new Set(
-    currentPlayers.map((p) => p.steamid).filter((id) => id),
-  );
-
-  // Players who joined
-  for (const player of currentPlayers) {
-    if (player.steamid && !previousPlayers.has(player.steamid)) {
-      try {
-        // Sanitize player name when creating session
-        const cleanName = sanitizePlayerName(player.name) || "Unknown";
-        await pool.query(
-          `INSERT INTO player_sessions (steamid, name, server_ip, server_port, joined_at)
-           VALUES (?, ?, ?, ?, NOW())`,
-          [player.steamid, cleanName, server.ip, server.port],
-        );
-        logger.debug("Player joined", {
-          steamid: player.steamid,
-          server: serverKey,
-        });
-      } catch (error) {
-        logger.error("Failed to track player join", {
-          error: error.message,
-          steamid: player.id,
-        });
-      }
-    }
-  }
-
-  // Players who left
-  for (const playerId of previousPlayers) {
-    if (!currentPlayerIds.has(playerId)) {
-      try {
-        await pool.query(
-          `UPDATE player_sessions 
-           SET left_at = NOW(), 
-               duration = TIMESTAMPDIFF(SECOND, joined_at, NOW())
-           WHERE steamid = ? 
-             AND server_ip = ? 
-             AND server_port = ? 
-             AND left_at IS NULL`,
-          [playerId, server.ip, server.port],
-        );
-        logger.debug("Player left", { steamid: playerId, server: serverKey });
-      } catch (error) {
-        logger.error("Failed to track player leave", {
-          error: error.message,
-          steamid: playerId,
-        });
-      }
-    }
-  }
-
-  // Update previous state
-  previousServerStates.set(serverKey, currentPlayerIds);
-}
-
-/**
- * Track map changes
- */
-async function trackMapChange(server, newMap, playerCount) {
-  const serverKey = `${server.ip}:${server.port}`;
-  const currentMap = currentMapStates.get(serverKey);
-
-  if (currentMap && currentMap.name !== newMap) {
-    // End previous map
-    try {
-      await pool.query(
-        `UPDATE map_history 
-         SET ended_at = NOW(), 
-             duration = TIMESTAMPDIFF(SECOND, started_at, NOW())
-         WHERE server_ip = ? 
-           AND server_port = ? 
-           AND ended_at IS NULL`,
-        [server.ip, server.port],
-      );
-
-      // Start new map
-      await pool.query(
-        `INSERT INTO map_history 
-         (server_ip, server_port, map_name, started_at, player_count_avg, player_count_peak)
-         VALUES (?, ?, ?, NOW(), ?, ?)`,
-        [server.ip, server.port, newMap, playerCount, playerCount],
-      );
-
-      logger.debug("Map changed", {
-        server: serverKey,
-        from: currentMap.name,
-        to: newMap,
-      });
-    } catch (error) {
-      logger.error("Failed to track map change", { error: error.message });
-    }
-  } else if (!currentMap && newMap) {
-    // First map entry for this server
-    try {
-      await pool.query(
-        `INSERT INTO map_history 
-         (server_ip, server_port, map_name, started_at, player_count_avg, player_count_peak)
-         VALUES (?, ?, ?, NOW(), ?, ?)`,
-        [server.ip, server.port, newMap, playerCount, playerCount],
-      );
-    } catch (error) {
-      logger.error("Failed to initialize map tracking", {
-        error: error.message,
-      });
-    }
-  } else if (currentMap && currentMap.name === newMap) {
-    // Update player counts for current map
-    try {
-      await pool.query(
-        `UPDATE map_history 
-         SET player_count_peak = GREATEST(player_count_peak, ?),
-             player_count_avg = (player_count_avg + ?) / 2
-         WHERE server_ip = ? 
-           AND server_port = ? 
-           AND ended_at IS NULL`,
-        [playerCount, playerCount, server.ip, server.port],
-      );
-    } catch (error) {
-      logger.error("Failed to update map player counts", {
-        error: error.message,
-      });
-    }
-  }
-
-  currentMapStates.set(serverKey, { name: newMap, playerCount });
-}
-
 async function updateLoop() {
+  // A cycle can outlast the interval when servers are slow to answer.
+  if (isUpdating) {
+    logger.warn("Update loop still running, skipping this tick");
+    return;
+  }
+  isUpdating = true;
+  try {
+    await runUpdateCycle();
+  } finally {
+    isUpdating = false;
+  }
+}
+
+async function runUpdateCycle() {
   loadConfig();
 
   // Query all servers in parallel
@@ -278,13 +164,22 @@ async function updateLoop() {
         if (result.players && result.players.length > 0) {
           const playersWithSteamId = result.players.filter((p) => p.steamid);
           if (playersWithSteamId.length > 0) {
-            await trackPlayerSessions(server, playersWithSteamId);
+            await trackPlayerSessions(
+              server.ip,
+              server.port,
+              playersWithSteamId,
+            );
           }
         }
 
         // Track map changes
         if (result.map) {
-          await trackMapChange(server, sanitizedMap, result.playerCount || 0);
+          await trackMapChange(
+            server.ip,
+            server.port,
+            sanitizedMap,
+            result.playerCount || 0,
+          );
         }
 
         // Emit WebSocket events for server changes
@@ -395,6 +290,10 @@ async function updateLoop() {
             server.tickrate || null,
           ],
         );
+
+        // Nobody is connected to an offline server.
+        // Without this, sessions opened before it went down stayed open (left_at IS NULL) forever.
+        await closeServerSessions(server.ip, server.port);
 
         // Emit status change if server went offline
         if (previousServer && previousServer.status === 1) {
