@@ -70,20 +70,25 @@ router.post("/aggregate-daily", async (req, res) => {
     let aggregated = 0;
 
     for (const server of servers) {
+      // Snapshot stats come from server_history alone.
       const [stats] = await pool.query(
         `SELECT 
-          COUNT(DISTINCT steamid) as unique_players,
           MAX(player_count) as peak_players,
           AVG(player_count) as avg_players,
           COUNT(*) as data_points
-        FROM server_history sh
-        LEFT JOIN player_sessions ps ON 
-          ps.server_ip = sh.server_ip AND 
-          ps.server_port = sh.server_port AND 
-          DATE(ps.joined_at) = DATE(sh.recorded_at)
-        WHERE sh.server_ip = ? 
-          AND sh.server_port = ? 
-          AND DATE(sh.recorded_at) = ?`,
+        FROM server_history
+        WHERE server_ip = ? 
+          AND server_port = ? 
+          AND DATE(recorded_at) = ?`,
+        [server.server_ip, server.server_port, targetDate],
+      );
+
+      const [playerStats] = await pool.query(
+        `SELECT COUNT(DISTINCT steamid) as unique_players
+        FROM player_sessions
+        WHERE server_ip = ? 
+          AND server_port = ? 
+          AND DATE(joined_at) = ?`,
         [server.server_ip, server.server_port, targetDate],
       );
 
@@ -115,7 +120,7 @@ router.post("/aggregate-daily", async (req, res) => {
           server.server_ip,
           server.server_port,
           stats[0].data_points,
-          stats[0].unique_players || 0,
+          playerStats[0].unique_players || 0,
           stats[0].peak_players || 0,
           parseFloat(stats[0].avg_players) || 0,
           uptime_minutes,
@@ -251,7 +256,7 @@ router.post("/cleanup-expired-bans", async (req, res) => {
   try {
     logger.info("Manual expired bans cleanup triggered");
 
-    const result = await cleanupExpiredBans();
+    const result = await cleanupExpiredBans(true);
 
     logger.info("Expired bans cleanup complete", result);
     logger.logRequest(req, res, Date.now() - startTime);
