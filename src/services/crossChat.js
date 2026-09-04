@@ -66,6 +66,14 @@ function loadServerLookup() {
 }
 
 /**
+ * Cap a string at `max` characters without splitting a surrogate pair.
+ */
+function truncateChars(text, max) {
+  const chars = [...text]; // iterates by code point
+  return chars.length > max ? chars.slice(0, max).join("") : text;
+}
+
+/**
  * Strip in-game color/control codes, collapse whitespace, cap length.
  * Keeps visible Unicode (emoji, hearts, non-latin text).
  */
@@ -73,7 +81,7 @@ function sanitizeMessage(text) {
   if (!text || typeof text !== "string") return "";
   let cleaned = text.replace(/[\x00-\x1F\x7F]/g, ""); // color codes / control
   cleaned = cleaned.replace(/\s+/g, " ").trim();
-  return cleaned.substring(0, MAX_MESSAGE_LEN);
+  return truncateChars(cleaned, MAX_MESSAGE_LEN);
 }
 
 function headId() {
@@ -121,8 +129,8 @@ function addMessage({ ip, port, steamid, name, message, team, muted }) {
   const cfg = serverLookup.get(serverKey);
   if (!cfg) return { error: "Server not registered" };
 
-  const cleanName = (sanitizePlayerName(name) || "Unknown").substring(
-    0,
+  const cleanName = truncateChars(
+    sanitizePlayerName(name) || "Unknown",
     MAX_NAME_LEN,
   );
   const cleanMsg = sanitizeMessage(message);
@@ -286,5 +294,6 @@ module.exports = {
   wait,
   headId,
   // exposed for tests
+  sanitizeMessage,
   _ring: ring,
 };
