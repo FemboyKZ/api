@@ -70,10 +70,22 @@ const BANS_FULL_SWEEP_ENABLED =
 const BANS_FULL_SWEEP_PAGE_SIZE = 1000;
 const BANS_FULL_SWEEP_PAGE_DELAY = 1500; // ms between pages
 
-// Caches for normalized data
+// Caches for normalized data.
+// Maps and servers are a bounded set (thousands) so those stay uncapped,
+// but GlobalKZ has millions of distinct players and this process runs indefinitely,
+// so the player cache is capped and evicts oldest-first.
 const playerCache = new Map();
 const mapCache = new Map();
 const serverCache = new Map();
+const PLAYER_CACHE_MAX = 50000;
+
+function cachePlayer(key, value) {
+  if (playerCache.size >= PLAYER_CACHE_MAX && !playerCache.has(key)) {
+    // Map iterates in insertion order, so the first key is the oldest.
+    playerCache.delete(playerCache.keys().next().value);
+  }
+  playerCache.set(key, value);
+}
 
 // State tracking
 let isRunning = false;
@@ -283,7 +295,7 @@ async function getOrCreatePlayer(connection, record) {
 
   if (rows.length > 0) {
     const playerData = { id: rows[0].id, steamid64: rows[0].steamid64 };
-    playerCache.set(cacheKey, playerData);
+    cachePlayer(cacheKey, playerData);
     return playerData;
   }
 
@@ -304,7 +316,7 @@ async function getOrCreatePlayer(connection, record) {
   );
 
   const playerData = { id: result.insertId, steamid64 };
-  playerCache.set(cacheKey, playerData);
+  cachePlayer(cacheKey, playerData);
   return playerData;
 }
 
