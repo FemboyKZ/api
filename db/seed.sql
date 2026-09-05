@@ -21,33 +21,21 @@ INSERT INTO servers (ip, port, game, status, map, player_count, maxplayers, bot_
 ('54.39.52.5', 27025, 'csgo', 1, 'kz_rockclimb', 4, 32, 0, '1.38.8.1', 'FemboyKZ | NA #1 [CS:GO]', 'Linux', 1, 'na', 'na.femboy.kz', '[]', NULL, 125, 128),
 ('54.39.52.5', 27030, 'csgo', 0, '', 0, 32, 0, '1.38.8.1', 'FemboyKZ | NA #2 [CS:GO]', 'Linux', 1, 'na', 'na.femboy.kz', '[]', NULL, 126, 128);
 
--- Insert sample players with game separation, avatars, and realistic playtimes
+-- Insert sample players with game separation and realistic playtimes
 -- Player 1 plays both CS:GO and CS2
-INSERT INTO players (steamid, latest_name, game, playtime, server_ip, server_port, avatar, avatar_updated_at) VALUES
-('76561198000000001', 'remulian', 'csgo', 18900, '37.27.107.76', 27025, 
- 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb.jpg',
- NOW()),
-('76561198000000001', 'remulian', 'counterstrike2', 25200, '37.27.107.76', 27015,
- 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb.jpg',
- NOW()),
+INSERT INTO players (steamid, latest_name, game, playtime, server_ip, server_port) VALUES
+('76561198000000001', 'remulian', 'csgo', 18900, '37.27.107.76', 27025),
+('76561198000000001', 'remulian', 'counterstrike2', 25200, '37.27.107.76', 27015),
 
 -- Player 2 only plays CS2
-('76561198000000002', 'kz_pro_player', 'counterstrike2', 43200, '54.39.52.5', 27015,
- 'https://avatars.steamstatic.com/b5bd56c1aa4644a474a2e4972be27ef9e82e517e.jpg',
- NOW()),
+('76561198000000002', 'kz_pro_player', 'counterstrike2', 43200, '54.39.52.5', 27015),
 
 -- Player 3 plays both games
-('76561198000000003', 'casual_gamer', 'csgo', 12600, '37.27.107.76', 27025,
- 'https://avatars.steamstatic.com/c5d56249ee5d28a07db4ac9f7f60af961fab5426.jpg',
- NOW()),
-('76561198000000003', 'casual_gamer', 'counterstrike2', 16200, '37.27.107.76', 27016,
- 'https://avatars.steamstatic.com/c5d56249ee5d28a07db4ac9f7f60af961fab5426.jpg',
- NOW()),
+('76561198000000003', 'casual_gamer', 'csgo', 12600, '37.27.107.76', 27025),
+('76561198000000003', 'casual_gamer', 'counterstrike2', 16200, '37.27.107.76', 27016),
 
 -- Player 4 only plays CS:GO
-('76561198000000004', 'old_school_player', 'csgo', 36000, '54.39.52.5', 27025,
- 'https://avatars.steamstatic.com/fe3bb3eef3bb8fe4f3f3bb3eef3bb8fe4f3f3bb3.jpg',
- NOW()),
+('76561198000000004', 'old_school_player', 'csgo', 36000, '54.39.52.5', 27025),
 
 -- Player 5 CS2 beginner
 ('76561198000000005', 'newbie_kz', 'counterstrike2', 5400, '149.40.54.210', 26532,
