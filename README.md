@@ -28,6 +28,8 @@ api/
 ├── scripts/         # Data management scripts
 ├── src/
 │   ├── api/         # API route handlers
+│   │   ├── global/  # GlobalAPI mirror (gokz)
+│   │   └── local/   # Local timer DBs, per game
 │   ├── config/      # API Internal configuration
 │   ├── db/          # Database connection
 │   ├── services/    # Service logic (updaters, queries)

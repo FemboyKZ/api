@@ -5,7 +5,11 @@ This directory contains SQL scripts for setting up the MySQL database.
 ## Files
 
 - **`schema.sql`** - Creates the database tables (servers, players, maps)
+- **`kz-records-schema.sql`** - Creates the KZ records tables (kz_players, kz_records, kz_maps, kz_bans)
 - **`seed.sql`** - Inserts sample data for testing
+- **`migrations/`** - Incremental changes applied after the base schema.
+  There is no migration runner: apply them by hand, and note the filenames carry no ordering,
+  so check dependencies between them before applying.
 
 ## Setup Instructions
 

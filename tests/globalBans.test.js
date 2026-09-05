@@ -23,7 +23,7 @@ describe("KZ Bans Endpoints", () => {
     kzRecords.getKzPool.mockReturnValue(mockPool);
   });
 
-  describe("GET /kzglobal/bans", () => {
+  describe("GET /global/bans", () => {
     it("should return paginated list of bans", async () => {
       mockPool.query
         .mockResolvedValueOnce([[{ total: 1 }]])
@@ -48,7 +48,7 @@ describe("KZ Bans Endpoints", () => {
         ]);
 
       const response = await request(app)
-        .get("/kzglobal/bans")
+        .get("/global/bans")
         .expect("Content-Type", /json/)
         .expect(200);
 
@@ -65,7 +65,7 @@ describe("KZ Bans Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       const response = await request(app)
-        .get("/kzglobal/bans?steamid=76561198000000001")
+        .get("/global/bans?steamid=76561198000000001")
         .expect(200);
 
       expect(mockPool.query).toHaveBeenCalled();
@@ -77,7 +77,7 @@ describe("KZ Bans Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/bans?ban_type=Bhop Hack").expect(200);
+      await request(app).get("/global/bans?ban_type=Bhop Hack").expect(200);
 
       const call = mockPool.query.mock.calls[0];
       expect(call[0]).toContain("ban_type");
@@ -88,7 +88,7 @@ describe("KZ Bans Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/bans?active=true").expect(200);
+      await request(app).get("/global/bans?active=true").expect(200);
 
       const call = mockPool.query.mock.calls[0];
       expect(call[0]).toMatch(
@@ -101,20 +101,20 @@ describe("KZ Bans Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/bans").expect(200);
+      await request(app).get("/global/bans").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("ORDER BY b.created_on DESC");
     });
   });
 
-  describe("GET /kzglobal/bans/active", () => {
+  describe("GET /global/bans/active", () => {
     it("should return only active bans", async () => {
       mockPool.query
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/bans/active").expect(200);
+      await request(app).get("/global/bans/active").expect(200);
 
       const call = mockPool.query.mock.calls[0];
       expect(call[0]).toMatch(
@@ -123,7 +123,7 @@ describe("KZ Bans Endpoints", () => {
     });
   });
 
-  describe("GET /kzglobal/bans/stats", () => {
+  describe("GET /global/bans/stats", () => {
     it("should return ban statistics", async () => {
       const overallStats = [
         {
@@ -144,9 +144,7 @@ describe("KZ Bans Endpoints", () => {
         ])
         .mockResolvedValueOnce([[]]);
 
-      const response = await request(app)
-        .get("/kzglobal/bans/stats")
-        .expect(200);
+      const response = await request(app).get("/global/bans/stats").expect(200);
 
       expect(response.body).toHaveProperty("statistics");
       expect(response.body).toHaveProperty("ban_type_breakdown");
@@ -156,7 +154,7 @@ describe("KZ Bans Endpoints", () => {
     });
   });
 
-  describe("GET /kzglobal/bans/:id", () => {
+  describe("GET /global/bans/:id", () => {
     it("should return ban details by id", async () => {
       const banData = {
         id: 1,
@@ -181,7 +179,7 @@ describe("KZ Bans Endpoints", () => {
 
       mockPool.query.mockResolvedValueOnce([[banData]]);
 
-      const response = await request(app).get("/kzglobal/bans/1").expect(200);
+      const response = await request(app).get("/global/bans/1").expect(200);
 
       expect(response.body).toHaveProperty("data");
       expect(response.body.data).toHaveProperty("id", 1);
@@ -192,17 +190,17 @@ describe("KZ Bans Endpoints", () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
       const response = await request(app)
-        .get("/kzglobal/bans/999999")
+        .get("/global/bans/999999")
         .expect(404);
       expect(response.body).toHaveProperty("error");
     });
 
     it("should return 400 for invalid ban id", async () => {
-      await request(app).get("/kzglobal/bans/invalid").expect(400);
+      await request(app).get("/global/bans/invalid").expect(400);
     });
   });
 
-  describe("GET /kzglobal/bans/player/:steamid", () => {
+  describe("GET /global/bans/player/:steamid", () => {
     it("should return all bans for a player", async () => {
       mockPool.query.mockResolvedValueOnce([
         [
@@ -234,7 +232,7 @@ describe("KZ Bans Endpoints", () => {
       ]);
 
       const response = await request(app)
-        .get("/kzglobal/bans/player/76561198000000001")
+        .get("/global/bans/player/76561198000000001")
         .expect(200);
 
       expect(response.body).toHaveProperty("data");
@@ -247,7 +245,7 @@ describe("KZ Bans Endpoints", () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/bans/player/76561198000000001?active=true")
+        .get("/global/bans/player/76561198000000001?active=true")
         .expect(200);
 
       const call = mockPool.query.mock.calls[0];
@@ -257,7 +255,7 @@ describe("KZ Bans Endpoints", () => {
     });
 
     it("should return 400 for invalid steamid", async () => {
-      await request(app).get("/kzglobal/bans/player/invalid").expect(400);
+      await request(app).get("/global/bans/player/invalid").expect(400);
     });
   });
 });

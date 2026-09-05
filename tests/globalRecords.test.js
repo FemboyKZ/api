@@ -21,7 +21,7 @@ describe("KZ Records Endpoints", () => {
     kzRecords.getKzPool.mockReturnValue(mockPool);
   });
 
-  describe("GET /kzglobal/records", () => {
+  describe("GET /global/records", () => {
     it("should return paginated list of records", async () => {
       mockPool.query
         .mockResolvedValueOnce([[{ total: 2 }]])
@@ -50,7 +50,7 @@ describe("KZ Records Endpoints", () => {
         ]);
 
       const response = await request(app)
-        .get("/kzglobal/records")
+        .get("/global/records")
         .expect("Content-Type", /json/)
         .expect(200);
 
@@ -67,7 +67,7 @@ describe("KZ Records Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/records?map=synergy").expect(200);
+      await request(app).get("/global/records?map=synergy").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("map_name LIKE");
@@ -79,7 +79,7 @@ describe("KZ Records Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/records?player=76561198000000001")
+        .get("/global/records?player=76561198000000001")
         .expect(200);
 
       const call = mockPool.query.mock.calls[1];
@@ -91,7 +91,7 @@ describe("KZ Records Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/records?mode=kz_timer").expect(200);
+      await request(app).get("/global/records?mode=kz_timer").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("mode =");
@@ -102,7 +102,7 @@ describe("KZ Records Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/records?stage=0").expect(200);
+      await request(app).get("/global/records?stage=0").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("stage =");
@@ -113,7 +113,7 @@ describe("KZ Records Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/records?teleports=pro").expect(200);
+      await request(app).get("/global/records?teleports=pro").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("teleports = 0");
@@ -124,7 +124,7 @@ describe("KZ Records Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/records").expect(200);
+      await request(app).get("/global/records").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).toMatch(
@@ -137,9 +137,7 @@ describe("KZ Records Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app)
-        .get("/kzglobal/records?include_banned=true")
-        .expect(200);
+      await request(app).get("/global/records?include_banned=true").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).not.toContain("is_banned IS NULL");
@@ -150,14 +148,14 @@ describe("KZ Records Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/records").expect(200);
+      await request(app).get("/global/records").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("ORDER BY r.created_on DESC");
     });
   });
 
-  describe("GET /kzglobal/records/leaderboard/:mapname", () => {
+  describe("GET /global/records/leaderboard/:mapname", () => {
     it("should return leaderboard with best times per player", async () => {
       const leaderboardData = [
         {
@@ -197,7 +195,7 @@ describe("KZ Records Endpoints", () => {
         .mockResolvedValueOnce([leaderboardData]);
 
       const response = await request(app)
-        .get("/kzglobal/records/leaderboard/kz_synergy_x")
+        .get("/global/records/leaderboard/kz_synergy_x")
         .expect(200);
 
       expect(response.body).toHaveProperty("map", "kz_synergy_x");
@@ -215,7 +213,7 @@ describe("KZ Records Endpoints", () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/records/leaderboard/kz_synergy_x?mode=kz_simple")
+        .get("/global/records/leaderboard/kz_synergy_x?mode=kz_simple")
         .expect(200);
 
       const call = mockPool.query.mock.calls[1];
@@ -228,7 +226,7 @@ describe("KZ Records Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/records/leaderboard/kz_synergy_x?stage=1")
+        .get("/global/records/leaderboard/kz_synergy_x?stage=1")
         .expect(200);
 
       const call = mockPool.query.mock.calls[1];
@@ -240,7 +238,7 @@ describe("KZ Records Endpoints", () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/records/leaderboard/kz_synergy_x?teleports=tp")
+        .get("/global/records/leaderboard/kz_synergy_x?teleports=tp")
         .expect(200);
 
       const call = mockPool.query.mock.calls[1];
@@ -251,12 +249,12 @@ describe("KZ Records Endpoints", () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/records/leaderboard/nonexistent_map")
+        .get("/global/records/leaderboard/nonexistent_map")
         .expect(404);
     });
   });
 
-  describe("GET /kzglobal/records/recent", () => {
+  describe("GET /global/records/recent", () => {
     it("should return most recent records", async () => {
       mockPool.query.mockResolvedValueOnce([
         [
@@ -273,7 +271,7 @@ describe("KZ Records Endpoints", () => {
       ]);
 
       const response = await request(app)
-        .get("/kzglobal/records/recent")
+        .get("/global/records/recent")
         .expect(200);
 
       expect(response.body).toHaveProperty("data");
@@ -285,7 +283,7 @@ describe("KZ Records Endpoints", () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/records/recent?mode=kz_timer")
+        .get("/global/records/recent?mode=kz_timer")
         .expect(200);
 
       const call = mockPool.query.mock.calls[0];
@@ -295,7 +293,7 @@ describe("KZ Records Endpoints", () => {
     it("should respect limit parameter", async () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/records/recent?limit=25").expect(200);
+      await request(app).get("/global/records/recent?limit=25").expect(200);
 
       const call = mockPool.query.mock.calls[0];
       expect(call[1]).toContain(25);
@@ -304,14 +302,14 @@ describe("KZ Records Endpoints", () => {
     it("should enforce maximum limit", async () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/records/recent?limit=500").expect(200);
+      await request(app).get("/global/records/recent?limit=500").expect(200);
 
       const call = mockPool.query.mock.calls[0];
       expect(call[1]).toContain(100); // Max is 100
     });
   });
 
-  describe("GET /kzglobal/records/worldrecords", () => {
+  describe("GET /global/records/worldrecords", () => {
     it("should return current world records", async () => {
       const wrRecord = {
         id: 1,
@@ -327,7 +325,7 @@ describe("KZ Records Endpoints", () => {
       mockPool.query.mockResolvedValueOnce([[wrRecord]]);
 
       const response = await request(app)
-        .get("/kzglobal/records/worldrecords")
+        .get("/global/records/worldrecords")
         .expect(200);
 
       expect(response.body).toHaveProperty("mode");
@@ -341,7 +339,7 @@ describe("KZ Records Endpoints", () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/records/worldrecords?mode=kz_simple")
+        .get("/global/records/worldrecords?mode=kz_simple")
         .expect(200);
 
       const call = mockPool.query.mock.calls[0];
@@ -352,7 +350,7 @@ describe("KZ Records Endpoints", () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/records/worldrecords?stage=1")
+        .get("/global/records/worldrecords?stage=1")
         .expect(200);
 
       const call = mockPool.query.mock.calls[0];
@@ -362,7 +360,7 @@ describe("KZ Records Endpoints", () => {
     it("should default to pro runs", async () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/records/worldrecords").expect(200);
+      await request(app).get("/global/records/worldrecords").expect(200);
 
       const call = mockPool.query.mock.calls[0];
       expect(call[0]).toContain("wrc.teleports = ?");
@@ -370,7 +368,7 @@ describe("KZ Records Endpoints", () => {
     });
   });
 
-  describe("GET /kzglobal/records/:id", () => {
+  describe("GET /global/records/:id", () => {
     it("should return detailed record information", async () => {
       const recordDetails = {
         id: 1,
@@ -391,7 +389,7 @@ describe("KZ Records Endpoints", () => {
       mockPool.query.mockResolvedValueOnce([[recordDetails]]);
 
       const response = await request(app)
-        .get("/kzglobal/records/1000")
+        .get("/global/records/1000")
         .expect(200);
 
       expect(response.body.data).toHaveProperty("original_id", 1000);
@@ -402,11 +400,11 @@ describe("KZ Records Endpoints", () => {
     it("should return 404 for non-existent record", async () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/records/999999").expect(404);
+      await request(app).get("/global/records/999999").expect(404);
     });
 
     it("should return 400 for invalid record id", async () => {
-      await request(app).get("/kzglobal/records/invalid").expect(400);
+      await request(app).get("/global/records/invalid").expect(400);
     });
   });
 });

@@ -7,7 +7,7 @@
 
 const express = require("express");
 const router = express.Router();
-const { getKzPool } = require("../db/kzRecords");
+const { getKzPool } = require("../../db/kzRecords");
 const {
   validatePagination,
   paginationMeta,
@@ -17,19 +17,22 @@ const {
   validateSortField,
   validateSortOrder,
   defaultSortOrder,
-} = require("../utils/validators");
+} = require("../../utils/validators");
 const {
   toCountQuery,
   getPlayerPartitionHint,
   computeCompletionStats,
-} = require("../utils/kzHelpers");
-const logger = require("../utils/logger");
-const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
+} = require("../../utils/kzHelpers");
+const logger = require("../../utils/logger");
+const {
+  cacheMiddleware,
+  kzKeyGenerator,
+} = require("../../utils/cacheMiddleware");
 const {
   getPlayerPBs,
   getPlayerMapCompletions,
   refreshPlayerPBs,
-} = require("../services/playerPBsSync");
+} = require("../../services/playerPBsSync");
 
 /**
  * The identity fields returned alongside a player's statistics.
@@ -98,7 +101,7 @@ async function fetchRecentRecords(pool, steamid64, limit = 10) {
 
 /**
  * @swagger
- * /kzglobal/players:
+ * /global/players:
  *   get:
  *     summary: Get KZ players
  *     description: Returns a paginated list of KZ players with statistics
@@ -323,7 +326,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
- * /kzglobal/players/{steamid}:
+ * /global/players/{steamid}:
  *   get:
  *     summary: Get player details
  *     description: Returns detailed statistics for a specific player
@@ -521,7 +524,7 @@ router.get(
 
 /**
  * @swagger
- * /kzglobal/players/{steamid}/records:
+ * /global/players/{steamid}/records:
  *   get:
  *     summary: Get player records
  *     description: Returns all records for a specific player
@@ -678,7 +681,7 @@ router.get(
 
 /**
  * @swagger
- * /kzglobal/players/{steamid}/pbs:
+ * /global/players/{steamid}/pbs:
  *   get:
  *     summary: Get player's personal bests
  *     description: Returns cached personal bests for a player across all maps
@@ -856,7 +859,7 @@ router.get(
 
 /**
  * @swagger
- * /kzglobal/players/{steamid}/completions:
+ * /global/players/{steamid}/completions:
  *   get:
  *     summary: Get player's map completion status
  *     description: Returns all maps with player's completion status for filtering
@@ -1060,7 +1063,7 @@ router.get(
 
 /**
  * @swagger
- * /kzglobal/players/{steamid}/refresh-pbs:
+ * /global/players/{steamid}/refresh-pbs:
  *   post:
  *     summary: Force refresh player's PBs cache
  *     description: Triggers a refresh of the player's personal bests cache
@@ -1080,7 +1083,7 @@ router.get(
  *         description: Server error
  */
 /**
- * GET /kzglobal/players/:steamid/overview
+ * GET /global/players/:steamid/overview
  * Lightweight profile extras: global leaderboard rank (by total points) and
  * map-completion totals broken down by difficulty tier (1-7).
  */

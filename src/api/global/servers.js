@@ -4,7 +4,7 @@
 
 const express = require("express");
 const router = express.Router();
-const { getKzPool } = require("../db/kzRecords");
+const { getKzPool } = require("../../db/kzRecords");
 const {
   validatePagination,
   paginationMeta,
@@ -12,14 +12,17 @@ const {
   validateSortField,
   validateSortOrder,
   defaultSortOrder,
-} = require("../utils/validators");
-const { toCountQuery } = require("../utils/kzHelpers");
-const logger = require("../utils/logger");
-const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
+} = require("../../utils/validators");
+const { toCountQuery } = require("../../utils/kzHelpers");
+const logger = require("../../utils/logger");
+const {
+  cacheMiddleware,
+  kzKeyGenerator,
+} = require("../../utils/cacheMiddleware");
 
 /**
  * @swagger
- * /kzglobal/servers:
+ * /global/servers:
  *   get:
  *     summary: Get KZ servers
  *     description: Returns a paginated list of KZ servers from GlobalKZ
@@ -167,7 +170,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
- * /kzglobal/servers/top/records:
+ * /global/servers/top/records:
  *   get:
  *     summary: Get top servers by record count
  *     description: Returns servers ranked by number of records
@@ -231,7 +234,7 @@ router.get(
 
 /**
  * @swagger
- * /kzglobal/servers/{id}:
+ * /global/servers/{id}:
  *   get:
  *     summary: Get server details
  *     description: Returns detailed information about a specific server
@@ -368,7 +371,7 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
- * /kzglobal/servers/{id}/records:
+ * /global/servers/{id}/records:
  *   get:
  *     summary: Get all records from a server
  *     description: Returns paginated list of all records set on a specific server

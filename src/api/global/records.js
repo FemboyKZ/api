@@ -5,7 +5,7 @@
 
 const express = require("express");
 const router = express.Router();
-const { getKzPool } = require("../db/kzRecords");
+const { getKzPool } = require("../../db/kzRecords");
 const {
   validatePagination,
   paginationMeta,
@@ -15,14 +15,17 @@ const {
   validateSortField,
   validateSortOrder,
   defaultSortOrder,
-} = require("../utils/validators");
-const logger = require("../utils/logger");
-const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
-const { getYearlyPartitionHint } = require("../utils/kzHelpers");
+} = require("../../utils/validators");
+const logger = require("../../utils/logger");
+const {
+  cacheMiddleware,
+  kzKeyGenerator,
+} = require("../../utils/cacheMiddleware");
+const { getYearlyPartitionHint } = require("../../utils/kzHelpers");
 
 /**
  * @swagger
- * /kzglobal/records:
+ * /global/records:
  *   get:
  *     summary: Get KZ records
  *     description: Returns a paginated list of KZ records with filtering and sorting
@@ -314,7 +317,7 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
- * /kzglobal/records/leaderboard/{mapname}:
+ * /global/records/leaderboard/{mapname}:
  *   get:
  *     summary: Get map leaderboard
  *     description: Returns the leaderboard for a specific map with best times
@@ -480,7 +483,7 @@ router.get(
 
 /**
  * @swagger
- * /kzglobal/records/recent:
+ * /global/records/recent:
  *   get:
  *     summary: Get recent records
  *     description: Returns the most recently set records
@@ -582,7 +585,7 @@ router.get("/recent", cacheMiddleware(15, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
- * /kzglobal/records/worldrecords:
+ * /global/records/worldrecords:
  *   get:
  *     summary: Get world records
  *     description: Returns current world records across all maps
@@ -697,7 +700,7 @@ router.get(
 
 /**
  * @swagger
- * /kzglobal/records/{id}:
+ * /global/records/{id}:
  *   get:
  *     summary: Get a specific KZ record
  *     description: Returns detailed information about a specific record

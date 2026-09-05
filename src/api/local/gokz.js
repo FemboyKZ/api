@@ -1,5 +1,5 @@
 /**
- * CS:GO local timer (128/64 tick). CS2 counterpart is api/kzLocalCS2.js.
+ * CS:GO local timer (128/64 tick). CS2 counterpart is local/cs2kz.js.
  *
  * This schema keys records by numeric TimeID/MapCourseID and stores SteamID32,
  * where the CS2 schema uses its own ids and SteamID64.
@@ -10,7 +10,7 @@ const router = express.Router();
 const {
   getKzLocalCSGO128Pool,
   getKzLocalCSGO64Pool,
-} = require("../db/kzLocal");
+} = require("../../db/kzLocal");
 const {
   validatePagination,
   paginationMeta,
@@ -22,7 +22,7 @@ const {
   validateSortField,
   validateSortOrder,
   defaultSortOrder,
-} = require("../utils/validators");
+} = require("../../utils/validators");
 const {
   KZ_MODES,
   JUMP_TYPES,
@@ -32,9 +32,13 @@ const {
   formatRuntimeMs: formatRuntime,
   formatDistance,
   formatStat,
-} = require("../utils/kzHelpers");
-const logger = require("../utils/logger");
-const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
+} = require("../../utils/kzHelpers");
+const logger = require("../../utils/logger");
+const f = require("./filters");
+const {
+  cacheMiddleware,
+  kzKeyGenerator,
+} = require("../../utils/cacheMiddleware");
 
 /**
  * Helper to get pool based on tickrate parameter
@@ -49,7 +53,7 @@ function getPoolForTickrate(tickrate) {
 
 /**
  * @swagger
- * /kzlocal/maps:
+ * /local/gokz/maps:
  *   get:
  *     summary: Get KZ local maps
  *     description: Returns a paginated list of maps from local KZ servers
@@ -137,17 +141,14 @@ router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       WHERE 1=1
     `;
 
-    const params = [];
+    // Built once, appended to both this query and the count query below.
+    const filters = f.build([
+      f.like("m.Name", name),
+      f.boolEquals("m.InRankedPool", ranked),
+    ]);
 
-    if (name) {
-      query += " AND m.Name LIKE ?";
-      params.push(`%${sanitizeString(name)}%`);
-    }
-
-    if (ranked !== undefined) {
-      query += " AND m.InRankedPool = ?";
-      params.push(ranked === "true" || ranked === "1" ? 1 : 0);
-    }
+    const params = [...filters.params];
+    query += filters.sql;
 
     query += ` GROUP BY m.MapID, m.Name, m.LastPlayed, m.Created, m.InRankedPool`;
     query += ` ORDER BY ${sortFieldMap[sortField]} ${sortOrder}`;
@@ -157,19 +158,9 @@ router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
     const [rows] = await pool.query(query, params);
 
     let countQuery = `SELECT COUNT(*) as total FROM Maps m WHERE 1=1`;
-    const countParams = [];
+    countQuery += filters.sql;
 
-    if (name) {
-      countQuery += " AND m.Name LIKE ?";
-      countParams.push(`%${sanitizeString(name)}%`);
-    }
-
-    if (ranked !== undefined) {
-      countQuery += " AND m.InRankedPool = ?";
-      countParams.push(ranked === "true" || ranked === "1" ? 1 : 0);
-    }
-
-    const [[{ total }]] = await pool.query(countQuery, countParams);
+    const [[{ total }]] = await pool.query(countQuery, filters.params);
 
     res.json({
       data: rows.map((row) => ({
@@ -192,7 +183,7 @@ router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
- * /kzlocal/maps/{mapname}:
+ * /local/gokz/maps/{mapname}:
  *   get:
  *     summary: Get specific KZ local map details
  *     description: Returns detailed information about a specific map
@@ -316,7 +307,7 @@ router.get(
 
 /**
  * @swagger
- * /kzlocal/records:
+ * /local/gokz/records:
  *   get:
  *     summary: Get KZ local records
  *     description: Returns a paginated list of time records
@@ -438,43 +429,21 @@ router.get(
       WHERE 1=1
     `;
 
-      const params = [];
+      // Built once, appended to both this query and the count query below.
+      const filters = f.build([
+        f.like("m.Name", map),
+        f.player(player, {
+          idColumn: "t.SteamID32",
+          aliasColumn: "p.Alias",
+          toId: f.asSteamID32,
+        }),
+        f.intEquals("t.Mode", mode),
+        f.intEquals("mc.Course", course),
+        f.teleports("t.Teleports", teleports),
+      ]);
 
-      if (map) {
-        query += " AND m.Name LIKE ?";
-        params.push(`%${sanitizeString(map)}%`);
-      }
-
-      if (player) {
-        // Check if it's a SteamID
-        if (isValidSteamID(player)) {
-          const steamid64 = convertToSteamID64(player);
-          if (steamid64) {
-            const steamid32 = steamid64To32(steamid64);
-            query += " AND t.SteamID32 = ?";
-            params.push(steamid32);
-          }
-        } else {
-          query += " AND p.Alias LIKE ?";
-          params.push(`%${sanitizeString(player)}%`);
-        }
-      }
-
-      if (mode !== undefined) {
-        query += " AND t.Mode = ?";
-        params.push(parseInt(mode, 10));
-      }
-
-      if (course !== undefined) {
-        query += " AND mc.Course = ?";
-        params.push(parseInt(course, 10));
-      }
-
-      if (teleports === "pro") {
-        query += " AND t.Teleports = 0";
-      } else if (teleports === "tp") {
-        query += " AND t.Teleports > 0";
-      }
+      const params = [...filters.params];
+      query += filters.sql;
 
       query += ` ORDER BY ${sortFieldMap[sortField]} ${sortOrder}`;
       query += ` LIMIT ? OFFSET ?`;
@@ -490,44 +459,9 @@ router.get(
       JOIN Maps m ON mc.MapID = m.MapID
       WHERE 1=1
     `;
-      const countParams = [];
+      countQuery += filters.sql;
 
-      if (map) {
-        countQuery += " AND m.Name LIKE ?";
-        countParams.push(`%${sanitizeString(map)}%`);
-      }
-
-      if (player) {
-        if (isValidSteamID(player)) {
-          const steamid64 = convertToSteamID64(player);
-          if (steamid64) {
-            const steamid32 = steamid64To32(steamid64);
-            countQuery += " AND t.SteamID32 = ?";
-            countParams.push(steamid32);
-          }
-        } else {
-          countQuery += " AND p.Alias LIKE ?";
-          countParams.push(`%${sanitizeString(player)}%`);
-        }
-      }
-
-      if (mode !== undefined) {
-        countQuery += " AND t.Mode = ?";
-        countParams.push(parseInt(mode, 10));
-      }
-
-      if (course !== undefined) {
-        countQuery += " AND mc.Course = ?";
-        countParams.push(parseInt(course, 10));
-      }
-
-      if (teleports === "pro") {
-        countQuery += " AND t.Teleports = 0";
-      } else if (teleports === "tp") {
-        countQuery += " AND t.Teleports > 0";
-      }
-
-      const [[{ total }]] = await pool.query(countQuery, countParams);
+      const [[{ total }]] = await pool.query(countQuery, filters.params);
 
       res.json({
         data: rows.map((row) => ({
@@ -557,7 +491,7 @@ router.get(
 
 /**
  * @swagger
- * /kzlocal/records/{id}:
+ * /local/gokz/records/{id}:
  *   get:
  *     summary: Get specific KZ local record
  *     description: Returns details of a specific time record
@@ -651,7 +585,7 @@ router.get(
 
 /**
  * @swagger
- * /kzlocal/jumpstats:
+ * /local/gokz/jumpstats:
  *   get:
  *     summary: Get KZ local jumpstats
  *     description: Returns a paginated list of jumpstat records
@@ -777,41 +711,21 @@ router.get(
       WHERE 1=1
     `;
 
-      const params = [];
+      // Built once, appended to both this query and the count query below.
+      const filters = f.build([
+        f.player(player, {
+          idColumn: "j.SteamID32",
+          aliasColumn: "p.Alias",
+          toId: f.asSteamID32,
+        }),
+        f.intEquals("j.JumpType", jump_type),
+        f.intEquals("j.Mode", mode),
+        f.boolEquals("j.IsBlockJump", is_block),
+        f.atLeast("j.Distance", min_distance, 10000),
+      ]);
 
-      if (player) {
-        if (isValidSteamID(player)) {
-          const steamid64 = convertToSteamID64(player);
-          if (steamid64) {
-            const steamid32 = steamid64To32(steamid64);
-            query += " AND j.SteamID32 = ?";
-            params.push(steamid32);
-          }
-        } else {
-          query += " AND p.Alias LIKE ?";
-          params.push(`%${sanitizeString(player)}%`);
-        }
-      }
-
-      if (jump_type !== undefined) {
-        query += " AND j.JumpType = ?";
-        params.push(parseInt(jump_type, 10));
-      }
-
-      if (mode !== undefined) {
-        query += " AND j.Mode = ?";
-        params.push(parseInt(mode, 10));
-      }
-
-      if (is_block !== undefined) {
-        query += " AND j.IsBlockJump = ?";
-        params.push(is_block === "true" || is_block === "1" ? 1 : 0);
-      }
-
-      if (min_distance) {
-        query += " AND j.Distance >= ?";
-        params.push(parseFloat(min_distance) * 10000);
-      }
+      const params = [...filters.params];
+      query += filters.sql;
 
       query += ` ORDER BY ${sortFieldMap[sortField]} ${sortOrder}`;
       query += ` LIMIT ? OFFSET ?`;
@@ -825,43 +739,9 @@ router.get(
       JOIN Players p ON j.SteamID32 = p.SteamID32
       WHERE 1=1
     `;
-      const countParams = [];
+      countQuery += filters.sql;
 
-      if (player) {
-        if (isValidSteamID(player)) {
-          const steamid64 = convertToSteamID64(player);
-          if (steamid64) {
-            const steamid32 = steamid64To32(steamid64);
-            countQuery += " AND j.SteamID32 = ?";
-            countParams.push(steamid32);
-          }
-        } else {
-          countQuery += " AND p.Alias LIKE ?";
-          countParams.push(`%${sanitizeString(player)}%`);
-        }
-      }
-
-      if (jump_type !== undefined) {
-        countQuery += " AND j.JumpType = ?";
-        countParams.push(parseInt(jump_type, 10));
-      }
-
-      if (mode !== undefined) {
-        countQuery += " AND j.Mode = ?";
-        countParams.push(parseInt(mode, 10));
-      }
-
-      if (is_block !== undefined) {
-        countQuery += " AND j.IsBlockJump = ?";
-        countParams.push(is_block === "true" || is_block === "1" ? 1 : 0);
-      }
-
-      if (min_distance) {
-        countQuery += " AND j.Distance >= ?";
-        countParams.push(parseFloat(min_distance) * 10000);
-      }
-
-      const [[{ total }]] = await pool.query(countQuery, countParams);
+      const [[{ total }]] = await pool.query(countQuery, filters.params);
 
       res.json({
         data: rows.map((row) => ({
@@ -894,7 +774,7 @@ router.get(
 
 /**
  * @swagger
- * /kzlocal/jumpstats/{id}:
+ * /local/gokz/jumpstats/{id}:
  *   get:
  *     summary: Get specific KZ local jumpstat
  *     description: Returns details of a specific jumpstat record
@@ -989,7 +869,7 @@ router.get(
 
 /**
  * @swagger
- * /kzlocal/players:
+ * /local/gokz/players:
  *   get:
  *     summary: Get KZ local players
  *     description: Returns a paginated list of players with statistics
@@ -1080,17 +960,14 @@ router.get(
       WHERE 1=1
     `;
 
-      const params = [];
+      // Built once, appended to both this query and the count query below.
+      const filters = f.build([
+        f.like("p.Alias", name),
+        f.like("p.Country", country),
+      ]);
 
-      if (name) {
-        query += " AND p.Alias LIKE ?";
-        params.push(`%${sanitizeString(name)}%`);
-      }
-
-      if (country) {
-        query += " AND p.Country LIKE ?";
-        params.push(`%${sanitizeString(country)}%`);
-      }
+      const params = [...filters.params];
+      query += filters.sql;
 
       query += ` GROUP BY p.SteamID32, p.Alias, p.Country, p.Cheater, p.LastPlayed, p.Created`;
       query += ` ORDER BY ${sortFieldMap[sortField]} ${sortOrder}`;
@@ -1100,19 +977,9 @@ router.get(
       const [rows] = await pool.query(query, params);
 
       let countQuery = `SELECT COUNT(*) as total FROM Players p WHERE 1=1`;
-      const countParams = [];
+      countQuery += filters.sql;
 
-      if (name) {
-        countQuery += " AND p.Alias LIKE ?";
-        countParams.push(`%${sanitizeString(name)}%`);
-      }
-
-      if (country) {
-        countQuery += " AND p.Country LIKE ?";
-        countParams.push(`%${sanitizeString(country)}%`);
-      }
-
-      const [[{ total }]] = await pool.query(countQuery, countParams);
+      const [[{ total }]] = await pool.query(countQuery, filters.params);
 
       res.json({
         data: rows.map((row) => ({
@@ -1137,7 +1004,7 @@ router.get(
 
 /**
  * @swagger
- * /kzlocal/players/{player}:
+ * /local/gokz/players/{player}:
  *   get:
  *     summary: Get specific KZ local player
  *     description: Returns detailed player profile with statistics including air/bhop stats

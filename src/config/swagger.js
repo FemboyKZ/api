@@ -1,5 +1,5 @@
 /**
- * Scans @swagger blocks in src/api/*.js; served at /docs from app.js.
+ * Scans @swagger blocks under src/api/; served at /docs from app.js.
  */
 
 const swaggerJsdoc = require("swagger-jsdoc");
@@ -22,7 +22,7 @@ const options = {
         description: "Development server",
       },
       {
-        url: "https://api.femboy.kz",
+        url: "https://api.femboykz.com",
         description: "Production server",
       },
     ],
@@ -44,6 +44,11 @@ const options = {
         description: "Historical data and trends endpoints",
       },
       {
+        name: "KZ Global",
+        description:
+          "GlobalAPI mirror (gokz records, players, maps, servers, bans)",
+      },
+      {
         name: "KZ Local",
         description: "CS:GO KZ local server data (128/64 tick)",
       },
@@ -54,7 +59,7 @@ const options = {
     ],
   },
   // Path to the API routes with JSDoc comments
-  apis: ["./src/api/*.js", "./src/app.js"],
+  apis: ["./src/api/**/*.js", "./src/app.js"],
 };
 
 const swaggerSpec = swaggerJsdoc(options);

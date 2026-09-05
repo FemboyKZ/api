@@ -108,24 +108,24 @@ describe("Cache Middleware", () => {
   describe("kzKeyGenerator", () => {
     it("should generate key with params and query", () => {
       const req = {
-        baseUrl: "/kzglobal",
+        baseUrl: "/global",
         path: "/records",
         params: { mapname: "kz_grotto" },
         query: { mode: "1", stage: "0" },
       };
       const key = kzKeyGenerator(req);
-      expect(key).toBe("cache:kz:/kzglobal/records:kz_grotto:mode:1:stage:0");
+      expect(key).toBe("cache:kz:/global/records:kz_grotto:mode:1:stage:0");
     });
 
     it("should generate key with only path", () => {
       const req = {
-        baseUrl: "/kzglobal",
+        baseUrl: "/global",
         path: "/players",
         params: {},
         query: {},
       };
       const key = kzKeyGenerator(req);
-      expect(key).toBe("cache:kz:/kzglobal/players");
+      expect(key).toBe("cache:kz:/global/players");
     });
 
     it("should sort params and query alphabetically", () => {

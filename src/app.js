@@ -21,13 +21,13 @@ const mapsRouter = require("./api/maps");
 const healthRouter = require("./api/health");
 const historyRouter = require("./api/history");
 const adminRouter = require("./api/admin");
-const kzRecordsRouter = require("./api/kzRecords");
-const kzPlayersRouter = require("./api/kzPlayers");
-const kzMapsRouter = require("./api/kzMaps");
-const kzServersRouter = require("./api/kzServers");
-const kzBansRouter = require("./api/kzBans");
-const kzLocalRouter = require("./api/kzLocal");
-const kzLocalCS2Router = require("./api/kzLocalCS2");
+const globalRecordsRouter = require("./api/global/records");
+const globalPlayersRouter = require("./api/global/players");
+const globalMapsRouter = require("./api/global/maps");
+const globalServersRouter = require("./api/global/servers");
+const globalBansRouter = require("./api/global/bans");
+const localGokzRouter = require("./api/local/gokz");
+const localCs2kzRouter = require("./api/local/cs2kz");
 const chatRouter = require("./api/chat");
 const kofiRouter = require("./api/kofi");
 const linksRouter = require("./api/links");
@@ -135,18 +135,16 @@ app.use("/links", linksRouter);
 // VIP status, gift-token redemption, self-serve custom role/tag (admin-authed)
 app.use("/vip", vipRouter);
 
-// KZ Global endpoints
-app.use("/kzglobal/records", kzRecordsRouter);
-app.use("/kzglobal/players", kzPlayersRouter);
-app.use("/kzglobal/maps", kzMapsRouter);
-app.use("/kzglobal/servers", kzServersRouter);
-app.use("/kzglobal/bans", kzBansRouter);
+// GlobalAPI mirror (gokz)
+app.use("/global/records", globalRecordsRouter);
+app.use("/global/players", globalPlayersRouter);
+app.use("/global/maps", globalMapsRouter);
+app.use("/global/servers", globalServersRouter);
+app.use("/global/bans", globalBansRouter);
 
-// KZ Local endpoints (CSGO 128/64 tick servers)
-app.use("/kzlocal", kzLocalRouter);
-
-// KZ Local CS2 endpoints (CS2 servers)
-app.use("/kzlocal-cs2", kzLocalCS2Router);
+// Local timer databases, one per game
+app.use("/local/gokz", localGokzRouter);
+app.use("/local/cs2kz", localCs2kzRouter);
 
 app.use(errorHandler);
 

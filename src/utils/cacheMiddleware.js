@@ -88,7 +88,7 @@ function mapsKeyGenerator(req) {
 }
 
 /**
- * Cache key generator for KZ Global endpoints
+ * Cache key generator for the global and local KZ endpoints
  */
 function kzKeyGenerator(req) {
   const params = Object.entries(req.params)

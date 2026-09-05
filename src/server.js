@@ -123,20 +123,20 @@ async function startServer() {
       // Step 10: Refresh map globalInfo from the GOKZ/CS2KZ APIs.
       startGlobalInfoUpdateJob();
 
-      // Step 11: Start KZ records scraper (runs every 3.75s for 80% rate limit utilization)
+      // Step 11: Start KZ records scraper
       if (process.env.KZ_SCRAPER_ENABLED !== "false") {
         startScraperJob();
         logger.info(
           `KZ Records scraper enabled (normal: ${SCRAPER_INTERVAL}ms, idle: ${SCRAPER_IDLE_INTERVAL}ms)`,
         );
 
-        // Step 12: Start ban status cleanup job (runs every hour by default)
+        // Step 12: Start ban status cleanup job
         startBanCleanupJob();
         logger.info(
           `KZ Ban cleanup job enabled (interval: ${CLEANUP_INTERVAL / 1000}s)`,
         );
 
-        // Step 13: Start KZ statistics refresh job (runs every 6 hours by default)
+        // Step 13: Start KZ statistics refresh job
         startStatisticsJob();
         logger.info(
           `KZ Statistics refresh job enabled (interval: ${STATS_INTERVAL / 1000 / 60} minutes)`,

@@ -4,7 +4,7 @@
 
 const express = require("express");
 const router = express.Router();
-const { getKzPool } = require("../db/kzRecords");
+const { getKzPool } = require("../../db/kzRecords");
 const {
   validatePagination,
   paginationMeta,
@@ -14,14 +14,17 @@ const {
   validateSortField,
   validateSortOrder,
   defaultSortOrder,
-} = require("../utils/validators");
-const { toCountQuery } = require("../utils/kzHelpers");
-const logger = require("../utils/logger");
-const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
+} = require("../../utils/validators");
+const { toCountQuery } = require("../../utils/kzHelpers");
+const logger = require("../../utils/logger");
+const {
+  cacheMiddleware,
+  kzKeyGenerator,
+} = require("../../utils/cacheMiddleware");
 
 /**
  * @swagger
- * /kzglobal/bans:
+ * /global/bans:
  *   get:
  *     summary: Get KZ bans
  *     description: Returns a paginated list of player bans from GlobalKZ
@@ -185,7 +188,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
- * /kzglobal/bans/active:
+ * /global/bans/active:
  *   get:
  *     summary: Get all active bans
  *     description: Returns currently active bans (not expired)
@@ -268,7 +271,7 @@ router.get("/active", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
- * /kzglobal/bans/stats:
+ * /global/bans/stats:
  *   get:
  *     summary: Get ban statistics
  *     description: Returns overview statistics about bans
@@ -335,7 +338,7 @@ router.get("/stats", cacheMiddleware(300, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
- * /kzglobal/bans/changes:
+ * /global/bans/changes:
  *   get:
  *     summary: Get recent ban changes
  *     description: >
@@ -488,7 +491,7 @@ router.get(
 
 /**
  * @swagger
- * /kzglobal/bans/{id}:
+ * /global/bans/{id}:
  *   get:
  *     summary: Get ban details
  *     description: Returns detailed information about a specific ban
@@ -567,7 +570,7 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
- * /kzglobal/bans/player/{steamid}:
+ * /global/bans/player/{steamid}:
  *   get:
  *     summary: Get bans for a player
  *     description: Returns all bans for a specific player

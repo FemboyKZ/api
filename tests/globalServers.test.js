@@ -21,7 +21,7 @@ describe("KZ Servers Endpoints", () => {
     kzRecords.getKzPool.mockReturnValue(mockPool);
   });
 
-  describe("GET /kzglobal/servers", () => {
+  describe("GET /global/servers", () => {
     it("should return paginated list of servers with stats", async () => {
       mockPool.query
         .mockResolvedValueOnce([[{ total: 2 }]])
@@ -55,7 +55,7 @@ describe("KZ Servers Endpoints", () => {
         ]);
 
       const response = await request(app)
-        .get("/kzglobal/servers")
+        .get("/global/servers")
         .expect("Content-Type", /json/)
         .expect(200);
 
@@ -72,7 +72,7 @@ describe("KZ Servers Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/servers?name=Server").expect(200);
+      await request(app).get("/global/servers?name=Server").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("server_name LIKE");
@@ -85,7 +85,7 @@ describe("KZ Servers Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/servers?owner=76561198000000001")
+        .get("/global/servers?owner=76561198000000001")
         .expect(200);
 
       const call = mockPool.query.mock.calls[1];
@@ -97,7 +97,7 @@ describe("KZ Servers Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/servers?approval_status=1").expect(200);
+      await request(app).get("/global/servers?approval_status=1").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("approval_status =");
@@ -108,9 +108,7 @@ describe("KZ Servers Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app)
-        .get("/kzglobal/servers?sort=name&order=asc")
-        .expect(200);
+      await request(app).get("/global/servers?sort=name&order=asc").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("ORDER BY s.server_name ASC");
@@ -122,7 +120,7 @@ describe("KZ Servers Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/servers?sort=records&order=desc")
+        .get("/global/servers?sort=records&order=desc")
         .expect(200);
 
       const call = mockPool.query.mock.calls[1];
@@ -130,7 +128,7 @@ describe("KZ Servers Endpoints", () => {
     });
   });
 
-  describe("GET /kzglobal/servers/top/records", () => {
+  describe("GET /global/servers/top/records", () => {
     it("should return servers ranked by record count", async () => {
       mockPool.query.mockResolvedValueOnce([
         [
@@ -156,7 +154,7 @@ describe("KZ Servers Endpoints", () => {
       ]);
 
       const response = await request(app)
-        .get("/kzglobal/servers/top/records")
+        .get("/global/servers/top/records")
         .expect(200);
 
       expect(response.body.data).toHaveLength(2);
@@ -169,7 +167,7 @@ describe("KZ Servers Endpoints", () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/servers/top/records?limit=50")
+        .get("/global/servers/top/records?limit=50")
         .expect(200);
 
       const call = mockPool.query.mock.calls[0];
@@ -177,7 +175,7 @@ describe("KZ Servers Endpoints", () => {
     });
   });
 
-  describe("GET /kzglobal/servers/:id", () => {
+  describe("GET /global/servers/:id", () => {
     it("should return server details with statistics", async () => {
       // First query returns server with joined statistics
       mockPool.query
@@ -221,7 +219,7 @@ describe("KZ Servers Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       const response = await request(app)
-        .get("/kzglobal/servers/123")
+        .get("/global/servers/123")
         .expect(200);
 
       expect(response.body).toHaveProperty("server");
@@ -232,17 +230,17 @@ describe("KZ Servers Endpoints", () => {
     });
 
     it("should return 400 for invalid server id", async () => {
-      await request(app).get("/kzglobal/servers/invalid").expect(400);
+      await request(app).get("/global/servers/invalid").expect(400);
     });
 
     it("should return 404 for non-existent server", async () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/servers/999999").expect(404);
+      await request(app).get("/global/servers/999999").expect(404);
     });
   });
 
-  describe("GET /kzglobal/servers/:id/records", () => {
+  describe("GET /global/servers/:id/records", () => {
     it("should return paginated records from a server", async () => {
       // First query checks if server exists (by server_id)
       mockPool.query
@@ -267,7 +265,7 @@ describe("KZ Servers Endpoints", () => {
         ]);
 
       const response = await request(app)
-        .get("/kzglobal/servers/123/records")
+        .get("/global/servers/123/records")
         .expect(200);
 
       expect(response.body).toHaveProperty("data");
@@ -283,7 +281,7 @@ describe("KZ Servers Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/servers/123/records?mode=kz_timer")
+        .get("/global/servers/123/records?mode=kz_timer")
         .expect(200);
 
       const call = mockPool.query.mock.calls[2];
@@ -297,7 +295,7 @@ describe("KZ Servers Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/servers/123/records?map=synergy")
+        .get("/global/servers/123/records?map=synergy")
         .expect(200);
 
       const call = mockPool.query.mock.calls[2];
@@ -311,7 +309,7 @@ describe("KZ Servers Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/servers/123/records?sort=time&order=asc")
+        .get("/global/servers/123/records?sort=time&order=asc")
         .expect(200);
 
       const call = mockPool.query.mock.calls[2];
@@ -322,7 +320,7 @@ describe("KZ Servers Endpoints", () => {
       // Server check returns empty array (no server found)
       mockPool.query.mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/servers/999999/records").expect(404);
+      await request(app).get("/global/servers/999999/records").expect(404);
     });
   });
   describe("kz_players join key", () => {
@@ -334,7 +332,7 @@ describe("KZ Servers Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/servers/123/records").expect(200);
+      await request(app).get("/global/servers/123/records").expect(200);
 
       const sql = mockPool.query.mock.calls[2][0];
       expect(sql).toContain("JOIN kz_players p ON r.player_id = p.id");
@@ -347,7 +345,7 @@ describe("KZ Servers Endpoints", () => {
         .mockResolvedValueOnce([[]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/servers/123").expect(200);
+      await request(app).get("/global/servers/123").expect(200);
 
       const sql = mockPool.query.mock.calls[2][0];
       expect(sql).toContain("JOIN kz_players p ON r.player_id = p.id");

@@ -14,11 +14,11 @@ jest.mock("../src/utils/logger", () => ({
 }));
 
 const { getKzLocalCS2Pool } = require("../src/db/kzLocal");
-const kzLocalCS2Router = require("../src/api/kzLocalCS2");
+const cs2kzRouter = require("../src/api/local/cs2kz");
 
 const app = express();
 app.use(express.json());
-app.use("/kzlocal-cs2", kzLocalCS2Router);
+app.use("/local/cs2kz", cs2kzRouter);
 
 describe("KZ Local CS2 Endpoints", () => {
   let mockPool;
@@ -32,7 +32,7 @@ describe("KZ Local CS2 Endpoints", () => {
   });
 
   // ==================== PLAYERS ENDPOINTS ====================
-  describe("GET /kzlocal-cs2/players", () => {
+  describe("GET /local/cs2kz/players", () => {
     it("should return paginated list of players", async () => {
       const mockPlayers = [
         {
@@ -49,7 +49,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([mockPlayers])
         .mockResolvedValueOnce([[{ total: 1 }]]);
 
-      const res = await request(app).get("/kzlocal-cs2/players");
+      const res = await request(app).get("/local/cs2kz/players");
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
@@ -63,7 +63,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([[]])
         .mockResolvedValueOnce([[{ total: 0 }]]);
 
-      const res = await request(app).get("/kzlocal-cs2/players?name=Test");
+      const res = await request(app).get("/local/cs2kz/players?name=Test");
 
       expect(res.status).toBe(200);
       const firstCallParams = mockPool.query.mock.calls[0][1];
@@ -76,7 +76,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]]);
 
       const res = await request(app).get(
-        "/kzlocal-cs2/players?sort=name&order=asc",
+        "/local/cs2kz/players?sort=name&order=asc",
       );
 
       expect(res.status).toBe(200);
@@ -87,14 +87,14 @@ describe("KZ Local CS2 Endpoints", () => {
     it("should handle database errors", async () => {
       mockPool.query.mockRejectedValue(new Error("Database error"));
 
-      const res = await request(app).get("/kzlocal-cs2/players");
+      const res = await request(app).get("/local/cs2kz/players");
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe("Failed to fetch players");
     });
   });
 
-  describe("GET /kzlocal-cs2/players/:steamid", () => {
+  describe("GET /local/cs2kz/players/:steamid", () => {
     it("should return player profile with statistics", async () => {
       const mockPlayer = {
         steamid64: BigInt("76561198000000000"),
@@ -133,7 +133,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([mockRecentRecords]);
 
       const res = await request(app).get(
-        "/kzlocal-cs2/players/76561198000000000",
+        "/local/cs2kz/players/76561198000000000",
       );
 
       expect(res.status).toBe(200);
@@ -146,7 +146,7 @@ describe("KZ Local CS2 Endpoints", () => {
       // When SteamID is invalid format, it's passed directly to DB query which returns no results
       mockPool.query.mockResolvedValueOnce([[]]); // No player found
 
-      const res = await request(app).get("/kzlocal-cs2/players/invalid");
+      const res = await request(app).get("/local/cs2kz/players/invalid");
 
       // Current behavior: invalid format is passed to DB, no player found -> 404
       expect(res.status).toBe(404);
@@ -157,7 +157,7 @@ describe("KZ Local CS2 Endpoints", () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
       const res = await request(app).get(
-        "/kzlocal-cs2/players/76561198000000000",
+        "/local/cs2kz/players/76561198000000000",
       );
 
       expect(res.status).toBe(404);
@@ -168,7 +168,7 @@ describe("KZ Local CS2 Endpoints", () => {
       mockPool.query.mockRejectedValue(new Error("Database error"));
 
       const res = await request(app).get(
-        "/kzlocal-cs2/players/76561198000000000",
+        "/local/cs2kz/players/76561198000000000",
       );
 
       expect(res.status).toBe(500);
@@ -177,7 +177,7 @@ describe("KZ Local CS2 Endpoints", () => {
   });
 
   // ==================== MAPS ENDPOINTS ====================
-  describe("GET /kzlocal-cs2/maps", () => {
+  describe("GET /local/cs2kz/maps", () => {
     it("should return paginated list of maps", async () => {
       const mockMaps = [
         {
@@ -194,7 +194,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([mockMaps])
         .mockResolvedValueOnce([[{ total: 1 }]]);
 
-      const res = await request(app).get("/kzlocal-cs2/maps");
+      const res = await request(app).get("/local/cs2kz/maps");
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
@@ -207,7 +207,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([[]])
         .mockResolvedValueOnce([[{ total: 0 }]]);
 
-      const res = await request(app).get("/kzlocal-cs2/maps?name=example");
+      const res = await request(app).get("/local/cs2kz/maps?name=example");
 
       expect(res.status).toBe(200);
       const firstCallParams = mockPool.query.mock.calls[0][1];
@@ -220,7 +220,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]]);
 
       const res = await request(app).get(
-        "/kzlocal-cs2/maps?sort=records&order=desc",
+        "/local/cs2kz/maps?sort=records&order=desc",
       );
 
       expect(res.status).toBe(200);
@@ -231,14 +231,14 @@ describe("KZ Local CS2 Endpoints", () => {
     it("should handle database errors", async () => {
       mockPool.query.mockRejectedValue(new Error("Database error"));
 
-      const res = await request(app).get("/kzlocal-cs2/maps");
+      const res = await request(app).get("/local/cs2kz/maps");
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe("Failed to fetch maps");
     });
   });
 
-  describe("GET /kzlocal-cs2/maps/:mapname", () => {
+  describe("GET /local/cs2kz/maps/:mapname", () => {
     it("should return map details with courses and statistics", async () => {
       const mockMap = {
         id: 1,
@@ -283,7 +283,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([mockModeStats])
         .mockResolvedValueOnce([mockWorldRecords]);
 
-      const res = await request(app).get("/kzlocal-cs2/maps/kz_test");
+      const res = await request(app).get("/local/cs2kz/maps/kz_test");
 
       expect(res.status).toBe(200);
       expect(res.body.name).toBe("kz_test");
@@ -295,7 +295,7 @@ describe("KZ Local CS2 Endpoints", () => {
     it("should return 404 for non-existent map", async () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
-      const res = await request(app).get("/kzlocal-cs2/maps/nonexistent");
+      const res = await request(app).get("/local/cs2kz/maps/nonexistent");
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBe("Map not found");
@@ -304,7 +304,7 @@ describe("KZ Local CS2 Endpoints", () => {
     it("should handle database errors", async () => {
       mockPool.query.mockRejectedValue(new Error("Database error"));
 
-      const res = await request(app).get("/kzlocal-cs2/maps/kz_test");
+      const res = await request(app).get("/local/cs2kz/maps/kz_test");
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe("Failed to fetch map");
@@ -312,7 +312,7 @@ describe("KZ Local CS2 Endpoints", () => {
   });
 
   // ==================== RECORDS ENDPOINTS ====================
-  describe("GET /kzlocal-cs2/records", () => {
+  describe("GET /local/cs2kz/records", () => {
     it("should return paginated list of records", async () => {
       const mockRecords = [
         {
@@ -337,7 +337,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([mockRecords])
         .mockResolvedValueOnce([[{ total: 1 }]]);
 
-      const res = await request(app).get("/kzlocal-cs2/records");
+      const res = await request(app).get("/local/cs2kz/records");
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
@@ -350,7 +350,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([[]])
         .mockResolvedValueOnce([[{ total: 0 }]]);
 
-      const res = await request(app).get("/kzlocal-cs2/records?map=kz_test");
+      const res = await request(app).get("/local/cs2kz/records?map=kz_test");
 
       expect(res.status).toBe(200);
     });
@@ -361,7 +361,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]]);
 
       const res = await request(app).get(
-        "/kzlocal-cs2/records?player=76561198000000000",
+        "/local/cs2kz/records?player=76561198000000000",
       );
 
       expect(res.status).toBe(200);
@@ -373,7 +373,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]]);
 
       const res = await request(app).get(
-        "/kzlocal-cs2/records?player=TestPlayer",
+        "/local/cs2kz/records?player=TestPlayer",
       );
 
       expect(res.status).toBe(200);
@@ -386,7 +386,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([[]])
         .mockResolvedValueOnce([[{ total: 0 }]]);
 
-      const res = await request(app).get("/kzlocal-cs2/records?teleports=pro");
+      const res = await request(app).get("/local/cs2kz/records?teleports=pro");
 
       expect(res.status).toBe(200);
       const firstCallQuery = mockPool.query.mock.calls[0][0];
@@ -398,7 +398,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([[]])
         .mockResolvedValueOnce([[{ total: 0 }]]);
 
-      const res = await request(app).get("/kzlocal-cs2/records?teleports=tp");
+      const res = await request(app).get("/local/cs2kz/records?teleports=tp");
 
       expect(res.status).toBe(200);
       const firstCallQuery = mockPool.query.mock.calls[0][0];
@@ -408,14 +408,14 @@ describe("KZ Local CS2 Endpoints", () => {
     it("should handle database errors", async () => {
       mockPool.query.mockRejectedValue(new Error("Database error"));
 
-      const res = await request(app).get("/kzlocal-cs2/records");
+      const res = await request(app).get("/local/cs2kz/records");
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe("Failed to fetch records");
     });
   });
 
-  describe("GET /kzlocal-cs2/records/:id", () => {
+  describe("GET /local/cs2kz/records/:id", () => {
     it("should return record details", async () => {
       const mockRecord = {
         id: "test-uuid",
@@ -442,7 +442,7 @@ describe("KZ Local CS2 Endpoints", () => {
       // Mock the second query for rank calculation
       mockPool.query.mockResolvedValueOnce([[{ rank: 1 }]]);
 
-      const res = await request(app).get("/kzlocal-cs2/records/test-uuid");
+      const res = await request(app).get("/local/cs2kz/records/test-uuid");
 
       expect(res.status).toBe(200);
       expect(res.body.id).toBe("test-uuid");
@@ -453,7 +453,7 @@ describe("KZ Local CS2 Endpoints", () => {
     it("should return 404 for non-existent record", async () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
-      const res = await request(app).get("/kzlocal-cs2/records/nonexistent");
+      const res = await request(app).get("/local/cs2kz/records/nonexistent");
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBe("Record not found");
@@ -462,14 +462,14 @@ describe("KZ Local CS2 Endpoints", () => {
     it("should handle database errors", async () => {
       mockPool.query.mockRejectedValue(new Error("Database error"));
 
-      const res = await request(app).get("/kzlocal-cs2/records/test-uuid");
+      const res = await request(app).get("/local/cs2kz/records/test-uuid");
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe("Failed to fetch record");
     });
   });
 
-  describe("GET /kzlocal-cs2/records/top/:mapname", () => {
+  describe("GET /local/cs2kz/records/top/:mapname", () => {
     it("should return top records for a map", async () => {
       const mockMap = { ID: 1 };
       const mockRecords = [
@@ -491,7 +491,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([[mockMap]])
         .mockResolvedValueOnce([mockRecords]);
 
-      const res = await request(app).get("/kzlocal-cs2/records/top/kz_test");
+      const res = await request(app).get("/local/cs2kz/records/top/kz_test");
 
       expect(res.status).toBe(200);
       expect(res.body.map_name).toBe("kz_test");
@@ -503,7 +503,7 @@ describe("KZ Local CS2 Endpoints", () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
       const res = await request(app).get(
-        "/kzlocal-cs2/records/top/nonexistent",
+        "/local/cs2kz/records/top/nonexistent",
       );
 
       expect(res.status).toBe(404);
@@ -516,7 +516,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       const res = await request(app).get(
-        "/kzlocal-cs2/records/top/kz_test?mode=1",
+        "/local/cs2kz/records/top/kz_test?mode=1",
       );
 
       expect(res.status).toBe(200);
@@ -525,7 +525,7 @@ describe("KZ Local CS2 Endpoints", () => {
     it("should handle database errors", async () => {
       mockPool.query.mockRejectedValue(new Error("Database error"));
 
-      const res = await request(app).get("/kzlocal-cs2/records/top/kz_test");
+      const res = await request(app).get("/local/cs2kz/records/top/kz_test");
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe("Failed to fetch top records");
@@ -533,7 +533,7 @@ describe("KZ Local CS2 Endpoints", () => {
   });
 
   // ==================== JUMPSTATS ENDPOINTS ====================
-  describe("GET /kzlocal-cs2/jumpstats", () => {
+  describe("GET /local/cs2kz/jumpstats", () => {
     it("should return paginated list of jumpstats", async () => {
       const mockJumpstats = [
         {
@@ -559,7 +559,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([mockJumpstats])
         .mockResolvedValueOnce([[{ total: 1 }]]);
 
-      const res = await request(app).get("/kzlocal-cs2/jumpstats");
+      const res = await request(app).get("/local/cs2kz/jumpstats");
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
@@ -572,7 +572,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([[]])
         .mockResolvedValueOnce([[{ total: 0 }]]);
 
-      const res = await request(app).get("/kzlocal-cs2/jumpstats?jump_type=0");
+      const res = await request(app).get("/local/cs2kz/jumpstats?jump_type=0");
 
       expect(res.status).toBe(200);
     });
@@ -582,7 +582,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([[]])
         .mockResolvedValueOnce([[{ total: 0 }]]);
 
-      const res = await request(app).get("/kzlocal-cs2/jumpstats?block=true");
+      const res = await request(app).get("/local/cs2kz/jumpstats?block=true");
 
       expect(res.status).toBe(200);
       const firstCallQuery = mockPool.query.mock.calls[0][0];
@@ -592,14 +592,14 @@ describe("KZ Local CS2 Endpoints", () => {
     it("should handle database errors", async () => {
       mockPool.query.mockRejectedValue(new Error("Database error"));
 
-      const res = await request(app).get("/kzlocal-cs2/jumpstats");
+      const res = await request(app).get("/local/cs2kz/jumpstats");
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe("Failed to fetch jumpstats");
     });
   });
 
-  describe("GET /kzlocal-cs2/jumpstats/top", () => {
+  describe("GET /local/cs2kz/jumpstats/top", () => {
     it("should return top jumpstats", async () => {
       const mockJumpstats = [
         {
@@ -625,7 +625,7 @@ describe("KZ Local CS2 Endpoints", () => {
 
       mockPool.query.mockResolvedValueOnce([mockJumpstats]);
 
-      const res = await request(app).get("/kzlocal-cs2/jumpstats/top");
+      const res = await request(app).get("/local/cs2kz/jumpstats/top");
 
       expect(res.status).toBe(200);
       expect(res.body.records).toHaveLength(1);
@@ -636,7 +636,7 @@ describe("KZ Local CS2 Endpoints", () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
       const res = await request(app).get(
-        "/kzlocal-cs2/jumpstats/top?jump_type=1&mode=1",
+        "/local/cs2kz/jumpstats/top?jump_type=1&mode=1",
       );
 
       expect(res.status).toBe(200);
@@ -645,7 +645,7 @@ describe("KZ Local CS2 Endpoints", () => {
     it("should handle database errors", async () => {
       mockPool.query.mockRejectedValue(new Error("Database error"));
 
-      const res = await request(app).get("/kzlocal-cs2/jumpstats/top");
+      const res = await request(app).get("/local/cs2kz/jumpstats/top");
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe("Failed to fetch top jumpstats");
@@ -653,7 +653,7 @@ describe("KZ Local CS2 Endpoints", () => {
   });
 
   // ==================== MODES/STYLES/COURSES/STATS ENDPOINTS ====================
-  describe("GET /kzlocal-cs2/modes", () => {
+  describe("GET /local/cs2kz/modes", () => {
     it("should return list of modes", async () => {
       const mockModes = [
         { id: 1, name: "Classic", short_name: "CL" },
@@ -662,7 +662,7 @@ describe("KZ Local CS2 Endpoints", () => {
 
       mockPool.query.mockResolvedValueOnce([mockModes]);
 
-      const res = await request(app).get("/kzlocal-cs2/modes");
+      const res = await request(app).get("/local/cs2kz/modes");
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(2);
@@ -671,14 +671,14 @@ describe("KZ Local CS2 Endpoints", () => {
     it("should handle database errors", async () => {
       mockPool.query.mockRejectedValue(new Error("Database error"));
 
-      const res = await request(app).get("/kzlocal-cs2/modes");
+      const res = await request(app).get("/local/cs2kz/modes");
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe("Failed to fetch modes");
     });
   });
 
-  describe("GET /kzlocal-cs2/styles", () => {
+  describe("GET /local/cs2kz/styles", () => {
     it("should return list of styles", async () => {
       const mockStyles = [
         { id: 1, name: "Normal", short_name: "NM" },
@@ -687,7 +687,7 @@ describe("KZ Local CS2 Endpoints", () => {
 
       mockPool.query.mockResolvedValueOnce([mockStyles]);
 
-      const res = await request(app).get("/kzlocal-cs2/styles");
+      const res = await request(app).get("/local/cs2kz/styles");
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(2);
@@ -696,14 +696,14 @@ describe("KZ Local CS2 Endpoints", () => {
     it("should handle database errors", async () => {
       mockPool.query.mockRejectedValue(new Error("Database error"));
 
-      const res = await request(app).get("/kzlocal-cs2/styles");
+      const res = await request(app).get("/local/cs2kz/styles");
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe("Failed to fetch styles");
     });
   });
 
-  describe("GET /kzlocal-cs2/courses", () => {
+  describe("GET /local/cs2kz/courses", () => {
     it("should return paginated list of courses", async () => {
       const mockCourses = [
         {
@@ -721,7 +721,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([mockCourses])
         .mockResolvedValueOnce([[{ total: 1 }]]);
 
-      const res = await request(app).get("/kzlocal-cs2/courses");
+      const res = await request(app).get("/local/cs2kz/courses");
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
@@ -734,7 +734,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([[]])
         .mockResolvedValueOnce([[{ total: 0 }]]);
 
-      const res = await request(app).get("/kzlocal-cs2/courses?map=kz_test");
+      const res = await request(app).get("/local/cs2kz/courses?map=kz_test");
 
       expect(res.status).toBe(200);
       const firstCallParams = mockPool.query.mock.calls[0][1];
@@ -744,14 +744,14 @@ describe("KZ Local CS2 Endpoints", () => {
     it("should handle database errors", async () => {
       mockPool.query.mockRejectedValue(new Error("Database error"));
 
-      const res = await request(app).get("/kzlocal-cs2/courses");
+      const res = await request(app).get("/local/cs2kz/courses");
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe("Failed to fetch courses");
     });
   });
 
-  describe("GET /kzlocal-cs2/stats", () => {
+  describe("GET /local/cs2kz/stats", () => {
     it("should return server statistics", async () => {
       const mockStats = {
         total_players: 1000,
@@ -773,7 +773,7 @@ describe("KZ Local CS2 Endpoints", () => {
         .mockResolvedValueOnce([[mockStats]])
         .mockResolvedValueOnce([[mockRecentStats]]);
 
-      const res = await request(app).get("/kzlocal-cs2/stats");
+      const res = await request(app).get("/local/cs2kz/stats");
 
       expect(res.status).toBe(200);
       expect(res.body.total_players).toBe(1000);
@@ -785,7 +785,7 @@ describe("KZ Local CS2 Endpoints", () => {
     it("should handle database errors", async () => {
       mockPool.query.mockRejectedValue(new Error("Database error"));
 
-      const res = await request(app).get("/kzlocal-cs2/stats");
+      const res = await request(app).get("/local/cs2kz/stats");
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe("Failed to fetch stats");

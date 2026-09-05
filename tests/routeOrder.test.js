@@ -1,5 +1,5 @@
-// Express matches in registration order, so a parameterised route registered
-// before a static sibling makes the static one unreachable.
+// Express matches in registration order,
+// so a parameterised route registered before a static sibling makes the static one unreachable.
 
 const fs = require("fs");
 const path = require("path");
@@ -41,7 +41,16 @@ function shadowedRoutes(file) {
   return shadowed;
 }
 
-const apiFiles = fs.readdirSync(API_DIR).filter((f) => f.endsWith(".js"));
+/** Router files, including those nested under global/ and local/. */
+function apiFilesIn(dir, prefix = "") {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) return apiFilesIn(path.join(dir, entry.name), rel);
+    return entry.name.endsWith(".js") ? [rel] : [];
+  });
+}
+
+const apiFiles = apiFilesIn(API_DIR);
 
 describe("route registration order", () => {
   it.each(apiFiles)("%s registers no unreachable routes", (file) => {
@@ -49,7 +58,7 @@ describe("route registration order", () => {
   });
 
   it("keeps /mode-filters ahead of /:mapname", () => {
-    const routes = routesOf("kzMaps.js").map((r) => r.route);
+    const routes = routesOf("global/maps.js").map((r) => r.route);
     expect(routes.indexOf("/mode-filters")).toBeGreaterThan(-1);
     expect(routes.indexOf("/mode-filters")).toBeLessThan(
       routes.indexOf("/:mapname"),

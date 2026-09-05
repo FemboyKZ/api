@@ -4,7 +4,7 @@
 
 const express = require("express");
 const router = express.Router();
-const { getKzPool } = require("../db/kzRecords");
+const { getKzPool } = require("../../db/kzRecords");
 const {
   validatePagination,
   paginationMeta,
@@ -12,9 +12,9 @@ const {
   validateSortField,
   validateSortOrder,
   defaultSortOrder,
-} = require("../utils/validators");
-const { toCountQuery } = require("../utils/kzHelpers");
-const { refreshMapWorldRecord } = require("../services/wrSync");
+} = require("../../utils/validators");
+const { toCountQuery } = require("../../utils/kzHelpers");
+const { refreshMapWorldRecord } = require("../../services/wrSync");
 
 /**
  * WHERE conditions shared by the map listing endpoints.
@@ -54,12 +54,15 @@ const MAP_SORT_COLUMNS = {
   // Record counts live in the statistics table, not on kz_maps.
   records: "COALESCE(ms.total_records, 0)",
 };
-const logger = require("../utils/logger");
-const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
+const logger = require("../../utils/logger");
+const {
+  cacheMiddleware,
+  kzKeyGenerator,
+} = require("../../utils/cacheMiddleware");
 
 /**
  * @swagger
- * /kzglobal/maps:
+ * /global/maps:
  *   get:
  *     summary: Get KZ maps
  *     description: Returns a paginated list of KZ maps with statistics
@@ -217,7 +220,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
 /**
  * @swagger
- * /kzglobal/maps/top/difficulty:
+ * /global/maps/top/difficulty:
  *   get:
  *     summary: Get maps by difficulty
  *     description: Returns maps grouped and sorted by difficulty tier
@@ -307,7 +310,7 @@ router.get(
 
 /**
  * @swagger
- * /kzglobal/maps/enriched:
+ * /global/maps/enriched:
  *   get:
  *     summary: Get enriched maps with world record holders
  *     description: Returns maps with global data and world record holder information for efficient front-end loading. Optionally include player completion status.
@@ -674,11 +677,11 @@ router.get(
 // Must stay ahead of /:mapname, which would otherwise swallow it.
 /**
  * @swagger
- * /kzglobal/maps/mode-filters:
+ * /global/maps/mode-filters:
  *   get:
  *     summary: Get all map mode filters
  *     description: Returns maps that have mode-specific restrictions. Maps without entries are available for all modes.
- *     tags: [KZ Global Maps]
+ *     tags: [KZ Global]
  *     parameters:
  *       - in: query
  *         name: mode
@@ -767,11 +770,11 @@ router.get(
 
 /**
  * @swagger
- * /kzglobal/maps/mode-filters/{mode}:
+ * /global/maps/mode-filters/{mode}:
  *   get:
  *     summary: Get maps for a specific mode
  *     description: Returns all maps that are allowed for the specified mode, including unrestricted maps.
- *     tags: [KZ Global Maps]
+ *     tags: [KZ Global]
  *     parameters:
  *       - in: path
  *         name: mode
@@ -868,7 +871,7 @@ router.get(
 
 /**
  * @swagger
- * /kzglobal/maps/{mapname}:
+ * /global/maps/{mapname}:
  *   get:
  *     summary: Get map details
  *     description: Returns detailed information about a specific map
@@ -1102,7 +1105,7 @@ router.get(
 
 /**
  * @swagger
- * /kzglobal/maps/{mapname}/records:
+ * /global/maps/{mapname}/records:
  *   get:
  *     summary: Get all records for a map
  *     description: Returns paginated list of all records set on a specific map
@@ -1255,7 +1258,7 @@ router.get(
 
 /**
  * @swagger
- * /kzglobal/maps/{mapname}/refresh-wr:
+ * /global/maps/{mapname}/refresh-wr:
  *   post:
  *     summary: Refresh world record from KZTimer API
  *     description: Forces a refresh of the world record data from KZTimer Global API
@@ -1328,7 +1331,7 @@ router.post("/:mapname/refresh-wr", async (req, res) => {
 
 /**
  * @swagger
- * /kzglobal/maps/{mapname}/courses:
+ * /global/maps/{mapname}/courses:
  *   get:
  *     summary: Get available courses/stages for a map
  *     description: Returns all available courses (stages) for a map based on record filters

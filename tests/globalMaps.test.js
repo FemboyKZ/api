@@ -21,7 +21,7 @@ describe("KZ Maps Endpoints", () => {
     kzRecords.getKzPool.mockReturnValue(mockPool);
   });
 
-  describe("GET /kzglobal/maps", () => {
+  describe("GET /global/maps", () => {
     it("should return paginated list of maps", async () => {
       mockPool.query
         .mockResolvedValueOnce([[{ total: 1 }]]) // COUNT query
@@ -42,7 +42,7 @@ describe("KZ Maps Endpoints", () => {
         ]);
 
       const response = await request(app)
-        .get("/kzglobal/maps")
+        .get("/global/maps")
         .expect("Content-Type", /json/)
         .expect(200);
 
@@ -59,7 +59,7 @@ describe("KZ Maps Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]]) // COUNT query
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/maps?name=synergy").expect(200);
+      await request(app).get("/global/maps?name=synergy").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("map_name LIKE");
@@ -71,7 +71,7 @@ describe("KZ Maps Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]]) // COUNT query
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/maps?difficulty=5").expect(200);
+      await request(app).get("/global/maps?difficulty=5").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("difficulty =");
@@ -83,7 +83,7 @@ describe("KZ Maps Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]]) // COUNT query
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/maps?validated=true").expect(200);
+      await request(app).get("/global/maps?validated=true").expect(200);
 
       const call = mockPool.query.mock.calls[1];
       expect(call[0]).toContain("validated =");
@@ -95,7 +95,7 @@ describe("KZ Maps Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/maps?sort=difficulty&order=asc")
+        .get("/global/maps?sort=difficulty&order=asc")
         .expect(200);
 
       const call = mockPool.query.mock.calls[1];
@@ -108,14 +108,14 @@ describe("KZ Maps Endpoints", () => {
         message: "Connection refused",
       });
 
-      const response = await request(app).get("/kzglobal/maps").expect(503);
+      const response = await request(app).get("/global/maps").expect(503);
 
       expect(response.body).toHaveProperty("error");
       expect(response.body.error).toContain("connection refused");
     });
   });
 
-  describe("GET /kzglobal/maps/top/difficulty", () => {
+  describe("GET /global/maps/top/difficulty", () => {
     it("should return maps grouped by difficulty", async () => {
       mockPool.query.mockResolvedValueOnce([
         [
@@ -137,7 +137,7 @@ describe("KZ Maps Endpoints", () => {
       ]);
 
       const response = await request(app)
-        .get("/kzglobal/maps/top/difficulty")
+        .get("/global/maps/top/difficulty")
         .expect(200);
 
       expect(response.body.data).toHaveLength(2);
@@ -148,9 +148,7 @@ describe("KZ Maps Endpoints", () => {
     it("should filter by specific tier", async () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
-      await request(app)
-        .get("/kzglobal/maps/top/difficulty?tier=5")
-        .expect(200);
+      await request(app).get("/global/maps/top/difficulty?tier=5").expect(200);
 
       const call = mockPool.query.mock.calls[0];
       expect(call[0]).toContain("difficulty =");
@@ -158,7 +156,7 @@ describe("KZ Maps Endpoints", () => {
     });
   });
 
-  describe("GET /kzglobal/maps/:mapname", () => {
+  describe("GET /global/maps/:mapname", () => {
     it("should return map details with statistics", async () => {
       mockPool.query
         .mockResolvedValueOnce([
@@ -199,7 +197,7 @@ describe("KZ Maps Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       const response = await request(app)
-        .get("/kzglobal/maps/kz_synergy_x")
+        .get("/global/maps/kz_synergy_x")
         .expect(200);
 
       expect(response.body).toHaveProperty("map");
@@ -212,11 +210,11 @@ describe("KZ Maps Endpoints", () => {
     it("should return 404 for non-existent map", async () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/maps/nonexistent_map").expect(404);
+      await request(app).get("/global/maps/nonexistent_map").expect(404);
     });
   });
 
-  describe("GET /kzglobal/maps/:mapname/records", () => {
+  describe("GET /global/maps/:mapname/records", () => {
     it("should return paginated records for a map", async () => {
       mockPool.query
         .mockResolvedValueOnce([[{ id: 1 }]])
@@ -234,7 +232,7 @@ describe("KZ Maps Endpoints", () => {
         ]);
 
       const response = await request(app)
-        .get("/kzglobal/maps/kz_synergy_x/records")
+        .get("/global/maps/kz_synergy_x/records")
         .expect(200);
 
       expect(response.body).toHaveProperty("data");
@@ -249,7 +247,7 @@ describe("KZ Maps Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/maps/kz_synergy_x/records?mode=kz_timer")
+        .get("/global/maps/kz_synergy_x/records?mode=kz_timer")
         .expect(200);
 
       const call = mockPool.query.mock.calls[2];
@@ -263,7 +261,7 @@ describe("KZ Maps Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/maps/kz_synergy_x/records?stage=0")
+        .get("/global/maps/kz_synergy_x/records?stage=0")
         .expect(200);
 
       const call = mockPool.query.mock.calls[2];
@@ -277,7 +275,7 @@ describe("KZ Maps Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       await request(app)
-        .get("/kzglobal/maps/kz_synergy_x/records?teleports=pro")
+        .get("/global/maps/kz_synergy_x/records?teleports=pro")
         .expect(200);
 
       const call = mockPool.query.mock.calls[2];
@@ -287,7 +285,7 @@ describe("KZ Maps Endpoints", () => {
     it("should return 404 for non-existent map", async () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/maps/nonexistent/records").expect(404);
+      await request(app).get("/global/maps/nonexistent/records").expect(404);
     });
   });
 });

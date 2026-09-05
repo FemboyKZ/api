@@ -2,7 +2,7 @@
  * KZ Helpers - Shared utilities for KZ-related API endpoints
  *
  * Contains common formatting, conversion, and query helper functions
- * used across kzLocal, kzLocalCS2, kzRecords, kzPlayers, kzMaps, etc.
+ * used across the api/global and api/local routers.
  */
 
 // Import shared utilities from validators to avoid duplication

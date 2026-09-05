@@ -1,6 +1,6 @@
 /**
- * Live map data from tracked servers. KZ Global maps are api/kzMaps.js;
- * local timer maps are api/kzLocal.js and api/kzLocalCS2.js.
+ * Live map data from tracked servers. GlobalAPI maps are api/global/maps.js;
+ * local timer maps are api/local/gokz.js and api/local/cs2kz.js.
  */
 
 const express = require("express");

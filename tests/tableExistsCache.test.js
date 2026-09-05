@@ -1,12 +1,11 @@
-// tableExists guards optional tables and is called on every request,
-// so its information_schema lookups are cached.
+// tableExists guards optional tables and is called on every request, so its information_schema lookups are cached.
 
 const mockQuery = jest.fn();
 jest.mock("../src/db/kzRecords", () => ({
   getKzPool: () => ({ query: mockQuery }),
 }));
 
-const { tableExists } = require("../src/api/kzPlayers");
+const { tableExists } = require("../src/api/global/players");
 
 const found = () => mockQuery.mockResolvedValueOnce([[{ count: 1 }]]);
 const missing = () => mockQuery.mockResolvedValueOnce([[{ count: 0 }]]);

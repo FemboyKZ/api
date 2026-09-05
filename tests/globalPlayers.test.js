@@ -15,7 +15,7 @@ jest.mock("../src/db/redis", () => ({
   setCachedData: jest.fn(),
 }));
 
-const { resetTableExistsCache } = require("../src/api/kzPlayers");
+const { resetTableExistsCache } = require("../src/api/global/players");
 
 describe("KZ Players Endpoints", () => {
   beforeEach(() => {
@@ -25,7 +25,7 @@ describe("KZ Players Endpoints", () => {
     resetTableExistsCache();
   });
 
-  describe("GET /kzglobal/players", () => {
+  describe("GET /global/players", () => {
     it("should return paginated list of players with stats", async () => {
       mockPool.query
         .mockResolvedValueOnce([[{ count: 0 }]]) // tableExists: kz_player_statistics
@@ -60,7 +60,7 @@ describe("KZ Players Endpoints", () => {
         ]);
 
       const response = await request(app)
-        .get("/kzglobal/players")
+        .get("/global/players")
         .expect("Content-Type", /json/)
         .expect(200);
 
@@ -78,7 +78,7 @@ describe("KZ Players Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/players?name=remulian").expect(200);
+      await request(app).get("/global/players?name=remulian").expect(200);
 
       const call = mockPool.query.mock.calls[2]; // tableExists, then total, then the page query
       expect(call[0]).toContain("player_name LIKE");
@@ -91,7 +91,7 @@ describe("KZ Players Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/players?banned=true").expect(200);
+      await request(app).get("/global/players?banned=true").expect(200);
 
       const call = mockPool.query.mock.calls[2]; // tableExists, then total, then the page query
       expect(call[0]).toContain("is_banned =");
@@ -103,7 +103,7 @@ describe("KZ Players Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/players").expect(200);
+      await request(app).get("/global/players").expect(200);
 
       const call = mockPool.query.mock.calls[2]; // tableExists, then total, then the page query
       expect(call[0]).toContain("ORDER BY records DESC");
@@ -115,16 +115,14 @@ describe("KZ Players Endpoints", () => {
         .mockResolvedValueOnce([[{ total: 0 }]])
         .mockResolvedValueOnce([[]]);
 
-      await request(app)
-        .get("/kzglobal/players?sort=name&order=asc")
-        .expect(200);
+      await request(app).get("/global/players?sort=name&order=asc").expect(200);
 
       const call = mockPool.query.mock.calls[2]; // tableExists, then total, then the page query
       expect(call[0]).toContain("ORDER BY p.player_name ASC");
     });
   });
 
-  describe("GET /kzglobal/players/:steamid", () => {
+  describe("GET /global/players/:steamid", () => {
     it("should return player details with comprehensive stats", async () => {
       mockPool.query
         .mockResolvedValueOnce([
@@ -178,7 +176,7 @@ describe("KZ Players Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       const response = await request(app)
-        .get("/kzglobal/players/76561198000000001")
+        .get("/global/players/76561198000000001")
         .expect(200);
 
       expect(response.body).toHaveProperty("player");
@@ -193,24 +191,24 @@ describe("KZ Players Endpoints", () => {
       // Player lookup returns empty (404)
       mockPool.query.mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/players/[U:1:40000001]").expect(404);
+      await request(app).get("/global/players/[U:1:40000001]").expect(404);
 
       // Verify the converted SteamID64 was used in query
       expect(mockPool.query).toHaveBeenCalled();
     });
 
     it("should return 400 for invalid steamid", async () => {
-      await request(app).get("/kzglobal/players/invalid").expect(400);
+      await request(app).get("/global/players/invalid").expect(400);
     });
 
     it("should return 404 for non-existent player", async () => {
       mockPool.query.mockResolvedValueOnce([[]]);
 
-      await request(app).get("/kzglobal/players/76561198999999999").expect(404);
+      await request(app).get("/global/players/76561198999999999").expect(404);
     });
   });
 
-  describe("GET /kzglobal/players/:steamid/records", () => {
+  describe("GET /global/players/:steamid/records", () => {
     it("should return paginated records for a player", async () => {
       const recordData = {
         id: 1,
@@ -229,7 +227,7 @@ describe("KZ Players Endpoints", () => {
         .mockResolvedValueOnce([[recordData]]); // records query
 
       const response = await request(app)
-        .get("/kzglobal/players/76561198000000001/records")
+        .get("/global/players/76561198000000001/records")
         .expect(200);
 
       expect(response.body).toHaveProperty("data");
@@ -244,7 +242,7 @@ describe("KZ Players Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       const response = await request(app)
-        .get("/kzglobal/players/76561198000000001/records?map=synergy")
+        .get("/global/players/76561198000000001/records?map=synergy")
         .expect(200);
 
       expect(response.body).toHaveProperty("data");
@@ -258,7 +256,7 @@ describe("KZ Players Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       const response = await request(app)
-        .get("/kzglobal/players/76561198000000001/records?mode=kz_timer")
+        .get("/global/players/76561198000000001/records?mode=kz_timer")
         .expect(200);
 
       expect(response.body).toHaveProperty("data");
@@ -272,7 +270,7 @@ describe("KZ Players Endpoints", () => {
         .mockResolvedValueOnce([[]]);
 
       const response = await request(app)
-        .get("/kzglobal/players/76561198000000001/records?sort=time&order=asc")
+        .get("/global/players/76561198000000001/records?sort=time&order=asc")
         .expect(200);
 
       expect(response.body).toHaveProperty("data");
@@ -281,7 +279,7 @@ describe("KZ Players Endpoints", () => {
     });
 
     it("should return 400 for invalid steamid", async () => {
-      await request(app).get("/kzglobal/players/invalid/records").expect(400);
+      await request(app).get("/global/players/invalid/records").expect(400);
     });
   });
 });
