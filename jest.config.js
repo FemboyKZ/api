@@ -4,7 +4,7 @@ module.exports = {
   collectCoverageFrom: [
     "src/**/*.js",
     "!src/server.js",
-    "!src/services/updater.js",
+    "!src/services/servers/updateLoop.js",
   ],
   testMatch: ["**/tests/**/*.test.js"],
   setupFiles: ["<rootDir>/tests/setup.js"],

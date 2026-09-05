@@ -13,12 +13,12 @@
  * Every exported mutator takes a live connection so callers run them inside a single transaction.
  */
 
-const logger = require("../utils/logger");
+const logger = require("../../utils/logger");
 const {
   TIER_ROLES,
   tierForTotal,
   giftTokensForTotal,
-} = require("../config/tiers");
+} = require("../../config/tiers");
 
 const EMPTY_PERMS = { roles: [], customRole: null, customTag: null };
 

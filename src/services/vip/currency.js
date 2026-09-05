@@ -12,8 +12,8 @@
  */
 
 const axios = require("axios");
-const pool = require("../db");
-const logger = require("../utils/logger");
+const pool = require("../../db");
+const logger = require("../../utils/logger");
 
 const SETTING_KEY = "fx_rates_eur";
 const REFRESH_MS = 12 * 60 * 60 * 1000; // 12h

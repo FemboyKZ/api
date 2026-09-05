@@ -5,12 +5,12 @@
  * a game server answers in well under a second or it is down, and this runs inside the update loop.
  *
  * Returns { status: 0 } rather than null on failure -
- * services/updater.js branches on result.status, and 0 maps to the servers.status column.
+ * services/servers/updateLoop.js branches on result.status, and 0 maps to the servers.status column.
  */
 
 const { GameDig } = require("gamedig");
-const logger = require("../utils/logger");
-const { querySteamMaster } = require("./steamMasterQuery");
+const logger = require("../../utils/logger");
+const { querySteamMaster } = require("./steamMaster");
 
 /**
  * Query a game server with fallback strategy:

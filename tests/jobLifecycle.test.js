@@ -9,19 +9,27 @@ const SERVICES = path.join(__dirname, "..", "src", "services");
 
 // service file -> [start export, stop export]
 const JOBS = [
-  ["updater.js", "startUpdateLoop", "stopUpdateLoop"],
+  ["servers/updateLoop.js", "startUpdateLoop", "stopUpdateLoop"],
   [
-    "worldRecordsCache.js",
+    "kz/worldRecordsCache.js",
     "startWorldRecordsCacheJob",
     "stopWorldRecordsCacheJob",
   ],
-  ["mapsQuery.js", "startGlobalInfoUpdateJob", "stopGlobalInfoUpdateJob"],
-  ["crossChat.js", "startChatCleanupJob", "stopChatCleanupJob"],
-  ["kzRecordsScraper.js", "startScraperJob", "stopScraperJob"],
-  ["kzBanStatus.js", "startBanCleanupJob", "stopBanCleanupJob"],
-  ["kzStatistics.js", "startStatisticsJob", "stopStatisticsJobs"],
-  ["wrSync.js", "startWorldRecordsSyncJob", "stopWorldRecordsSyncJob"],
-  ["playerPBsSync.js", "startPlayerPBsSyncJob", "stopPlayerPBsSyncJob"],
+  [
+    "kz/mapGlobalInfoSync.js",
+    "startMapGlobalInfoSyncJob",
+    "stopMapGlobalInfoSyncJob",
+  ],
+  ["comms/chat.js", "startChatCleanupJob", "stopChatCleanupJob"],
+  ["kz/recordsScraper.js", "startScraperJob", "stopScraperJob"],
+  ["kz/banStatus.js", "startBanCleanupJob", "stopBanCleanupJob"],
+  ["kz/statistics.js", "startStatisticsJob", "stopStatisticsJobs"],
+  [
+    "kz/worldRecordsSync.js",
+    "startWorldRecordsSyncJob",
+    "stopWorldRecordsSyncJob",
+  ],
+  ["kz/pbsCache.js", "startPlayerPBsCacheJob", "stopPlayerPBsCacheJob"],
 ];
 
 describe("background job lifecycle", () => {

@@ -14,8 +14,8 @@ jest.mock("../src/db/redis", () => ({
   setCachedData: jest.fn(),
 }));
 
-// Mock steamQuery service
-jest.mock("../src/services/steamQuery", () => ({
+// Mock steamPlayerClient service
+jest.mock("../src/services/servers/steamPlayer", () => ({
   getPlayerSummary: jest.fn(() => null),
 }));
 

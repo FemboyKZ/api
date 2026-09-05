@@ -8,7 +8,7 @@ const {
   initWebSocket,
   closeWebSocket,
   getWebSocketStats,
-} = require("../src/services/websocket");
+} = require("../src/services/comms/websocket");
 
 /** Resolves true if the HTTP server finished closing within `ms`. */
 function closeWithin(server, ms) {

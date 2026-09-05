@@ -13,12 +13,12 @@ const { VALID_ROLES, VALID_TAG_COLORS } = require("../config/permissions");
 const {
   getStats: getScraperStats,
   processBansFullSweep,
-} = require("../services/kzRecordsScraper");
+} = require("../services/kz/recordsScraper");
 const {
   getStats: getBanStatusStats,
   manualBanStatusUpdate,
   cleanupExpiredBans,
-} = require("../services/kzBanStatus");
+} = require("../services/kz/banStatus");
 const {
   refreshAllStatistics,
   refreshPlayerStatistics,
@@ -26,7 +26,7 @@ const {
   refreshServerStatistics,
   populateAllStatistics,
   getStatisticsSummary,
-} = require("../services/kzStatistics");
+} = require("../services/kz/statistics");
 const { deleteCache, flushCache } = require("../db/redis");
 const {
   runCleanup: runJumpstatCleanup,
@@ -34,7 +34,7 @@ const {
   restoreJumpstat,
   restoreAllJumpstats,
   getAvailableFilters: getJumpstatFilters,
-} = require("../services/jumpstatCleanup");
+} = require("../services/kz/jumpstatCleanup");
 
 /**
  * @swagger

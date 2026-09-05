@@ -7,7 +7,7 @@ const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
 const { isRedisConnected } = require("../db/redis");
-const { getWebSocketStats } = require("../services/websocket");
+const { getWebSocketStats } = require("../services/comms/websocket");
 
 /**
  * @swagger

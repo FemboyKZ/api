@@ -22,10 +22,10 @@
 
 require("dotenv").config();
 const axios = require("axios");
-const logger = require("../utils/logger");
-const pool = require("../db");
-const { sanitizePlayerName } = require("../utils/validators");
-const { parsePlayersList } = require("../utils/playersList");
+const logger = require("../../utils/logger");
+const pool = require("../../db");
+const { sanitizePlayerName } = require("../../utils/validators");
+const { parsePlayersList } = require("../../utils/playersList");
 
 const DISCORD_TIMEOUT_MS = 10000;
 

@@ -1,6 +1,6 @@
 /**
  * adminAuth on the whole router.
- * Tier thresholds live in config/tiers.js and are resolved through services/entitlements.js.
+ * Tier thresholds live in config/tiers.js and are resolved through services/vip/entitlements.js.
  */
 
 const express = require("express");
@@ -16,8 +16,11 @@ const {
   CUSTOM_ROLE_MIN_EUR,
   CUSTOM_TAG_MIN_EUR,
 } = require("../config/tiers");
-const { parsePermissions, grantBaseVip } = require("../services/entitlements");
-const { isValidEmail, normalizeEmail } = require("../services/playerContacts");
+const {
+  parsePermissions,
+  grantBaseVip,
+} = require("../services/vip/entitlements");
+const { isValidEmail, normalizeEmail } = require("../services/vip/contacts");
 
 // site2-mediated; all VIP/self-serve routes require admin auth.
 router.use(adminAuth);

@@ -2,16 +2,16 @@
  * Server Tracking
  *
  * Player-session and map-history bookkeeping:
- *   - services/updater.js   polls servers we have no live data for
+ *   - services/servers/updateLoop.js   polls servers we have no live data for
  *   - api/serverStatus.js   ingests live data pushed by the in-game plugin
  *
  * Both paths write the same player_sessions / map_history rows, and a server moves between them at runtime
  * (the updater skips servers reporting live, and resumes when the plugin hibernates or goes stale).
  */
 
-const pool = require("../db");
-const logger = require("../utils/logger");
-const { sanitizePlayerName } = require("../utils/validators");
+const pool = require("../../db");
+const logger = require("../../utils/logger");
+const { sanitizePlayerName } = require("../../utils/validators");
 
 // "ip:port" -> Set of steamids seen on the last observation
 const previousServerStates = new Map();

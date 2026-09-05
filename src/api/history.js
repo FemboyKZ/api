@@ -1,5 +1,5 @@
 /**
- * Reads the rollup tables written by services/serverTracking.js
+ * Reads the rollup tables written by services/servers/tracking.js
  * and the daily aggregation job, not the live servers/players tables.
  */
 

@@ -14,8 +14,8 @@ const {
   hashToken,
   generateToken,
   logContact,
-} = require("../services/playerContacts");
-const { redeemPendingGifts } = require("../services/entitlements");
+} = require("../services/vip/contacts");
+const { redeemPendingGifts } = require("../services/vip/entitlements");
 
 // All contact-linking routes require admin auth
 // (site2 calls them server-side after proving SteamID ownership via Steam OpenID).

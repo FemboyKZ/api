@@ -106,7 +106,7 @@ const {
   CS2_FIELD_MAP,
   CSGO_FIELD_MAP,
   VALID_OPERATORS,
-} = require("../src/services/jumpstatCleanup");
+} = require("../src/services/kz/jumpstatCleanup");
 
 describe("Jumpstat Cleanup Service", () => {
   describe("loadFilters", () => {

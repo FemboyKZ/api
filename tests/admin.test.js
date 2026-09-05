@@ -1,7 +1,7 @@
 const request = require("supertest");
 const app = require("../src/app");
 const pool = require("../src/db");
-const kzStatistics = require("../src/services/kzStatistics");
+const kzStatistics = require("../src/services/kz/statistics");
 
 // Mock database pool
 jest.mock("../src/db", () => ({
@@ -36,7 +36,7 @@ jest.mock("../src/utils/auth", () => ({
 }));
 
 // Mock kzStatistics service
-jest.mock("../src/services/kzStatistics", () => ({
+jest.mock("../src/services/kz/statistics", () => ({
   refreshAllStatistics: jest.fn(),
   refreshPlayerStatistics: jest.fn(),
   refreshMapStatistics: jest.fn(),

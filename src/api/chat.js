@@ -17,7 +17,7 @@ const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
 const { isValidIP, parsePort } = require("../utils/validators");
-const { addMessage, wait } = require("../services/crossChat");
+const { addMessage, wait } = require("../services/comms/chat");
 
 const STREAM_HOLD_MS = 25000; // keep < the plugins' 30s request timeout
 

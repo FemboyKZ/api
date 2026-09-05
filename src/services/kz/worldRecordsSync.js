@@ -14,8 +14,9 @@
  */
 
 const axios = require("axios");
-const { getKzPool } = require("../db/kzRecords");
-const logger = require("../utils/logger");
+const { getKzPool } = require("../../db/kzRecords");
+const logger = require("../../utils/logger");
+const { sleep } = require("../../utils/retry");
 
 const GOKZ_API_URL =
   process.env.GOKZ_API_URL || "https://kztimerglobal.com/api/v2";
@@ -221,7 +222,7 @@ async function syncAllWorldRecordsForMap(map) {
       if (wr) syncedCount++;
 
       // Small delay between requests to avoid rate limiting
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await sleep(50);
     } catch (error) {
       logger.error(
         `Failed to fetch ${wrType.columnPrefix} for ${map.map_name}: ${error.message}`,
@@ -270,7 +271,7 @@ async function syncWorldRecords() {
         successCount++;
 
         // Delay between maps
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await sleep(100);
       } catch (error) {
         logger.error(
           `Failed to sync WRs for ${map.map_name}: ${error.message}`,
@@ -378,7 +379,7 @@ async function initialPopulateWorldRecords() {
         successCount++;
 
         // Rate limit: delay between maps (each map makes 6 API calls)
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        await sleep(200);
       } catch (error) {
         logger.error(
           `Failed to sync WRs for ${map.map_name}: ${error.message}`,
@@ -396,7 +397,10 @@ async function initialPopulateWorldRecords() {
       logger.info(
         "More maps need initial WR sync, scheduling next batch in 5 minutes...",
       );
-      wrSyncTimer = setTimeout(initialPopulateWorldRecords, 5 * 60 * 1000);
+      worldRecordsSyncTimer = setTimeout(
+        initialPopulateWorldRecords,
+        5 * 60 * 1000,
+      );
     } else {
       logger.info("Initial WR population complete!");
     }
@@ -408,7 +412,7 @@ async function initialPopulateWorldRecords() {
 /**
  * Start initial WR population job (runs once on startup, then continues until all maps are synced)
  */
-let wrSyncTimer = null;
+let worldRecordsSyncTimer = null;
 
 function startWorldRecordsSyncJob() {
   logger.info("Starting world records initial population job");
@@ -421,14 +425,14 @@ function startWorldRecordsSyncJob() {
   );
 
   // Run after a short delay on startup (give DB time to initialize)
-  wrSyncTimer = setTimeout(() => {
+  worldRecordsSyncTimer = setTimeout(() => {
     initialPopulateWorldRecords();
   }, 15000);
 }
 
 function stopWorldRecordsSyncJob() {
-  clearTimeout(wrSyncTimer);
-  wrSyncTimer = null;
+  clearTimeout(worldRecordsSyncTimer);
+  worldRecordsSyncTimer = null;
 }
 
 module.exports = {

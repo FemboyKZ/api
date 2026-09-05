@@ -2,7 +2,7 @@
  * KZ Ban Change Tracking
  *
  * Shared upsert path for kz_bans, used by both the in-process scraper
- * (services/kzRecordsScraper.js) and the standalone script (scripts/bans-scraper.js).
+ * (services/kz/recordsScraper.js) and the standalone script (scripts/bans-scraper.js).
  *
  * Why this exists:
  *   GlobalAPI has no usable "what changed" query. `updated_since` is accepted by
@@ -17,7 +17,7 @@
  *      and always bumping last_seen_at.
  */
 
-const logger = require("../utils/logger");
+const logger = require("../../utils/logger");
 
 // Fields diffed into kz_ban_changes. ip, player_name and steam_id are identity
 // fields rather than ban state, so churn in them is not worth logging.

@@ -1,5 +1,5 @@
 /**
- * Reads kz_maps plus the statistics tables refreshed by services/kzStatistics.js and services/wrSync.js.
+ * Reads kz_maps plus the statistics tables refreshed by services/kz/statistics.js and services/kz/worldRecordsSync.js.
  */
 
 const express = require("express");
@@ -14,7 +14,7 @@ const {
   defaultSortOrder,
 } = require("../../utils/validators");
 const { toCountQuery } = require("../../utils/kzHelpers");
-const { refreshMapWorldRecord } = require("../../services/wrSync");
+const { refreshMapWorldRecord } = require("../../services/kz/worldRecordsSync");
 
 /**
  * WHERE conditions shared by the map listing endpoints.

@@ -6,7 +6,7 @@
  * queries (Steam Master, GameDig, RCON) for that server.
  */
 
-const logger = require("../utils/logger");
+const logger = require("../../utils/logger");
 
 // Map of "ip:port" -> { lastReport: timestamp }
 const liveServers = new Map();

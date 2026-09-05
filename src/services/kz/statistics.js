@@ -16,8 +16,9 @@
  * - Uses stored procedures for consistent logic
  */
 
-const { getKzPool } = require("../db/kzRecords");
-const logger = require("../utils/logger");
+const { getKzPool } = require("../../db/kzRecords");
+const logger = require("../../utils/logger");
+const { sleep } = require("../../utils/retry");
 
 // Configuration
 const DEFAULT_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
@@ -81,9 +82,7 @@ async function refreshPlayerStatistics(
         logger.warn(
           `Error refreshing player statistics (attempt ${retryCount}/${MAX_RETRIES}): ${error.message}`,
         );
-        await new Promise((resolve) =>
-          setTimeout(resolve, RETRY_DELAY_BASE * Math.pow(2, retryCount - 1)),
-        );
+        await sleep(RETRY_DELAY_BASE * Math.pow(2, retryCount - 1));
         continue;
       }
       logger.error(
@@ -121,9 +120,7 @@ async function callRefreshProcedure(procedure, label) {
         logger.warn(
           `Error refreshing ${label} statistics (attempt ${attempt}/${MAX_RETRIES}): ${error.message}`,
         );
-        await new Promise((resolve) =>
-          setTimeout(resolve, RETRY_DELAY_BASE * Math.pow(2, attempt - 1)),
-        );
+        await sleep(RETRY_DELAY_BASE * Math.pow(2, attempt - 1));
         continue;
       }
       logger.error(

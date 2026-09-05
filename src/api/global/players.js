@@ -1,5 +1,5 @@
 /**
- * Reads kz_players plus the PB cache maintained by services/playerPBsSync.js.
+ * Reads kz_players plus the PB cache maintained by services/kz/pbsCache.js.
  *
  * tableExists/resetTableExistsCache are exported below the router only so
  * tests/tableExistsCache.test.js can reach the cache.
@@ -32,7 +32,7 @@ const {
   getPlayerPBs,
   getPlayerMapCompletions,
   refreshPlayerPBs,
-} = require("../../services/playerPBsSync");
+} = require("../../services/kz/pbsCache");
 
 /**
  * The identity fields returned alongside a player's statistics.

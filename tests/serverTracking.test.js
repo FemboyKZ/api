@@ -1,4 +1,4 @@
-// Session/map tracking is shared between the poller (services/updater) and the plugin ingest (api/serverStatus).
+// Session/map tracking is shared between the poller (services/serverUpdateLoop) and the plugin ingest (api/serverStatus).
 // A server moving between them must keep one view of who is connected, so nobody gets a second open session.
 
 const mockQuery = jest.fn().mockResolvedValue([{ affectedRows: 1 }]);
@@ -8,7 +8,7 @@ const {
   trackPlayerSessions,
   closeServerSessions,
   trackMapChange,
-} = require("../src/services/serverTracking");
+} = require("../src/services/servers/tracking");
 
 // State is keyed by ip:port and lives for the process,
 // so each test takes its own port rather than reaching into the module to reset it.

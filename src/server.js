@@ -17,48 +17,51 @@ const {
   initAllKzLocalDatabases,
   closeAllKzLocalDatabases,
 } = require("./db/kzLocal");
-const { startUpdateLoop, stopUpdateLoop } = require("./services/updater");
+const {
+  startUpdateLoop,
+  stopUpdateLoop,
+} = require("./services/servers/updateLoop");
 const {
   startScraperJob,
   stopScraperJob,
   SCRAPER_INTERVAL,
   SCRAPER_IDLE_INTERVAL,
-} = require("./services/kzRecordsScraper");
+} = require("./services/kz/recordsScraper");
 const {
   startBanCleanupJob,
   stopBanCleanupJob,
   CLEANUP_INTERVAL,
-} = require("./services/kzBanStatus");
+} = require("./services/kz/banStatus");
 const {
   startWorldRecordsSyncJob,
   stopWorldRecordsSyncJob,
-} = require("./services/wrSync");
+} = require("./services/kz/worldRecordsSync");
 const {
-  startPlayerPBsSyncJob,
-  stopPlayerPBsSyncJob,
-} = require("./services/playerPBsSync");
-const { initWebSocket, closeWebSocket } = require("./services/websocket");
+  startPlayerPBsCacheJob,
+  stopPlayerPBsCacheJob,
+} = require("./services/kz/pbsCache");
+const { initWebSocket, closeWebSocket } = require("./services/comms/websocket");
 const {
   loadServerLookup,
   startChatCleanupJob,
   stopChatCleanupJob,
-} = require("./services/crossChat");
+} = require("./services/comms/chat");
 const { initRedis, closeRedis } = require("./db/redis");
-const { loadMessageIds } = require("./services/discordWebhook");
+const { loadMessageIds } = require("./services/comms/discord");
 const {
   startWorldRecordsCacheJob,
   stopWorldRecordsCacheJob,
-} = require("./services/worldRecordsCache");
+} = require("./services/kz/worldRecordsCache");
 const {
-  startGlobalInfoUpdateJob,
-  stopGlobalInfoUpdateJob,
+  startMapGlobalInfoSyncJob,
+  stopMapGlobalInfoSyncJob,
   GLOBALINFO_INTERVAL,
-} = require("./services/mapsQuery");
+} = require("./services/kz/mapGlobalInfoSync");
 const {
   startStatisticsJob,
   stopStatisticsJobs,
   STATS_INTERVAL,
-} = require("./services/kzStatistics");
+} = require("./services/kz/statistics");
 
 const port = process.env.PORT || 3000;
 const host = process.env.HOST || "0.0.0.0"; // Use 127.0.0.1 in production with reverse proxy
@@ -121,7 +124,7 @@ async function startServer() {
       startWorldRecordsCacheJob(5 * 60 * 1000);
 
       // Step 10: Refresh map globalInfo from the GOKZ/CS2KZ APIs.
-      startGlobalInfoUpdateJob();
+      startMapGlobalInfoSyncJob();
 
       // Step 11: Start KZ records scraper
       if (process.env.KZ_SCRAPER_ENABLED !== "false") {
@@ -149,7 +152,7 @@ async function startServer() {
         );
 
         // Step 15: Start Player PBs initial population (one-time, then updated by scraper)
-        startPlayerPBsSyncJob();
+        startPlayerPBsCacheJob();
         logger.info(
           "Player PBs initial population started (updates via scraper after initial sync)",
         );
@@ -170,13 +173,13 @@ const serverInstance = startServer();
 function stopBackgroundJobs() {
   stopUpdateLoop();
   stopWorldRecordsCacheJob();
-  stopGlobalInfoUpdateJob();
+  stopMapGlobalInfoSyncJob();
   stopChatCleanupJob();
   stopScraperJob();
   stopBanCleanupJob();
   stopStatisticsJobs();
   stopWorldRecordsSyncJob();
-  stopPlayerPBsSyncJob();
+  stopPlayerPBsCacheJob();
 }
 
 // Graceful shutdown handler

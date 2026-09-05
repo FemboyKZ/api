@@ -16,18 +16,21 @@ const {
   sanitizeMapName,
   sanitizePlayerName,
 } = require("../utils/validators");
-const { markServerLive, clearServerLive } = require("../services/liveServers");
+const {
+  markServerLive,
+  clearServerLive,
+} = require("../services/servers/presence");
 const { deleteCache } = require("../db/redis");
 const {
   emitServerUpdate,
   emitServerStatusChange,
   emitPlayerUpdate,
   emitMapUpdate,
-} = require("../services/websocket");
+} = require("../services/comms/websocket");
 const {
   trackPlayerSessions,
   trackMapChange,
-} = require("../services/serverTracking");
+} = require("../services/servers/tracking");
 
 /**
  * POST /servers/status

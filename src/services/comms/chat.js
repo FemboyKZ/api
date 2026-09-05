@@ -18,12 +18,12 @@
 
 const fs = require("fs");
 const path = require("path");
-const pool = require("../db");
-const logger = require("../utils/logger");
+const pool = require("../../db");
+const logger = require("../../utils/logger");
 const {
   sanitizePlayerName,
   convertToSteamID64,
-} = require("../utils/validators");
+} = require("../../utils/validators");
 const { emitChatMessage } = require("./websocket");
 
 const RING_CAPACITY = 300; // messages kept in memory for late readers
@@ -43,7 +43,7 @@ const waiters = new Set();
 
 /**
  * (Re)load the ip:port -> metadata map from config/servers.json.
- * Mirrors the path used by services/updater.js (relative to the process cwd).
+ * Mirrors the path used by services/servers/updateLoop.js (relative to the process cwd).
  */
 function loadServerLookup() {
   try {

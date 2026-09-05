@@ -22,7 +22,7 @@ const {
   onlinePlayersKeyGenerator,
 } = require("../utils/cacheMiddleware");
 const { parsePlayersList } = require("../utils/playersList");
-const { getPlayerSummary } = require("../services/steamQuery");
+const { getPlayerSummary } = require("../services/servers/steamPlayer");
 
 /**
  * @swagger

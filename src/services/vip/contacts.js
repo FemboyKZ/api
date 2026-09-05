@@ -9,8 +9,8 @@
  */
 
 const crypto = require("crypto");
-const pool = require("../db");
-const logger = require("../utils/logger");
+const pool = require("../../db");
+const logger = require("../../utils/logger");
 
 // Basic, deliberately strict-enough email check (not RFC-perfect on purpose).
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

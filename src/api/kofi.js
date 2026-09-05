@@ -1,6 +1,6 @@
 /**
  * Auth is per-route, not at mount time: /kofi/webhook stays public for Ko-fi to reach
- * and is verified against its verification_token in services/kofi.js before any write.
+ * and is verified against its verification_token in services/vip/kofi.js before any write.
  * Everything else is adminAuth'd.
  */
 
@@ -10,9 +10,9 @@ const pool = require("../db");
 const logger = require("../utils/logger");
 const { adminAuth } = require("../utils/auth");
 const { resolveSteamID, validatePagination } = require("../utils/validators");
-const { processKofiWebhook } = require("../services/kofi");
-const { isValidEmail, normalizeEmail } = require("../services/playerContacts");
-const { creditSpend } = require("../services/entitlements");
+const { processKofiWebhook } = require("../services/vip/kofi");
+const { isValidEmail, normalizeEmail } = require("../services/vip/contacts");
+const { creditSpend } = require("../services/vip/entitlements");
 
 /**
  * POST /kofi/webhook

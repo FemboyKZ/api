@@ -4,8 +4,9 @@
  */
 
 const axios = require("axios");
-const pool = require("../db");
-const logger = require("../utils/logger");
+const pool = require("../../db");
+const logger = require("../../utils/logger");
+const { sleep } = require("../../utils/retry");
 
 /**
  * GOKZ/CS2KZ API Service
@@ -204,7 +205,7 @@ async function updateGlobalInfoForGame({ game, label, fetch }) {
       failCount++;
     }
     // Small delay to avoid hammering the API
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await sleep(100);
   }
 
   logger.info(
@@ -254,7 +255,7 @@ const GLOBALINFO_INTERVAL =
 
 let globalInfoTimer = null;
 
-function startGlobalInfoUpdateJob(intervalMs = GLOBALINFO_INTERVAL) {
+function startMapGlobalInfoSyncJob(intervalMs = GLOBALINFO_INTERVAL) {
   logger.info(
     `Starting map globalInfo update job (interval: ${intervalMs / 1000}s = ${intervalMs / 1000 / 60 / 60}hrs)`,
   );
@@ -271,7 +272,7 @@ function startGlobalInfoUpdateJob(intervalMs = GLOBALINFO_INTERVAL) {
   globalInfoTimer = setInterval(updateMissingGlobalInfo, intervalMs);
 }
 
-function stopGlobalInfoUpdateJob() {
+function stopMapGlobalInfoSyncJob() {
   clearInterval(globalInfoTimer);
   globalInfoTimer = null;
 }
@@ -281,8 +282,8 @@ module.exports = {
   fetchMapFromCS2KZ,
   updateMapGlobalInfo,
   refreshMapGlobalInfo,
-  startGlobalInfoUpdateJob,
-  stopGlobalInfoUpdateJob,
+  startMapGlobalInfoSyncJob,
+  stopMapGlobalInfoSyncJob,
   GLOBALINFO_INTERVAL,
   getMapsNeedingGlobalInfo,
 };

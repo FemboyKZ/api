@@ -2,14 +2,16 @@ const fs = require("fs");
 
 // Mock the DB pool so persist() is a no-op.
 jest.mock("../src/db", () => ({ query: jest.fn().mockResolvedValue([{}]) }));
-jest.mock("../src/services/websocket", () => ({ emitChatMessage: jest.fn() }));
+jest.mock("../src/services/comms/websocket", () => ({
+  emitChatMessage: jest.fn(),
+}));
 
 const {
   addMessage,
   sanitizeMessage,
   loadServerLookup,
   _ring,
-} = require("../src/services/crossChat");
+} = require("../src/services/comms/chat");
 
 const SERVER = { ip: "10.0.0.1", port: 27015 };
 

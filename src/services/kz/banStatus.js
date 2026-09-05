@@ -19,14 +19,15 @@
  *   KZ_BAN_CLEANUP_ENABLED=true      # Enable/disable expired ban cleanup
  *
  * Usage:
- *   const banStatus = require('./services/kzBanStatus');
+ *   const banStatus = require('./services/kz/banStatus');
  *   banStatus.startBanCleanupJob(3600000); // Check every hour
  *   await banStatus.updatePlayerBanStatus(['76561198000000001', '76561198000000002']);
  */
 
 require("dotenv").config();
-const logger = require("../utils/logger");
-const { getKzPool } = require("../db/kzRecords");
+const logger = require("../../utils/logger");
+const { withRetry, isLockError } = require("../../utils/retry");
+const { getKzPool } = require("../../db/kzRecords");
 
 // Configuration
 const CLEANUP_INTERVAL =
@@ -51,39 +52,24 @@ const stats = {
 };
 
 /**
- * Helper to retry a query on deadlock or lock wait timeout
- * @param {Function} queryFn - Async function that executes the query
- * @param {number} maxRetries - Maximum number of retry attempts
- * @param {number} delayMs - Delay between retries in milliseconds
- * @returns {Promise<any>} Query result
+ * Retries a query while it is losing row locks. Jittered so concurrent writers
+ * do not all wake and collide again.
  */
 async function retryOnDeadlock(
   queryFn,
   maxRetries = DEADLOCK_MAX_RETRIES,
   delayMs = DEADLOCK_RETRY_DELAY,
 ) {
-  const RETRYABLE_ERRORS = ["ER_LOCK_DEADLOCK", "ER_LOCK_WAIT_TIMEOUT"];
-
-  let lastError;
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await queryFn();
-    } catch (error) {
-      lastError = error;
-      if (RETRYABLE_ERRORS.includes(error.code) && attempt < maxRetries) {
-        // Exponential backoff with jitter
-        const jitter = Math.random() * delayMs;
-        const waitTime = delayMs * Math.pow(2, attempt - 1) + jitter;
-        logger.warn(
-          `[KZ Ban Status] Lock error (${error.code}), retrying in ${Math.round(waitTime)}ms (attempt ${attempt}/${maxRetries})`,
-        );
-        await new Promise((resolve) => setTimeout(resolve, waitTime));
-      } else {
-        throw error;
-      }
-    }
-  }
-  throw lastError;
+  return withRetry(queryFn, {
+    attempts: maxRetries,
+    baseMs: delayMs,
+    isRetryable: isLockError,
+    jitter: true,
+    onRetry: ({ attempt, delay, error }) =>
+      logger.warn(
+        `[KZ Ban Status] Lock error (${error.code}), retrying in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})`,
+      ),
+  });
 }
 
 /**

@@ -3,8 +3,8 @@
  */
 
 const axios = require("axios");
-const pool = require("../db");
-const logger = require("../utils/logger");
+const pool = require("../../db");
+const logger = require("../../utils/logger");
 
 /**
  * Steam Player Lookup

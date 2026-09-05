@@ -12,8 +12,8 @@ const {
   getKzLocalCS2Pool,
   getKzLocalCSGO128Pool,
   getKzLocalCSGO64Pool,
-} = require("../db/kzLocal");
-const logger = require("../utils/logger");
+} = require("../../db/kzLocal");
+const logger = require("../../utils/logger");
 
 // Path to the filter configuration file
 const FILTERS_CONFIG_PATH = path.join(

@@ -32,7 +32,11 @@ api/
 │   │   └── local/   # Local timer DBs, per game
 │   ├── config/      # API Internal configuration
 │   ├── db/          # Database connection
-│   ├── services/    # Service logic (updaters, queries)
+│   ├── services/    # Service logic
+│   │   ├── servers/ # Polling game servers, presence, history
+│   │   ├── kz/      # KZ data pipelines (scraper, bans, stats, caches)
+│   │   ├── vip/     # Ko-fi, currency, entitlements, contact links
+│   │   └── comms/   # WebSocket, cross-server chat, Discord
 │   ├── utils/       # Utilities (logger, validators, auth, error handling)
 │   ├── app.js       # Express app configuration
 │   └── server.js    # Server entry point

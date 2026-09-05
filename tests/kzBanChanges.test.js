@@ -5,7 +5,7 @@ jest.mock("../src/utils/logger", () => ({
   error: jest.fn(),
 }));
 
-const banChanges = require("../src/services/kzBanChanges");
+const banChanges = require("../src/services/kz/banChanges");
 
 const FIXED_NOW = new Date("2026-07-23T12:00:00Z");
 

@@ -4,7 +4,7 @@
  */
 
 const { Server } = require("socket.io");
-const logger = require("../utils/logger");
+const logger = require("../../utils/logger");
 require("dotenv").config();
 
 // Rooms this server actually emits to (see the emit* helpers below).

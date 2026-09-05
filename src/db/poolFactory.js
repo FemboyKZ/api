@@ -11,6 +11,7 @@
 
 const mysql = require("mysql2/promise");
 const logger = require("../utils/logger");
+const { sleep } = require("../utils/retry");
 
 const MAX_RETRIES = 5;
 const RETRY_DELAY = 5000; // 5 seconds
@@ -78,7 +79,7 @@ async function testConnection(pool, name, retryCount = 0) {
       logger.info(
         `Retrying ${name} database connection (${nextRetry}/${MAX_RETRIES}) in ${RETRY_DELAY / 1000}s...`,
       );
-      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+      await sleep(RETRY_DELAY);
       return testConnection(pool, name, nextRetry);
     } else {
       logger.error(`Max ${name} database connection retries reached`);

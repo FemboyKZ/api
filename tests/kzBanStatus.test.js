@@ -26,7 +26,7 @@ jest.mock("../src/utils/logger", () => ({
 }));
 
 // Import after mocking
-const banStatus = require("../src/services/kzBanStatus");
+const banStatus = require("../src/services/kz/banStatus");
 
 describe("KZ Ban Status Service", () => {
   beforeEach(() => {

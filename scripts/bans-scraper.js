@@ -57,7 +57,7 @@ const { HttpsProxyAgent } = require("https-proxy-agent");
 const { HttpProxyAgent } = require("http-proxy-agent");
 const {
   upsertBansWithChangeTracking,
-} = require("../src/services/kzBanChanges");
+} = require("../src/services/kz/banChanges");
 
 // ============================================================================
 // CONFIGURATION

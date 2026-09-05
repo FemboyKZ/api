@@ -39,7 +39,7 @@
  *   For bulk scraping, use scripts/standalone-scraper.js with proxy support.
  *
  * Usage:
- *   const scraper = require('./services/kzRecordsScraper');
+ *   const scraper = require('./services/kz/recordsScraper');
  *   scraper.startScraperJob(3750, 30000); // Fast polling (3.75s), slow polling (30s)
  */
 
@@ -47,10 +47,11 @@ require("dotenv").config();
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
-const logger = require("../utils/logger");
-const { getKzPool } = require("../db/kzRecords");
-const { updatePlayerBanStatus } = require("./kzBanStatus");
-const { upsertBansWithChangeTracking } = require("./kzBanChanges");
+const logger = require("../../utils/logger");
+const { getKzPool } = require("../../db/kzRecords");
+const { updatePlayerBanStatus } = require("./banStatus");
+const { upsertBansWithChangeTracking } = require("./banChanges");
+const { sleep } = require("../../utils/retry");
 
 // Configuration
 const GOKZ_API_URL =
@@ -449,7 +450,7 @@ async function fetchRecord(recordId, attempt = 1) {
       logger.warn(
         `[KZ Scraper] Rate limited (429) on record ${recordId}, waiting ${rateLimitDelay / 1000}s before retry`,
       );
-      await new Promise((resolve) => setTimeout(resolve, rateLimitDelay));
+      await sleep(rateLimitDelay);
 
       if (attempt < RETRY_ATTEMPTS) {
         return fetchRecord(recordId, attempt + 1);
@@ -462,7 +463,7 @@ async function fetchRecord(recordId, attempt = 1) {
       logger.warn(
         `[KZ Scraper] Retry ${attempt}/${RETRY_ATTEMPTS} for record ${recordId} after ${delay}ms`,
       );
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await sleep(delay);
       return fetchRecord(recordId, attempt + 1);
     }
 
@@ -957,7 +958,7 @@ async function scrapeBatch(startId, batchSize) {
 
       // Add delay between requests (except for the last one)
       if (i < batchSize - 1 && REQUEST_DELAY > 0) {
-        await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY));
+        await sleep(REQUEST_DELAY);
       }
     }
 
@@ -1003,7 +1004,7 @@ async function scrapeBatch(startId, batchSize) {
             // Retry once after brief delay (longer for lock timeouts)
             const retryDelay =
               error.code === "ER_LOCK_WAIT_TIMEOUT" ? 500 : 100;
-            await new Promise((resolve) => setTimeout(resolve, retryDelay));
+            await sleep(retryDelay);
             const wasInserted = await processRecord(connection, recordData);
             if (wasInserted) {
               inserted++;
@@ -1077,7 +1078,7 @@ async function fetchBans(limit = 200, offset = 0, attempt = 1) {
       logger.warn(
         `[KZ Scraper] Rate limited (429) on bans, waiting ${rateLimitDelay / 1000}s before retry`,
       );
-      await new Promise((resolve) => setTimeout(resolve, rateLimitDelay));
+      await sleep(rateLimitDelay);
 
       if (attempt < RETRY_ATTEMPTS) {
         return fetchBans(limit, offset, attempt + 1);
@@ -1090,7 +1091,7 @@ async function fetchBans(limit = 200, offset = 0, attempt = 1) {
       logger.warn(
         `[KZ Scraper] Retry ${attempt}/${RETRY_ATTEMPTS} for bans after ${delay}ms`,
       );
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await sleep(delay);
       return fetchBans(limit, offset, attempt + 1);
     }
 
@@ -1288,9 +1289,7 @@ async function processBansFullSweep(force = false) {
         if (bans.length < BANS_FULL_SWEEP_PAGE_SIZE) break;
 
         offset += BANS_FULL_SWEEP_PAGE_SIZE;
-        await new Promise((resolve) =>
-          setTimeout(resolve, BANS_FULL_SWEEP_PAGE_DELAY),
-        );
+        await sleep(BANS_FULL_SWEEP_PAGE_DELAY);
       }
 
       // Any ban whose expiry moved needs its player's is_banned re-evaluated

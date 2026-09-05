@@ -7,7 +7,7 @@
  *
  * Grants are NOT applied here. The buyer later claims each payment on the site.
  * claiming credits the chosen recipient's lifetime EUR total, which drives their VIP tier.
- * See src/api/kofi.js (claim flow) and src/services/entitlements.js.
+ * See src/api/kofi.js (claim flow) and src/services/vip/entitlements.js.
  *
  * Ko-fi posts data as application/x-www-form-urlencoded with a single `data`
  * field containing a JSON string.
@@ -19,10 +19,13 @@
  */
 
 const axios = require("axios");
-const pool = require("../db");
-const logger = require("../utils/logger");
-const { isValidSteamID, convertToSteamID64 } = require("../utils/validators");
-const { findSteamIDByEmail } = require("./playerContacts");
+const pool = require("../../db");
+const logger = require("../../utils/logger");
+const {
+  isValidSteamID,
+  convertToSteamID64,
+} = require("../../utils/validators");
+const { findSteamIDByEmail } = require("./contacts");
 const { convertToEUR } = require("./currency");
 const { creditSpend } = require("./entitlements");
 

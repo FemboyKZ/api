@@ -5,9 +5,10 @@
  * and map completion status queries.
  */
 
-const { getKzPool } = require("../db/kzRecords");
-const logger = require("../utils/logger");
-const { computeCompletionStats } = require("../utils/kzHelpers");
+const { getKzPool } = require("../../db/kzRecords");
+const logger = require("../../utils/logger");
+const { computeCompletionStats } = require("../../utils/kzHelpers");
+const { sleep } = require("../../utils/retry");
 
 const PB_SYNC_BATCH_SIZE = 50; // Players per batch
 const PB_SYNC_STALE_HOURS = 24; // Consider PBs stale after 24 hours
@@ -545,7 +546,7 @@ async function initialPopulatePlayerPBs() {
       }
 
       // Small delay between players to avoid overwhelming the API
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await sleep(500);
     }
 
     logger.info(
@@ -571,7 +572,7 @@ async function initialPopulatePlayerPBs() {
  */
 let pbSyncTimer = null;
 
-function startPlayerPBsSyncJob() {
+function startPlayerPBsCacheJob() {
   logger.info(
     "Starting player PBs initial population (one-time, then updated by scraper)",
   );
@@ -582,7 +583,7 @@ function startPlayerPBsSyncJob() {
   }, 45000); // 45 seconds after startup (after WR sync starts)
 }
 
-function stopPlayerPBsSyncJob() {
+function stopPlayerPBsCacheJob() {
   clearTimeout(pbSyncTimer);
   pbSyncTimer = null;
 }
@@ -594,7 +595,7 @@ module.exports = {
   syncPlayerPBs,
   getPlayerPBs,
   getPlayerMapCompletions,
-  startPlayerPBsSyncJob,
-  stopPlayerPBsSyncJob,
+  startPlayerPBsCacheJob,
+  stopPlayerPBsCacheJob,
   initialPopulatePlayerPBs,
 };

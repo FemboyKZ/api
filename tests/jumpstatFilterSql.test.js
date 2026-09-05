@@ -10,7 +10,7 @@ jest.mock("../src/db/kzLocal", () => ({
 const {
   processCS2Filter,
   processCSGOFilter,
-} = require("../src/services/jumpstatCleanup");
+} = require("../src/services/kz/jumpstatCleanup");
 
 const FILTER = {
   id: "impossible_lj",

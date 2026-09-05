@@ -1,5 +1,5 @@
 /**
- * Read path only. Rows are written by services/updater.js and services/serverTracking.js;
+ * Read path only. Rows are written by services/servers/updateLoop.js and services/servers/tracking.js;
  * nothing here queries game servers directly.
  */
 

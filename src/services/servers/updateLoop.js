@@ -2,25 +2,28 @@
  * Background loop: polls every tracked server, writes results, records history, pushes WebSocket updates.
  */
 
-const pool = require("../db");
-const { queryServer } = require("./serverQuery");
-const logger = require("../utils/logger");
+const pool = require("../../db");
+const { queryServer } = require("./gameServer");
+const logger = require("../../utils/logger");
 const fs = require("fs");
-const { sanitizeMapName, sanitizePlayerName } = require("../utils/validators");
+const {
+  sanitizeMapName,
+  sanitizePlayerName,
+} = require("../../utils/validators");
 const {
   emitServerUpdate,
   emitServerStatusChange,
   emitPlayerUpdate,
   emitMapUpdate,
-} = require("./websocket");
-const { deleteCache } = require("../db/redis");
-const { updateDiscordWebhooks } = require("./discordWebhook");
-const { isServerLive } = require("./liveServers");
+} = require("../comms/websocket");
+const { deleteCache } = require("../../db/redis");
+const { updateDiscordWebhooks } = require("../comms/discord");
+const { isServerLive } = require("./presence");
 const {
   trackPlayerSessions,
   closeServerSessions,
   trackMapChange,
-} = require("./serverTracking");
+} = require("./tracking");
 
 /**
  * Server Update Service
@@ -33,7 +36,7 @@ const {
  * 3. Records historical snapshots in server_history table
  * 4. Tracks player sessions (join/leave) when Steam IDs available from plugin
  * 5. Tracks map changes and rotation in map_history table
- *    (4 and 5 live in services/serverTracking.js, shared with the plugin ingest)
+ *    (4 and 5 live in services/servers/tracking.js, shared with the plugin ingest)
  * 6. Updates player statistics (separated by game type)
  * 7. Updates map statistics (separated by game type)
  * 8. Emits WebSocket events for real-time updates

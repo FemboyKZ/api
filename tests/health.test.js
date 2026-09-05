@@ -13,7 +13,7 @@ jest.mock("../src/db/redis", () => ({
 }));
 
 // Mock websocket
-jest.mock("../src/services/websocket", () => ({
+jest.mock("../src/services/comms/websocket", () => ({
   getWebSocketStats: jest.fn(() => ({ connected: false, clients: 0 })),
 }));
 
