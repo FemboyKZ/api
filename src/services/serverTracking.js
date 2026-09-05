@@ -23,12 +23,8 @@ function serverKeyOf(ip, port) {
 }
 
 /**
- * Open sessions for players who just joined, close sessions for players who left, and remember the current roster.
- *
- * @param {string} ip
- * @param {number} port
- * @param {Array<{steamid: string, name: string}>} players - players connected right now. 
- *    Callers filter this list (e.g. to those with a SteamID).
+ * Open sessions for players who joined, close them for players who left, and remember the roster.
+ * Callers pass an already-filtered player list.
  */
 async function trackPlayerSessions(ip, port, players) {
   const serverKey = serverKeyOf(ip, port);
@@ -70,9 +66,8 @@ async function trackPlayerSessions(ip, port, players) {
 
 /**
  * Close every session still open on a server, e.g. when it goes offline.
- * No-op when we are not tracking anyone there, so it is safe to call on every poll of a server that stays down.
- *
- * @returns {Promise<number>} how many tracked players were closed out
+ * No-op when nobody is tracked there, so it is safe to call on every poll.
+ * @returns {Promise<number>} how many were closed out
  */
 async function closeServerSessions(ip, port) {
   const serverKey = serverKeyOf(ip, port);
@@ -114,13 +109,8 @@ async function closeSession(steamid, ip, port, serverKey) {
 }
 
 /**
- * Record map rotation: close the previous map_history row and open a new one when the map changed,
+ * Record map rotation: on a change, close the previous map_history row and open a new one;
  * otherwise keep the running player counts up to date.
- *
- * @param {string} ip
- * @param {number} port
- * @param {string} newMap - sanitized map name
- * @param {number} playerCount
  */
 async function trackMapChange(ip, port, newMap, playerCount) {
   const serverKey = serverKeyOf(ip, port);

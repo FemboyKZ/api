@@ -3,62 +3,17 @@ const router = express.Router();
 const { getKzPool } = require("../db/kzRecords");
 const {
   validatePagination,
+  paginationMeta,
   sanitizeString,
   isValidSteamID,
   convertToSteamID64,
+  validateSortField,
+  validateSortOrder,
+  defaultSortOrder,
 } = require("../utils/validators");
 const logger = require("../utils/logger");
 const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
-
-/**
- * Helper function to get partition hints based on date filters
- * For yearly partitions: p_old (before 2018), p2018-p2027, pfuture
- */
-const getYearlyPartitionHint = (dateFrom, dateTo, sortField, sortOrder) => {
-  const partitions = [];
-  const currentYear = new Date().getFullYear();
-
-  if (!dateFrom && !dateTo) {
-    // For recent queries without date filter, use recent partitions
-    if (sortField === "created_on" && sortOrder === "DESC") {
-      // Only scan current year and previous year for recent records
-      partitions.push(`p${currentYear}`);
-      partitions.push(`p${currentYear - 1}`);
-      partitions.push("pfuture");
-      return `PARTITION (${partitions.join(",")})`;
-    }
-    // Default: scan last 2 years to avoid full table scan on unfiltered queries
-    partitions.push(`p${currentYear}`);
-    partitions.push(`p${currentYear - 1}`);
-    partitions.push("pfuture");
-    return `PARTITION (${partitions.join(",")})`;
-  }
-
-  // Build partition list based on date range
-  const fromYear = dateFrom ? new Date(dateFrom).getFullYear() : 2014;
-  const toYear = dateTo ? new Date(dateTo).getFullYear() : currentYear;
-
-  // Add relevant partitions
-  if (fromYear < 2018) {
-    partitions.push("p_old");
-  }
-
-  for (
-    let year = Math.max(fromYear, 2018);
-    year <= Math.min(toYear, 2027);
-    year++
-  ) {
-    partitions.push(`p${year}`);
-  }
-
-  if (toYear >= currentYear) {
-    partitions.push("pfuture");
-  }
-
-  if (partitions.length === 0) return "";
-
-  return `PARTITION (${partitions.join(",")})`;
-};
+const { getYearlyPartitionHint } = require("../utils/kzHelpers");
 
 /**
  * @swagger
@@ -173,11 +128,15 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
       date_from,
       date_to,
     } = req.query;
-    const { limit: validLimit, offset } = validatePagination(page, limit, 100);
+    const {
+      page: validPage,
+      limit: validLimit,
+      offset,
+    } = validatePagination(page, limit, 100);
 
     const validSortFields = ["time", "created_on", "points"];
-    const sortField = validSortFields.includes(sort) ? sort : "created_on";
-    const sortOrder = order === "asc" ? "ASC" : "DESC";
+    const sortField = validateSortField(sort, validSortFields, "created_on");
+    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
     // Build WHERE conditions
     const whereConditions = [];
@@ -247,13 +206,14 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
     const whereClause =
       whereConditions.length > 0 ? ` AND ${whereConditions.join(" AND ")}` : "";
 
-    // Get partition hint
-    const partitionHint = getYearlyPartitionHint(
-      date_from,
-      date_to,
+    // recentOnly: with no date filter, scan the last two partitions rather than the whole table.
+    const partitionHint = getYearlyPartitionHint({
+      dateFrom: date_from,
+      dateTo: date_to,
       sortField,
       sortOrder,
-    );
+      recentOnly: true,
+    });
 
     const pool = getKzPool();
 
@@ -335,12 +295,7 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
 
     res.json({
       data: records,
-      pagination: {
-        page: parseInt(page, 10) || 1,
-        limit: validLimit,
-        total: total,
-        totalPages: Math.ceil(total / validLimit),
-      },
+      pagination: paginationMeta(validPage, validLimit, total),
     });
   } catch (e) {
     logger.error(`Failed to fetch KZ records: ${e.message}`);

@@ -35,12 +35,13 @@ function validateEnvironment() {
     throw new Error("REDIS_DB must be a valid number");
   }
 
-  // Validate boolean values
+  // Case-sensitive on purpose: consumers test `=== "true"`,
+  // so "TRUE" would pass here and then silently run with caching off.
   if (
     process.env.REDIS_ENABLED &&
-    !["true", "false"].includes(process.env.REDIS_ENABLED.toLowerCase())
+    !["true", "false"].includes(process.env.REDIS_ENABLED)
   ) {
-    throw new Error("REDIS_ENABLED must be 'true' or 'false'");
+    throw new Error("REDIS_ENABLED must be exactly 'true' or 'false'");
   }
 
   // Validate API URLs if provided
@@ -55,18 +56,17 @@ function validateEnvironment() {
   // Warn if optional API keys are missing
   if (!process.env.STEAM_API_KEY) {
     logger.warn(
-      "STEAM_API_KEY not set - Steam avatar fetching and Steam Master Server queries will not work",
+      "STEAM_API_KEY not set - Steam player lookups and Steam Master Server queries will not work",
     );
   }
 
+  // Both fall back to the public endpoints, so unset is normal.
   if (!process.env.GOKZ_API_URL) {
-    logger.warn(
-      "GOKZ_API_URL not set - CS:GO map metadata will not be fetched",
-    );
+    logger.debug("GOKZ_API_URL not set - using the default GlobalKZ endpoint");
   }
 
   if (!process.env.CS2KZ_API_URL) {
-    logger.warn("CS2KZ_API_URL not set - CS2 map metadata will not be fetched");
+    logger.debug("CS2KZ_API_URL not set - using the default CS2KZ endpoint");
   }
 
   logger.info("Environment validation passed");
@@ -76,7 +76,7 @@ function validateEnvironment() {
     `Configuration: PORT=${process.env.PORT || 3000}, DB_HOST=${process.env.DB_HOST}, REDIS_ENABLED=${process.env.REDIS_ENABLED || "false"}`,
   );
   logger.info(
-    `Steam API: ${process.env.STEAM_API_KEY ? "Configured" : "Missing"}, GOKZ API: ${process.env.GOKZ_API_URL || "Not set"}, CS2KZ API: ${process.env.CS2KZ_API_URL || "Not set"}`,
+    `Steam API: ${process.env.STEAM_API_KEY ? "Configured" : "Missing"}, GOKZ API: ${process.env.GOKZ_API_URL || "default"}, CS2KZ API: ${process.env.CS2KZ_API_URL || "default"}`,
   );
 }
 

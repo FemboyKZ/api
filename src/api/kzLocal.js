@@ -6,11 +6,15 @@ const {
 } = require("../db/kzLocal");
 const {
   validatePagination,
+  paginationMeta,
   sanitizeString,
   isValidSteamID,
   convertToSteamID64,
   steamid32To64,
   steamid64To32,
+  validateSortField,
+  validateSortOrder,
+  defaultSortOrder,
 } = require("../utils/validators");
 const {
   KZ_MODES,
@@ -93,7 +97,11 @@ function getPoolForTickrate(tickrate) {
 router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
   try {
     const { page, limit, name, tickrate, ranked, sort, order } = req.query;
-    const { limit: validLimit, offset } = validatePagination(page, limit, 100);
+    const {
+      page: validPage,
+      limit: validLimit,
+      offset,
+    } = validatePagination(page, limit, 100);
 
     const pool = getPoolForTickrate(tickrate);
 
@@ -104,8 +112,8 @@ router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       created: "m.Created",
       records: "records_count",
     };
-    const sortField = validSortFields.includes(sort) ? sort : "name";
-    const sortOrder = order === "desc" ? "DESC" : "ASC";
+    const sortField = validateSortField(sort, validSortFields, "name");
+    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
     let query = `
       SELECT 
@@ -141,7 +149,6 @@ router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
     const [rows] = await pool.query(query, params);
 
-    // Get total count
     let countQuery = `SELECT COUNT(*) as total FROM Maps m WHERE 1=1`;
     const countParams = [];
 
@@ -168,12 +175,7 @@ router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
         records_count: row.records_count,
         tickrate: tickrate === "64" ? 64 : 128,
       })),
-      pagination: {
-        page: parseInt(page, 10) || 1,
-        limit: validLimit,
-        total,
-        totalPages: Math.ceil(total / validLimit),
-      },
+      pagination: paginationMeta(validPage, validLimit, total),
     });
   } catch (error) {
     logger.error(`Error fetching KZ local maps: ${error.message}`);
@@ -392,11 +394,11 @@ router.get(
         sort,
         order,
       } = req.query;
-      const { limit: validLimit, offset } = validatePagination(
-        page,
-        limit,
-        100,
-      );
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit, 100);
 
       const pool = getPoolForTickrate(tickrate);
 
@@ -405,8 +407,8 @@ router.get(
         time: "t.RunTime",
         created: "t.Created",
       };
-      const sortField = validSortFields.includes(sort) ? sort : "created";
-      const sortOrder = order === "asc" ? "ASC" : "DESC";
+      const sortField = validateSortField(sort, validSortFields, "created");
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
       let query = `
       SELECT 
@@ -473,7 +475,6 @@ router.get(
 
       const [rows] = await pool.query(query, params);
 
-      // Get total count
       let countQuery = `
       SELECT COUNT(*) as total
       FROM Times t
@@ -538,12 +539,7 @@ router.get(
           time_guid: row.time_guid,
           tickrate: tickrate === "64" ? 64 : 128,
         })),
-        pagination: {
-          page: parseInt(page, 10) || 1,
-          limit: validLimit,
-          total,
-          totalPages: Math.ceil(total / validLimit),
-        },
+        pagination: paginationMeta(validPage, validLimit, total),
       });
     } catch (error) {
       logger.error(`Error fetching KZ local records: ${error.message}`);
@@ -733,7 +729,11 @@ router.get(
         sort,
         order,
       } = req.query;
-      const { limit: validLimit, offset } = validatePagination(
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(
         page,
         limit,
         1000, // Higher limit for jumpstats to allow client-side deduplication
@@ -746,8 +746,8 @@ router.get(
         distance: "j.Distance",
         created: "j.Created",
       };
-      const sortField = validSortFields.includes(sort) ? sort : "distance";
-      const sortOrder = order === "asc" ? "ASC" : "DESC";
+      const sortField = validateSortField(sort, validSortFields, "distance");
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
       let query = `
       SELECT 
@@ -812,7 +812,6 @@ router.get(
 
       const [rows] = await pool.query(query, params);
 
-      // Get total count
       let countQuery = `
       SELECT COUNT(*) as total
       FROM Jumpstats j
@@ -877,12 +876,7 @@ router.get(
           created: row.created,
           tickrate: tickrate === "64" ? 64 : 128,
         })),
-        pagination: {
-          page: parseInt(page, 10) || 1,
-          limit: validLimit,
-          total,
-          totalPages: Math.ceil(total / validLimit),
-        },
+        pagination: paginationMeta(validPage, validLimit, total),
       });
     } catch (error) {
       logger.error(`Error fetching KZ local jumpstats: ${error.message}`);
@@ -1045,11 +1039,11 @@ router.get(
   async (req, res) => {
     try {
       const { page, limit, tickrate, name, country, sort, order } = req.query;
-      const { limit: validLimit, offset } = validatePagination(
-        page,
-        limit,
-        100,
-      );
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit, 100);
 
       const pool = getPoolForTickrate(tickrate);
 
@@ -1060,8 +1054,8 @@ router.get(
         last_played: "p.LastPlayed",
         name: "p.Alias",
       };
-      const sortField = validSortFields.includes(sort) ? sort : "records";
-      const sortOrder = order === "asc" ? "ASC" : "DESC";
+      const sortField = validateSortField(sort, validSortFields, "records");
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
       let query = `
       SELECT 
@@ -1098,7 +1092,6 @@ router.get(
 
       const [rows] = await pool.query(query, params);
 
-      // Get total count
       let countQuery = `SELECT COUNT(*) as total FROM Players p WHERE 1=1`;
       const countParams = [];
 
@@ -1126,12 +1119,7 @@ router.get(
           jumpstats_count: row.jumpstats_count,
           tickrate: tickrate === "64" ? 64 : 128,
         })),
-        pagination: {
-          page: parseInt(page, 10) || 1,
-          limit: validLimit,
-          total,
-          totalPages: Math.ceil(total / validLimit),
-        },
+        pagination: paginationMeta(validPage, validLimit, total),
       });
     } catch (error) {
       logger.error(`Error fetching KZ local players: ${error.message}`);

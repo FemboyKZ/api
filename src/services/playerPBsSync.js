@@ -1,5 +1,6 @@
 const { getKzPool } = require("../db/kzRecords");
 const logger = require("../utils/logger");
+const { computeCompletionStats } = require("../utils/kzHelpers");
 
 /**
  * Player PBs Sync Service
@@ -36,7 +37,6 @@ async function refreshPlayerPBs(playerId) {
 
     const steamid64 = players[0].steamid64;
 
-    // Delete existing PBs for this player
     await pool.query("DELETE FROM kz_player_map_pbs WHERE player_id = ?", [
       playerId,
     ]);
@@ -480,45 +480,7 @@ async function getPlayerMapCompletions(steamid64, options = {}) {
     const [maps] = await pool.query(mapQuery, params);
 
     // Calculate stats
-    const stats = {
-      total_maps: 0,
-      completed_pro: 0,
-      completed_tp_only: 0,
-      not_completed: 0,
-      by_difficulty: {},
-    };
-
-    for (const map of maps) {
-      stats.total_maps++;
-      if (map.pro_time !== null) {
-        stats.completed_pro++;
-      } else if (map.tp_time !== null) {
-        stats.completed_tp_only++;
-      } else {
-        stats.not_completed++;
-      }
-
-      const tier = map.difficulty || 0;
-      if (!stats.by_difficulty[tier]) {
-        stats.by_difficulty[tier] = {
-          total: 0,
-          completed_pro: 0,
-          completed_tp: 0,
-          completed_any: 0,
-        };
-      }
-      stats.by_difficulty[tier].total++;
-      if (map.pro_time !== null) {
-        stats.by_difficulty[tier].completed_pro++;
-      }
-      if (map.tp_time !== null) {
-        stats.by_difficulty[tier].completed_tp++;
-      }
-      if (map.pro_time !== null || map.tp_time !== null) {
-        stats.by_difficulty[tier].completed_any++;
-      }
-    }
-
+    const stats = computeCompletionStats(maps);
     return { data: maps, stats };
   } catch (error) {
     logger.error(

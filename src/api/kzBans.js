@@ -3,10 +3,15 @@ const router = express.Router();
 const { getKzPool } = require("../db/kzRecords");
 const {
   validatePagination,
+  paginationMeta,
   sanitizeString,
   isValidSteamID,
   convertToSteamID64,
+  validateSortField,
+  validateSortOrder,
+  defaultSortOrder,
 } = require("../utils/validators");
+const { toCountQuery } = require("../utils/kzHelpers");
 const logger = require("../utils/logger");
 const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
 
@@ -82,7 +87,11 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       sort = "created_on",
       order = "desc",
     } = req.query;
-    const { limit: validLimit, offset } = validatePagination(page, limit, 100);
+    const {
+      page: validPage,
+      limit: validLimit,
+      offset,
+    } = validatePagination(page, limit, 100);
 
     const validSortFields = [
       "created_on",
@@ -90,8 +99,8 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       "updated_on",
       "updated_at",
     ];
-    const sortField = validSortFields.includes(sort) ? sort : "created_on";
-    const sortOrder = order === "asc" ? "ASC" : "DESC";
+    const sortField = validateSortField(sort, validSortFields, "created_on");
+    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
     let query = `
       SELECT 
@@ -149,11 +158,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       }
     }
 
-    // Get total count
-    const countQuery = query.replace(
-      /SELECT.*FROM/s,
-      "SELECT COUNT(*) as total FROM",
-    );
+    const countQuery = toCountQuery(query);
     const pool = getKzPool();
     const [countResult] = await pool.query(countQuery, params);
     const total = countResult[0].total;
@@ -166,12 +171,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
     res.json({
       data: bans,
-      pagination: {
-        page: parseInt(page, 10) || 1,
-        limit: validLimit,
-        total: total,
-        totalPages: Math.ceil(total / validLimit),
-      },
+      pagination: paginationMeta(validPage, validLimit, total),
     });
   } catch (e) {
     logger.error(`Failed to fetch KZ bans: ${e.message}`);
@@ -212,7 +212,11 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 router.get("/active", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
   try {
     const { page, limit, ban_type } = req.query;
-    const { limit: validLimit, offset } = validatePagination(page, limit, 100);
+    const {
+      page: validPage,
+      limit: validLimit,
+      offset,
+    } = validatePagination(page, limit, 100);
 
     let query = `
         SELECT 
@@ -237,11 +241,7 @@ router.get("/active", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       params.push(sanitizeString(ban_type, 50));
     }
 
-    // Count total
-    const countQuery = query.replace(
-      /SELECT.*FROM/s,
-      "SELECT COUNT(*) as total FROM",
-    );
+    const countQuery = toCountQuery(query);
     const pool = getKzPool();
     const [countResult] = await pool.query(countQuery, params);
     const total = countResult[0].total;
@@ -254,12 +254,7 @@ router.get("/active", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
     res.json({
       data: bans,
-      pagination: {
-        page: parseInt(page, 10) || 1,
-        limit: validLimit,
-        total: total,
-        totalPages: Math.ceil(total / validLimit),
-      },
+      pagination: paginationMeta(validPage, validLimit, total),
     });
   } catch (e) {
     logger.error(`Failed to fetch active bans: ${e.message}`);
@@ -392,11 +387,11 @@ router.get(
   async (req, res) => {
     try {
       const { page, limit, type, steamid, ban_id, since } = req.query;
-      const { limit: validLimit, offset } = validatePagination(
-        page,
-        limit,
-        100,
-      );
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit, 100);
 
       const validTypes = ["unban", "reban", "expiry_change", "edit"];
 
@@ -472,12 +467,7 @@ router.get(
 
       res.json({
         data: changes,
-        pagination: {
-          page: parseInt(page, 10) || 1,
-          limit: validLimit,
-          total: total,
-          totalPages: Math.ceil(total / validLimit),
-        },
+        pagination: paginationMeta(validPage, validLimit, total),
       });
     } catch (e) {
       if (e.code === "ER_NO_SUCH_TABLE") {

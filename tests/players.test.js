@@ -33,7 +33,6 @@ describe("Players Endpoints", () => {
             {
               steamid: "76561198000000001",
               name: "Player1",
-              avatar: "https://avatars.akamai.steamstatic.com/avatar1.jpg",
               csgo: JSON.stringify({
                 total_playtime: 12345,
                 last_seen: "2025-10-26T12:00:00Z",
@@ -48,7 +47,6 @@ describe("Players Endpoints", () => {
             {
               steamid: "76561198000000002",
               name: "Player2",
-              avatar: null,
               csgo: JSON.stringify({
                 total_playtime: 54321,
                 last_seen: "2025-10-25T10:00:00Z",
@@ -99,7 +97,6 @@ describe("Players Endpoints", () => {
             {
               steamid: "76561198000000001",
               name: "Player1",
-              avatar: null,
               csgo: JSON.stringify({
                 total_playtime: 12345,
                 last_seen: "2025-10-26T12:00:00Z",
@@ -132,7 +129,6 @@ describe("Players Endpoints", () => {
             {
               steamid: "76561198000000001",
               name: "TestPlayer",
-              avatar: null,
               csgo: JSON.stringify({
                 total_playtime: 12345,
                 last_seen: "2025-10-26T12:00:00Z",
@@ -177,7 +173,6 @@ describe("Players Endpoints", () => {
             {
               steamid: "76561198000000001",
               name: "Player1",
-              avatar: null,
               csgo: JSON.stringify({
                 total_playtime: 12345,
                 last_seen: "2025-10-26T12:00:00Z",
@@ -220,7 +215,6 @@ describe("Players Endpoints", () => {
             {
               steamid: "76561198000000001",
               name: "Player1",
-              avatar: null,
               // MariaDB returns JSON as string
               csgo: '{"total_playtime":12345,"last_seen":"2025-10-26T12:00:00Z"}',
               counterstrike2: null,

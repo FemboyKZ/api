@@ -5,6 +5,7 @@ jest.mock("../src/utils/logger", () => ({
   info: jest.fn(),
   warn: jest.fn(),
   error: jest.fn(),
+  debug: jest.fn(),
 }));
 
 describe("Environment Validator", () => {
@@ -128,27 +129,32 @@ describe("Environment Validator", () => {
       expect(() => validateEnvironment()).not.toThrow();
     });
 
-    it("should pass with REDIS_ENABLED=TRUE (case insensitive)", () => {
+    // db/redis.js tests `=== "true"` exactly, so other casings would look enabled but run with caching off.
+    it("should throw with REDIS_ENABLED=TRUE (wrong case)", () => {
       process.env.REDIS_ENABLED = "TRUE";
-      expect(() => validateEnvironment()).not.toThrow();
+      expect(() => validateEnvironment()).toThrow(
+        "REDIS_ENABLED must be exactly 'true' or 'false'",
+      );
     });
 
-    it("should pass with REDIS_ENABLED=FALSE (case insensitive)", () => {
+    it("should throw with REDIS_ENABLED=FALSE (wrong case)", () => {
       process.env.REDIS_ENABLED = "FALSE";
-      expect(() => validateEnvironment()).not.toThrow();
+      expect(() => validateEnvironment()).toThrow(
+        "REDIS_ENABLED must be exactly 'true' or 'false'",
+      );
     });
 
     it("should throw with invalid REDIS_ENABLED value", () => {
       process.env.REDIS_ENABLED = "yes";
       expect(() => validateEnvironment()).toThrow(
-        "REDIS_ENABLED must be 'true' or 'false'",
+        "REDIS_ENABLED must be exactly 'true' or 'false'",
       );
     });
 
     it("should throw with REDIS_ENABLED=1", () => {
       process.env.REDIS_ENABLED = "1";
       expect(() => validateEnvironment()).toThrow(
-        "REDIS_ENABLED must be 'true' or 'false'",
+        "REDIS_ENABLED must be exactly 'true' or 'false'",
       );
     });
   });
@@ -207,18 +213,25 @@ describe("Environment Validator", () => {
       );
     });
 
-    it("should warn when GOKZ_API_URL is not set", () => {
+    // Both fall back to the public endpoints, so unset is normal config.
+    it("should not warn when GOKZ_API_URL is not set", () => {
       delete process.env.GOKZ_API_URL;
       validateEnvironment();
-      expect(logger.warn).toHaveBeenCalledWith(
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        expect.stringContaining("GOKZ_API_URL"),
+      );
+      expect(logger.debug).toHaveBeenCalledWith(
         expect.stringContaining("GOKZ_API_URL not set"),
       );
     });
 
-    it("should warn when CS2KZ_API_URL is not set", () => {
+    it("should not warn when CS2KZ_API_URL is not set", () => {
       delete process.env.CS2KZ_API_URL;
       validateEnvironment();
-      expect(logger.warn).toHaveBeenCalledWith(
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        expect.stringContaining("CS2KZ_API_URL"),
+      );
+      expect(logger.debug).toHaveBeenCalledWith(
         expect.stringContaining("CS2KZ_API_URL not set"),
       );
     });

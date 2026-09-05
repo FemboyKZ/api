@@ -82,6 +82,15 @@ function convertToSteamID64(steamid) {
 }
 
 /**
+ * Validate then normalise any SteamID format to SteamID64.
+ * @param {string} input - Any SteamID format
+ * @returns {string|null} SteamID64, or null if invalid
+ */
+function resolveSteamID(input) {
+  return isValidSteamID(input) ? convertToSteamID64(input) : null;
+}
+
+/**
  * Convert SteamID32 (account ID) to SteamID64
  * @param {number|string} steamid32 - SteamID32 (account ID)
  * @returns {string} SteamID64
@@ -113,6 +122,14 @@ function validatePagination(page, limit, maxLimit = 100) {
 }
 
 /**
+ * Pagination envelope for a page of results.
+ * Pass validatePagination's page/limit so the reported page matches the offset the rows were fetched with.
+ */
+function paginationMeta(page, limit, total) {
+  return { page, limit, total, totalPages: Math.ceil(total / limit) };
+}
+
+/**
  * Validate and get sort field from allowed fields
  * @param {string} sort - Requested sort field
  * @param {string[]} validFields - Array of valid field names
@@ -133,6 +150,25 @@ function validateSortOrder(order, defaultOrder = "DESC") {
   if (order === "asc") return "ASC";
   if (order === "desc") return "DESC";
   return defaultOrder;
+}
+
+/** Sort fields that read naturally A->Z. Everything else defaults to DESC. */
+const ASCENDING_SORT_FIELDS = new Set([
+  "name",
+  "map_name",
+  "player_name",
+  "server_name",
+  "alias",
+  "steamid",
+  "steamid64",
+]);
+
+/**
+ * Default order when the caller did not ask for one. Keyed off the sort field,
+ * not the endpoint, so ?sort=name reads A->Z and ?sort=records highest-first.
+ */
+function defaultSortOrder(sortField) {
+  return ASCENDING_SORT_FIELDS.has(sortField) ? "ASC" : "DESC";
 }
 
 /**
@@ -249,6 +285,7 @@ module.exports = {
   // SteamID functions
   isValidSteamID,
   convertToSteamID64,
+  resolveSteamID,
   steamid32To64,
   steamid64To32,
   // String sanitization
@@ -257,6 +294,9 @@ module.exports = {
   sanitizeMapName,
   // Query helpers
   validatePagination,
+  paginationMeta,
   validateSortField,
   validateSortOrder,
+  defaultSortOrder,
+  ASCENDING_SORT_FIELDS,
 };

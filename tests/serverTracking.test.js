@@ -1,5 +1,5 @@
 // Session/map tracking is shared between the poller (services/updater) and the plugin ingest (api/serverStatus).
-// a server moving between those two paths must keep one view of who is connected, so nobody gets a second open session.
+// A server moving between them must keep one view of who is connected, so nobody gets a second open session.
 
 const mockQuery = jest.fn().mockResolvedValue([{ affectedRows: 1 }]);
 jest.mock("../src/db", () => ({ query: mockQuery }));
@@ -10,8 +10,8 @@ const {
   trackMapChange,
 } = require("../src/services/serverTracking");
 
-// Tracking state is keyed by ip:port and lives for the process, 
-//so each test gets its own port rather than reaching into the module to reset it.
+// State is keyed by ip:port and lives for the process,
+// so each test takes its own port rather than reaching into the module to reset it.
 const IP = "10.0.0.1";
 let PORT = 27015;
 
@@ -59,12 +59,10 @@ describe("player sessions", () => {
   });
 
   it("does not reopen sessions when a server hands off between poll and live paths", async () => {
-    // Poller observes two players...
+    // Poller observes two players, then the plugin reports the same roster.
     await trackPlayerSessions(IP, PORT, [player("1"), player("2")]);
     mockQuery.mockClear();
 
-    // ...then the plugin starts reporting the same roster.
-    // Because both paths share this state, neither player is treated as a new join.
     await trackPlayerSessions(IP, PORT, [player("1"), player("2")]);
     expect(joins()).toEqual([]);
     expect(leaves()).toEqual([]);

@@ -161,6 +161,39 @@ describe("History Endpoints", () => {
       expect(response.body).toHaveProperty("data");
     });
 
+    it("counts only the filtered rows, not the whole table", async () => {
+      pool.query.mockResolvedValueOnce([[]]);
+      pool.query.mockResolvedValueOnce([[{ total: 0 }]]);
+
+      await request(app)
+        .get("/history/maps?map=kz_grotto&server=192.168.1.1:27015")
+        .expect(200);
+
+      const [pageSql, pageParams] = pool.query.mock.calls[0];
+      const [countSql, countParams] = pool.query.mock.calls[1];
+
+      // An unfiltered count paginates over pages that come back empty.
+      expect(countSql).toContain("server_ip = ?");
+      expect(countSql).toContain("map_name LIKE ?");
+      expect(countParams).toEqual(["192.168.1.1", 27015, "%kz_grotto%"]);
+
+      // Same filters on both, with only LIMIT/OFFSET extra on the page query.
+      expect(pageParams.slice(0, countParams.length)).toEqual(countParams);
+      expect(pageSql).toContain("LIMIT ? OFFSET ?");
+    });
+
+    it("reports the clamped page rather than the raw query param", async () => {
+      pool.query.mockResolvedValueOnce([[]]);
+      pool.query.mockResolvedValueOnce([[{ total: 0 }]]);
+
+      const response = await request(app)
+        .get("/history/maps?page=notanumber")
+        .expect(200);
+
+      // NaN would serialise to null.
+      expect(response.body.pagination.page).toBe(1);
+    });
+
     it("should handle database errors", async () => {
       pool.query.mockRejectedValueOnce(new Error("Database error"));
 

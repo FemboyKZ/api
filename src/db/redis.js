@@ -104,11 +104,20 @@ async function deleteCache(pattern) {
       return true;
     }
 
-    // If it's a pattern, find and delete all matching keys
-    const keys = await client.keys(pattern);
-    if (keys.length > 0) {
-      await client.del(keys);
-      logger.info(`Cache invalidated: ${keys.length} keys matching ${pattern}`);
+    // SCAN, not KEYS: the updater fires four of these every cycle and KEYS blocks over the whole keyspace.
+    let cursor = "0";
+    let deleted = 0;
+    do {
+      const reply = await client.scan(cursor, { MATCH: pattern, COUNT: 500 });
+      cursor = String(reply.cursor);
+      if (reply.keys.length > 0) {
+        await client.del(reply.keys);
+        deleted += reply.keys.length;
+      }
+    } while (cursor !== "0");
+
+    if (deleted > 0) {
+      logger.info(`Cache invalidated: ${deleted} keys matching ${pattern}`);
     }
     return true;
   } catch (error) {

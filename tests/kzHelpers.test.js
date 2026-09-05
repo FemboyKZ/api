@@ -325,4 +325,118 @@ describe("KZ Helpers", () => {
       });
     });
   });
+
+  describe("computeCompletionStats", () => {
+    const { computeCompletionStats } = require("../src/utils/kzHelpers");
+
+    const map = (pro, tp, difficulty = 1) => ({
+      pro_time: pro,
+      tp_time: tp,
+      difficulty,
+    });
+
+    it("classifies each map as pro, tp-only or not completed", () => {
+      const stats = computeCompletionStats([
+        map(12.5, null),
+        map(12.5, 30.0), // a pro time wins even when a TP time also exists
+        map(null, 30.0),
+        map(null, null),
+      ]);
+
+      expect(stats).toMatchObject({
+        total_maps: 4,
+        completed_pro: 2,
+        completed_tp_only: 1,
+        not_completed: 1,
+      });
+    });
+
+    it("breaks the same totals down by difficulty tier", () => {
+      const stats = computeCompletionStats([
+        map(12.5, null, 3),
+        map(null, 30.0, 3),
+        map(null, null, 3),
+        map(12.5, null, 7),
+      ]);
+
+      expect(stats.by_difficulty[3]).toEqual({
+        total: 3,
+        completed_pro: 1,
+        completed_tp: 1,
+        completed_any: 2,
+      });
+      expect(stats.by_difficulty[7]).toEqual({
+        total: 1,
+        completed_pro: 1,
+        completed_tp: 0,
+        completed_any: 1,
+      });
+    });
+
+    it("counts a map with both times under pro, tp and any", () => {
+      const stats = computeCompletionStats([map(12.5, 30.0, 2)]);
+      expect(stats.by_difficulty[2]).toEqual({
+        total: 1,
+        completed_pro: 1,
+        completed_tp: 1,
+        completed_any: 1,
+      });
+    });
+
+    it("files maps with no tier under 0", () => {
+      const stats = computeCompletionStats([map(12.5, null, null)]);
+      expect(stats.by_difficulty[0].completed_pro).toBe(1);
+    });
+
+    it("returns zeroed totals for no maps", () => {
+      expect(computeCompletionStats([])).toEqual({
+        total_maps: 0,
+        completed_pro: 0,
+        completed_tp_only: 0,
+        not_completed: 0,
+        by_difficulty: {},
+      });
+    });
+  });
+
+  describe("toCountQuery", () => {
+    const { toCountQuery } = require("../src/utils/kzHelpers");
+    const flat = (sql) => sql.replace(/\s+/g, " ").trim();
+
+    it("replaces the projection with COUNT(*) and keeps the rest", () => {
+      const query = `
+        SELECT b.id, b.ban_type, s.server_name
+        FROM kz_bans b
+        LEFT JOIN kz_servers s ON b.server_id = s.server_id
+        WHERE 1=1 AND b.ban_type = ?
+      `;
+      expect(flat(toCountQuery(query))).toBe(
+        "SELECT COUNT(*) as total FROM kz_bans b " +
+          "LEFT JOIN kz_servers s ON b.server_id = s.server_id " +
+          "WHERE 1=1 AND b.ban_type = ?",
+      );
+    });
+
+    it("anchors on the first FROM, not the last", () => {
+      // A greedy match would anchor on the subquery's FROM.
+      const query =
+        "SELECT id FROM kz_records r WHERE r.id IN (SELECT id FROM other)";
+      expect(toCountQuery(query)).toBe(
+        "SELECT COUNT(*) as total FROM kz_records r WHERE r.id IN (SELECT id FROM other)",
+      );
+    });
+
+    it("is unbothered by a multi-line projection", () => {
+      const query = `
+        SELECT
+          a,
+          CASE WHEN x THEN 1 ELSE 0 END as flag
+        FROM t
+        WHERE 1=1
+      `;
+      expect(flat(toCountQuery(query))).toBe(
+        "SELECT COUNT(*) as total FROM t WHERE 1=1",
+      );
+    });
+  });
 });

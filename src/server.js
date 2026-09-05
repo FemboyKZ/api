@@ -10,12 +10,11 @@ const {
   closeAllKzLocalDatabases,
 } = require("./db/kzLocal");
 const { startUpdateLoop } = require("./services/updater");
-// const { startAvatarUpdateJob } = require("./services/steamQuery");
 const { startScraperJob } = require("./services/kzRecordsScraper");
 const { startBanCleanupJob } = require("./services/kzBanStatus");
 const { startWorldRecordsSyncJob } = require("./services/wrSync");
 const { startPlayerPBsSyncJob } = require("./services/playerPBsSync");
-const { initWebSocket } = require("./services/websocket");
+const { initWebSocket, closeWebSocket } = require("./services/websocket");
 const {
   loadServerLookup,
   startChatCleanupJob,
@@ -23,6 +22,7 @@ const {
 const { initRedis, closeRedis } = require("./db/redis");
 const { loadMessageIds } = require("./services/discordWebhook");
 const { startWorldRecordsCacheJob } = require("./services/worldRecordsCache");
+const { startGlobalInfoUpdateJob } = require("./services/mapsQuery");
 const { startStatisticsJob } = require("./services/kzStatistics");
 
 const port = process.env.PORT || 3000;
@@ -82,11 +82,14 @@ async function startServer() {
       // Step 8: Start background update loop
       startUpdateLoop(30 * 1000);
 
-      // Step 9: Start avatar update job (runs every hour)
-      // startAvatarUpdateJob(60 * 60 * 1000);
-
-      // Step 10: Start world records cache refresh job (runs every 5 minutes)
+      // Step 9: Start world records cache refresh job (runs every 5 minutes)
       startWorldRecordsCacheJob(5 * 60 * 1000);
+
+      // Step 10: Refresh map globalInfo from the GOKZ/CS2KZ APIs.
+      // Each map is only re-fetched once its cached copy is a week old.
+      const globalInfoInterval =
+        parseInt(process.env.MAP_GLOBALINFO_INTERVAL, 10) || 6 * 60 * 60 * 1000;
+      startGlobalInfoUpdateJob(globalInfoInterval);
 
       // Step 11: Start KZ records scraper (runs every 3.75s for 80% rate limit utilization)
       if (process.env.KZ_SCRAPER_ENABLED !== "false") {
@@ -152,17 +155,22 @@ async function gracefulShutdown(signal) {
   }, 30000); // 30 seconds timeout
 
   try {
-    // Step 1: Close Redis connection
+    // Step 1: Disconnect WebSocket clients.
+    // Must precede closing the HTTP server, whose close callback would otherwise wait on them forever.
+    logger.info("Closing WebSocket server...");
+    await closeWebSocket();
+
+    // Step 2: Close Redis connection
     logger.info("Closing Redis connection...");
     await closeRedis();
 
-    // Step 2: Close database connection pools
+    // Step 3: Close database connection pools
     logger.info("Closing database connections...");
     await closeDatabase();
     await closeKzDatabase();
     await closeAllKzLocalDatabases();
 
-    // Step 3: Close HTTP server
+    // Step 4: Close HTTP server
     logger.info("Closing HTTP server...");
     server.close(() => {
       logger.info("Server shutdown complete");

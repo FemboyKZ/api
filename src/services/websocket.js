@@ -186,15 +186,22 @@ function getWebSocketStats() {
 }
 
 /**
- * Close WebSocket server
+ * Close WebSocket server. Clients must be disconnected explicitly,
+ * or http.Server#close waits on them forever and shutdown never completes.
  */
 function closeWebSocket() {
-  if (io) {
-    io.close(() => {
+  if (!io) return Promise.resolve();
+
+  const server = io;
+  io = null;
+
+  return new Promise((resolve) => {
+    server.disconnectSockets(true);
+    server.close(() => {
       logger.info("WebSocket server closed");
+      resolve();
     });
-    io = null;
-  }
+  });
 }
 
 module.exports = {

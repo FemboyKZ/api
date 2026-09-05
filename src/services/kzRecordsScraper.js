@@ -558,6 +558,31 @@ async function processRecord(connection, record) {
   return wasInserted;
 }
 
+// Probed once per record insert otherwise.
+// Negative results are re-probed periodically so a migration lands without a restart.
+const schemaCache = new Map();
+const SCHEMA_RECHECK_MS = 60_000;
+
+/**
+ * Run an information_schema COUNT(*) probe, remembering the answer.
+ * @param {string} key - cache key naming what is being probed
+ * @param {string} sql - probe returning a single `count` column
+ */
+async function schemaHas(connection, key, sql) {
+  const cached = schemaCache.get(key);
+  if (
+    cached &&
+    (cached.exists || Date.now() - cached.checkedAt < SCHEMA_RECHECK_MS)
+  ) {
+    return cached.exists;
+  }
+
+  const [rows] = await connection.query(sql);
+  const exists = rows[0].count > 0;
+  schemaCache.set(key, { exists, checkedAt: Date.now() });
+  return exists;
+}
+
 /**
  * Update player PB and map WR caches when a new record is inserted
  * Only updates if the new time is better than existing cached time
@@ -579,12 +604,14 @@ async function updatePBAndWROnNewRecord(connection, recordData) {
 
   try {
     // Check if kz_player_map_pbs table exists
-    const [pbTableCheck] = await connection.query(
+    const hasPbsTable = await schemaHas(
+      connection,
+      "kz_player_map_pbs",
       `SELECT COUNT(*) as count FROM information_schema.tables 
        WHERE table_schema = DATABASE() AND table_name = 'kz_player_map_pbs'`,
     );
 
-    if (pbTableCheck[0].count > 0) {
+    if (hasPbsTable) {
       // Update player PB cache
       await updatePlayerPBOnNewRecord(connection, {
         playerId,
@@ -602,7 +629,9 @@ async function updatePBAndWROnNewRecord(connection, recordData) {
     }
 
     // Check if kz_map_statistics table has new WR columns (expanded to all modes)
-    const [wrColumnCheck] = await connection.query(
+    const hasWrColumns = await schemaHas(
+      connection,
+      "kz_map_statistics.wr_kz_timer_pro_time",
       `SELECT COUNT(*) as count FROM information_schema.columns 
        WHERE table_schema = DATABASE() 
        AND table_name = 'kz_map_statistics' 
@@ -610,7 +639,7 @@ async function updatePBAndWROnNewRecord(connection, recordData) {
     );
 
     // Only update WR for stage 0 (main course)
-    if (wrColumnCheck[0].count > 0 && stage === 0) {
+    if (hasWrColumns && stage === 0) {
       await updateMapWROnNewRecord(connection, {
         mapId,
         steamid64,

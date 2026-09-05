@@ -5,7 +5,11 @@ const {
   isValidSteamID,
   convertToSteamID64,
   validatePagination,
+  paginationMeta,
   sanitizeString,
+  validateSortField,
+  validateSortOrder,
+  defaultSortOrder,
 } = require("../utils/validators");
 const logger = require("../utils/logger");
 const {
@@ -13,6 +17,7 @@ const {
   playersKeyGenerator,
   onlinePlayersKeyGenerator,
 } = require("../utils/cacheMiddleware");
+const { parsePlayersList } = require("../utils/playersList");
 const { getPlayerSummary } = require("../services/steamQuery");
 
 /**
@@ -30,10 +35,6 @@ const { getPlayerSummary } = require("../services/steamQuery");
  *           type: string
  *           description: Player name (latest seen across all games)
  *           example: "PlayerName"
- *         avatar:
- *           type: string
- *           description: Avatar URL (32x32, append _medium.jpg or _full.jpg for larger sizes)
- *           example: "https://avatars.steamstatic.com/abc123.jpg"
  *         csgo:
  *           type: object
  *           description: CS:GO statistics (empty object if player hasn't played CS:GO)
@@ -76,9 +77,6 @@ const { getPlayerSummary } = require("../services/steamQuery");
  *         name:
  *           type: string
  *           description: Player name (from Steam or latest session)
- *         avatar:
- *           type: string
- *           description: Avatar URL (32x32, append _medium.jpg or _full.jpg for larger sizes)
  *         csgo:
  *           type: object
  *           properties:
@@ -189,18 +187,25 @@ const { getPlayerSummary } = require("../services/steamQuery");
 router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
   try {
     const { page, limit, sort, order, name, game } = req.query;
-    const { limit: validLimit, offset } = validatePagination(page, limit, 100);
+    const {
+      page: validPage,
+      limit: validLimit,
+      offset,
+    } = validatePagination(page, limit, 100);
 
     const validSortFields = ["total_playtime", "steamid", "last_seen"];
-    const sortField = validSortFields.includes(sort) ? sort : "total_playtime";
-    const sortOrder = order === "asc" ? "ASC" : "DESC";
+    const sortField = validateSortField(
+      sort,
+      validSortFields,
+      "total_playtime",
+    );
+    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
     // Optimized: Use SQL aggregation with JSON functions for better performance
     let query = `
       SELECT 
         p.steamid,
         MAX(p.latest_name) as name,
-        MAX(p.avatar) as avatar,
         JSON_OBJECT(
           'total_playtime', SUM(CASE WHEN p.game = 'csgo' THEN p.playtime ELSE 0 END),
           'last_seen', MAX(CASE WHEN p.game = 'csgo' THEN p.last_seen END)
@@ -311,12 +316,7 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
 
     res.json({
       data: players,
-      pagination: {
-        page: parseInt(page, 10) || 1,
-        limit: validLimit,
-        total: total,
-        totalPages: Math.ceil(total / validLimit),
-      },
+      pagination: paginationMeta(validPage, validLimit, total),
     });
   } catch (e) {
     logger.error(`Failed to fetch players: ${e.message}`);
@@ -455,23 +455,7 @@ router.get(
       let serversWithPlayers = 0;
 
       for (const server of servers) {
-        let playersList = [];
-
-        // Parse players_list JSON column
-        if (server.players_list) {
-          try {
-            playersList =
-              typeof server.players_list === "string"
-                ? JSON.parse(server.players_list)
-                : server.players_list;
-          } catch (e) {
-            logger.error(
-              `Failed to parse players_list for ${server.ip}:${server.port}`,
-              { error: e.message },
-            );
-            continue;
-          }
-        }
+        const playersList = parsePlayersList(server);
 
         // Add server info to each player
         if (playersList.length > 0) {
@@ -619,7 +603,6 @@ router.get("/:steamid", async (req, res) => {
       const response = {
         steamid: steamid64,
         name: steamPlayer.name,
-        avatar: steamPlayer.avatar,
         discord_id: null,
         discord_username: null,
         permissions: null,
@@ -674,7 +657,6 @@ router.get("/:steamid", async (req, res) => {
     const response = {
       steamid: steamid64, // Always return SteamID64 format
       name: null,
-      avatar: null,
       discord_id: meta?.discord_id || null,
       discord_username: meta?.discord_username || null,
       permissions: parseMetaJson(meta?.permissions),
@@ -683,10 +665,9 @@ router.get("/:steamid", async (req, res) => {
       counterstrike2: {},
     };
 
-    // Get name and avatar from any row (they should all be the same for a steamid)
+    // Name from any row (it is the same for every game row of a steamid)
     if (rows.length > 0) {
       response.name = rows[0].name;
-      response.avatar = rows[0].avatar;
     }
 
     // Populate game-specific stats and sessions

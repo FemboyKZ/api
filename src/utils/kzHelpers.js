@@ -12,6 +12,7 @@ const {
   steamid64To32,
   validateSortField,
   validateSortOrder,
+  defaultSortOrder,
 } = require("./validators");
 
 // ==================== CONSTANTS ====================
@@ -139,6 +140,65 @@ function formatAirtime(airtime, tickrate = 64) {
 // Note: validateSortField and validateSortOrder are imported from validators.js
 
 /**
+ * Summarise a player's per-map completion rows, overall and by difficulty tier.
+ * A pro time wins over a TP time; maps with no tier are filed under 0.
+ */
+function computeCompletionStats(maps) {
+  const stats = {
+    total_maps: 0,
+    completed_pro: 0,
+    completed_tp_only: 0,
+    not_completed: 0,
+    by_difficulty: {},
+  };
+
+  for (const map of maps) {
+    stats.total_maps++;
+    if (map.pro_time !== null) {
+      stats.completed_pro++;
+    } else if (map.tp_time !== null) {
+      stats.completed_tp_only++;
+    } else {
+      stats.not_completed++;
+    }
+
+    const tier = map.difficulty || 0;
+    if (!stats.by_difficulty[tier]) {
+      stats.by_difficulty[tier] = {
+        total: 0,
+        completed_pro: 0,
+        completed_tp: 0,
+        completed_any: 0,
+      };
+    }
+    stats.by_difficulty[tier].total++;
+    if (map.pro_time !== null) {
+      stats.by_difficulty[tier].completed_pro++;
+    }
+    if (map.tp_time !== null) {
+      stats.by_difficulty[tier].completed_tp++;
+    }
+    if (map.pro_time !== null || map.tp_time !== null) {
+      stats.by_difficulty[tier].completed_any++;
+    }
+  }
+
+  return stats;
+}
+
+/**
+ * Rewrite a paginated SELECT into the COUNT(*) query for its total.
+ * Matches up to the first FROM, so the projection must not contain one
+ * a scalar subquery in the SELECT list needs a hand-written count instead.
+ */
+function toCountQuery(query) {
+  return query.replace(
+    /SELECT[\s\S]*?\sFROM\s/i,
+    "SELECT COUNT(*) as total FROM ",
+  );
+}
+
+/**
  * Generate partition hint for yearly partitioned tables
  * Partitions: p_old (before 2018), p2018-p2027, pfuture
  *
@@ -241,6 +301,9 @@ module.exports = {
   // Query helpers
   validateSortField,
   validateSortOrder,
+  defaultSortOrder,
+  toCountQuery,
+  computeCompletionStats,
   getYearlyPartitionHint,
   getPlayerPartitionHint,
 };

@@ -241,16 +241,27 @@ function buildWhereClause(filter, fieldMap) {
 }
 
 /**
- * Process a single filter for CS2 jumpstats
- * @param {Object} pool - Database pool
- * @param {Object} filter - Filter to apply
- * @param {Object} options - Processing options
+ * Process a single filter against a Jumpstats table.
+ * CS2 and CSGO differ only in the identity column names and the game label.
+ *
+ * @param {Object} variant - { fieldMap, idColumns, game, label };
+ *   idColumns are the identity columns in the order the quarantine table expects them.
  * @returns {Object} Result of the operation
  */
-async function processCS2Filter(pool, filter, options = {}) {
+async function processFilter(pool, filter, options, variant) {
   const { dryRun = true, executedBy = "system" } = options;
+  const { fieldMap, idColumns, game, label } = variant;
 
-  const { whereClause, params } = buildWhereClause(filter, CS2_FIELD_MAP);
+  const { whereClause, params } = buildWhereClause(filter, fieldMap);
+  const result = (extra) => ({
+    filter_id: filter.id,
+    filter_name: filter.name,
+    game,
+    matched: 0,
+    quarantined: 0,
+    dry_run: dryRun,
+    ...extra,
+  });
 
   try {
     // Count matching records
@@ -261,46 +272,45 @@ async function processCS2Filter(pool, filter, options = {}) {
     const matchCount = countResult[0].count;
 
     if (matchCount === 0) {
-      return {
-        filter_id: filter.id,
-        filter_name: filter.name,
-        game: "cs2",
-        matched: 0,
-        quarantined: 0,
-        dry_run: dryRun,
-      };
+      return result({});
     }
 
     if (dryRun) {
       // In dry run mode, just return the count without moving anything
       logger.info(
-        `[DRY RUN] CS2 filter "${filter.name}" would match ${matchCount} records`,
+        `[DRY RUN] ${label} filter "${filter.name}" would match ${matchCount} records`,
       );
-      return {
-        filter_id: filter.id,
-        filter_name: filter.name,
-        game: "cs2",
-        matched: matchCount,
-        quarantined: 0,
-        dry_run: true,
-      };
+      return result({ matched: matchCount, dry_run: true });
     }
+
+    const columns = [
+      ...idColumns,
+      "JumpType",
+      "Mode",
+      "Distance",
+      "IsBlockJump",
+      "Block",
+      "Strafes",
+      "Sync",
+      "Pre",
+      "Max",
+      "Airtime",
+      "Created",
+    ].join(", ");
 
     // Begin transaction
     const connection = await pool.getConnection();
     await connection.beginTransaction();
 
     try {
-      // Insert matching records into quarantine table
+      // Copy matching records into the quarantine table
       const insertQuery = `
         INSERT INTO Jumpstats_Quarantine (
-          ID, SteamID64, JumpType, Mode, Distance, IsBlockJump, Block,
-          Strafes, Sync, Pre, Max, Airtime, Created,
+          ${columns},
           filter_id, filter_name, filter_conditions, quarantined_by
         )
         SELECT 
-          ID, SteamID64, JumpType, Mode, Distance, IsBlockJump, Block,
-          Strafes, Sync, Pre, Max, Airtime, Created,
+          ${columns},
           ?, ?, ?, ?
         FROM Jumpstats
         WHERE ${whereClause}
@@ -324,34 +334,39 @@ async function processCS2Filter(pool, filter, options = {}) {
       connection.release();
 
       logger.info(
-        `CS2 filter "${filter.name}" quarantined ${insertResult.affectedRows} records`,
+        `${label} filter "${filter.name}" quarantined ${insertResult.affectedRows} records`,
       );
 
-      return {
-        filter_id: filter.id,
-        filter_name: filter.name,
-        game: "cs2",
+      return result({
         matched: matchCount,
         quarantined: insertResult.affectedRows,
         dry_run: false,
-      };
+      });
     } catch (error) {
       await connection.rollback();
       connection.release();
       throw error;
     }
   } catch (error) {
-    logger.error(`CS2 filter "${filter.id}" failed: ${error.message}`);
-    return {
-      filter_id: filter.id,
-      filter_name: filter.name,
-      game: "cs2",
-      matched: 0,
-      quarantined: 0,
-      dry_run: dryRun,
-      error: error.message,
-    };
+    logger.error(`${label} filter "${filter.id}" failed: ${error.message}`);
+    return result({ error: error.message });
   }
+}
+
+/**
+ * Process a single filter for CS2 jumpstats
+ * @param {Object} pool - Database pool
+ * @param {Object} filter - Filter to apply
+ * @param {Object} options - Processing options
+ * @returns {Object} Result of the operation
+ */
+async function processCS2Filter(pool, filter, options = {}) {
+  return processFilter(pool, filter, options, {
+    fieldMap: CS2_FIELD_MAP,
+    idColumns: ["ID", "SteamID64"],
+    game: "cs2",
+    label: "CS2",
+  });
 }
 
 /**
@@ -363,111 +378,12 @@ async function processCS2Filter(pool, filter, options = {}) {
  * @returns {Object} Result of the operation
  */
 async function processCSGOFilter(pool, filter, options = {}, tickrate = "128") {
-  const { dryRun = true, executedBy = "system" } = options;
-
-  const { whereClause, params } = buildWhereClause(filter, CSGO_FIELD_MAP);
-
-  try {
-    // Count matching records
-    const [countResult] = await pool.query(
-      `SELECT COUNT(*) as count FROM Jumpstats WHERE ${whereClause}`,
-      params,
-    );
-    const matchCount = countResult[0].count;
-
-    if (matchCount === 0) {
-      return {
-        filter_id: filter.id,
-        filter_name: filter.name,
-        game: `csgo${tickrate}`,
-        matched: 0,
-        quarantined: 0,
-        dry_run: dryRun,
-      };
-    }
-
-    if (dryRun) {
-      logger.info(
-        `[DRY RUN] CSGO${tickrate} filter "${filter.name}" would match ${matchCount} records`,
-      );
-      return {
-        filter_id: filter.id,
-        filter_name: filter.name,
-        game: `csgo${tickrate}`,
-        matched: matchCount,
-        quarantined: 0,
-        dry_run: true,
-      };
-    }
-
-    // Begin transaction
-    const connection = await pool.getConnection();
-    await connection.beginTransaction();
-
-    try {
-      // Insert matching records into quarantine table
-      const insertQuery = `
-        INSERT INTO Jumpstats_Quarantine (
-          JumpID, SteamID32, JumpType, Mode, Distance, IsBlockJump, Block,
-          Strafes, Sync, Pre, Max, Airtime, Created,
-          filter_id, filter_name, filter_conditions, quarantined_by
-        )
-        SELECT 
-          JumpID, SteamID32, JumpType, Mode, Distance, IsBlockJump, Block,
-          Strafes, Sync, Pre, Max, Airtime, Created,
-          ?, ?, ?, ?
-        FROM Jumpstats
-        WHERE ${whereClause}
-      `;
-
-      const insertParams = [
-        filter.id,
-        filter.name,
-        JSON.stringify(filter.conditions),
-        executedBy,
-        ...params,
-      ];
-
-      const [insertResult] = await connection.query(insertQuery, insertParams);
-
-      // Delete from original table
-      const deleteQuery = `DELETE FROM Jumpstats WHERE ${whereClause}`;
-      await connection.query(deleteQuery, params);
-
-      await connection.commit();
-      connection.release();
-
-      logger.info(
-        `CSGO${tickrate} filter "${filter.name}" quarantined ${insertResult.affectedRows} records`,
-      );
-
-      return {
-        filter_id: filter.id,
-        filter_name: filter.name,
-        game: `csgo${tickrate}`,
-        matched: matchCount,
-        quarantined: insertResult.affectedRows,
-        dry_run: false,
-      };
-    } catch (error) {
-      await connection.rollback();
-      connection.release();
-      throw error;
-    }
-  } catch (error) {
-    logger.error(
-      `CSGO${tickrate} filter "${filter.id}" failed: ${error.message}`,
-    );
-    return {
-      filter_id: filter.id,
-      filter_name: filter.name,
-      game: `csgo${tickrate}`,
-      matched: 0,
-      quarantined: 0,
-      dry_run: dryRun,
-      error: error.message,
-    };
-  }
+  return processFilter(pool, filter, options, {
+    fieldMap: CSGO_FIELD_MAP,
+    idColumns: ["JumpID", "SteamID32"],
+    game: `csgo${tickrate}`,
+    label: `CSGO${tickrate}`,
+  });
 }
 
 /**
@@ -912,6 +828,8 @@ module.exports = {
   getAvailableFilters,
   buildWhereClause,
   // Export for testing
+  processCS2Filter,
+  processCSGOFilter,
   CS2_FIELD_MAP,
   CSGO_FIELD_MAP,
   VALID_OPERATORS,

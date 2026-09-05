@@ -9,7 +9,7 @@
  * Features:
  * - Real-time ban status updates
  * - Periodic expired ban checks (configurable interval)
- * - Handles permanent bans (expires_on IS NULL)
+ * - Handles permanent bans (expires_on IS NULL, or GlobalKZ's 9999 sentinel)
  * - Handles temporary bans (expires_on > NOW())
  * - Batch processing for efficiency
  * - Comprehensive logging and statistics
@@ -62,7 +62,6 @@ async function retryOnDeadlock(
   maxRetries = DEADLOCK_MAX_RETRIES,
   delayMs = DEADLOCK_RETRY_DELAY,
 ) {
-  // Retryable lock-related errors
   const RETRYABLE_ERRORS = ["ER_LOCK_DEADLOCK", "ER_LOCK_WAIT_TIMEOUT"];
 
   let lastError;
@@ -282,7 +281,9 @@ async function updatePlayerBanStatus(steamIds, archiveRecords = true) {
       );
 
       const activeSteamIds = activeBans.map((row) => row.steamid64);
-      const permanentBans = activeBans.filter((row) => Boolean(row.is_permanent));
+      const permanentBans = activeBans.filter((row) =>
+        Boolean(row.is_permanent),
+      );
       const inactiveSteamIds = batch.filter(
         (id) => !activeSteamIds.includes(id),
       );

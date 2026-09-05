@@ -19,7 +19,7 @@ async function refreshWorldRecordsCache() {
         logger.warn(
           `Duplicate key error refreshing world records cache (attempt ${retryCount}/${maxRetries}), retrying after delay...`,
         );
-        // Exponential backoff: 100ms, 200ms, 400ms
+        // Exponential backoff: 100ms, then 200ms
         await new Promise((resolve) =>
           setTimeout(resolve, 100 * Math.pow(2, retryCount - 1)),
         );

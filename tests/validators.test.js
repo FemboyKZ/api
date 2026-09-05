@@ -348,6 +348,93 @@ describe("Validators", () => {
     });
   });
 
+  describe("paginationMeta", () => {
+    const {
+      paginationMeta,
+      validatePagination,
+    } = require("../src/utils/validators");
+
+    it("reports the page and limit it was given", () => {
+      expect(paginationMeta(3, 20, 95)).toEqual({
+        page: 3,
+        limit: 20,
+        total: 95,
+        totalPages: 5,
+      });
+    });
+
+    it("rounds partial pages up", () => {
+      expect(paginationMeta(1, 10, 1).totalPages).toBe(1);
+      expect(paginationMeta(1, 10, 10).totalPages).toBe(1);
+      expect(paginationMeta(1, 10, 11).totalPages).toBe(2);
+    });
+
+    it("reports zero pages for an empty result", () => {
+      expect(paginationMeta(1, 10, 0).totalPages).toBe(0);
+    });
+
+    it("stays consistent with validatePagination's clamping", () => {
+      // A negative page must not be echoed back; the offset came from page 1.
+      const { page, limit } = validatePagination(-5, 20);
+      expect(paginationMeta(page, limit, 100).page).toBe(1);
+    });
+  });
+
+  describe("defaultSortOrder", () => {
+    const {
+      defaultSortOrder,
+      validateSortOrder,
+    } = require("../src/utils/validators");
+
+    it("sorts name-like fields A->Z", () => {
+      for (const field of [
+        "name",
+        "map_name",
+        "player_name",
+        "server_name",
+        "alias",
+        "steamid",
+        "steamid64",
+      ]) {
+        expect(defaultSortOrder(field)).toBe("ASC");
+      }
+    });
+
+    it("sorts counts, points, times and dates highest/newest first", () => {
+      for (const field of [
+        "records",
+        "points",
+        "time",
+        "created_on",
+        "created",
+        "last_played",
+        "last_seen",
+        "total_playtime",
+        "distance",
+        "difficulty",
+        "jumpstats",
+        "expires_on",
+      ]) {
+        expect(defaultSortOrder(field)).toBe("DESC");
+      }
+    });
+
+    it("lets one route serve both directions depending on the field", () => {
+      // The default follows the sort field, not the endpoint.
+      expect(validateSortOrder(undefined, defaultSortOrder("name"))).toBe(
+        "ASC",
+      );
+      expect(validateSortOrder(undefined, defaultSortOrder("records"))).toBe(
+        "DESC",
+      );
+    });
+
+    it("always honours an explicit order over the default", () => {
+      expect(validateSortOrder("desc", defaultSortOrder("name"))).toBe("DESC");
+      expect(validateSortOrder("asc", defaultSortOrder("records"))).toBe("ASC");
+    });
+  });
+
   describe("steamid32To64", () => {
     const { steamid32To64 } = require("../src/utils/validators");
 

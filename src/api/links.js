@@ -3,7 +3,7 @@ const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
 const { adminAuth } = require("../utils/auth");
-const { isValidSteamID, convertToSteamID64 } = require("../utils/validators");
+const { resolveSteamID } = require("../utils/validators");
 const {
   isValidEmail,
   normalizeEmail,
@@ -20,11 +20,6 @@ router.use(adminAuth);
 
 const DISCORD_ID_RE = /^[0-9]{15,20}$/;
 const DEFAULT_TOKEN_TTL_HOURS = 24;
-
-function resolveSteamID(input) {
-  if (!isValidSteamID(input)) return null;
-  return convertToSteamID64(input);
-}
 
 /**
  * POST /links/email/request

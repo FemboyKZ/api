@@ -25,22 +25,103 @@ describe("Admin Auth Utilities", () => {
   });
 
   describe("getClientIP", () => {
-    it("should extract IP from X-Forwarded-For header", () => {
-      const req = {
-        headers: {
-          "x-forwarded-for": "203.0.113.195, 70.41.3.18, 150.172.238.178",
-        },
-        socket: { remoteAddress: "127.0.0.1" },
-      };
-      expect(getClientIP(req)).toBe("203.0.113.195");
+    // Both are read at module load, so each config needs a fresh module.
+    const loadAuth = (env = {}) => {
+      let mod;
+      jest.isolateModules(() => {
+        const saved = { ...process.env };
+        Object.assign(process.env, env);
+        mod = require("../src/utils/auth");
+        process.env = saved;
+      });
+      return mod;
+    };
+
+    describe("with no proxy in front (direct connections)", () => {
+      it("ignores X-Forwarded-For and uses the socket address", () => {
+        const { getClientIP: get } = loadAuth();
+        const req = {
+          headers: { "x-forwarded-for": "203.0.113.195" },
+          socket: { remoteAddress: "192.168.1.100" },
+        };
+        // Believing the header here would let any caller claim a whitelisted IP.
+        expect(get(req)).toBe("192.168.1.100");
+      });
+
+      it("ignores X-Real-IP and uses the socket address", () => {
+        const { getClientIP: get } = loadAuth();
+        const req = {
+          headers: { "x-real-ip": "203.0.113.195" },
+          socket: { remoteAddress: "192.168.1.100" },
+        };
+        expect(get(req)).toBe("192.168.1.100");
+      });
     });
 
-    it("should extract IP from X-Real-IP header", () => {
-      const req = {
-        headers: { "x-real-ip": "203.0.113.195" },
-        socket: { remoteAddress: "127.0.0.1" },
-      };
-      expect(getClientIP(req)).toBe("203.0.113.195");
+    describe("behind one reverse proxy", () => {
+      const oneHop = () => loadAuth({ HOST: "127.0.0.1" });
+
+      it("uses the only X-Forwarded-For entry when the client sent none", () => {
+        const { getClientIP: get } = oneHop();
+        const req = {
+          headers: { "x-forwarded-for": "203.0.113.195" },
+          socket: { remoteAddress: "127.0.0.1" },
+        };
+        expect(get(req)).toBe("203.0.113.195");
+      });
+
+      it("ignores entries the client prepended to X-Forwarded-For", () => {
+        const { getClientIP: get } = oneHop();
+        const req = {
+          // The proxy appends what it saw, so the real client is last.
+          headers: { "x-forwarded-for": "1.2.3.4, 203.0.113.195" },
+          socket: { remoteAddress: "127.0.0.1" },
+        };
+        expect(get(req)).toBe("203.0.113.195");
+      });
+
+      it("falls back to X-Real-IP when there is no forwarded chain", () => {
+        const { getClientIP: get } = oneHop();
+        const req = {
+          headers: { "x-real-ip": "203.0.113.195" },
+          socket: { remoteAddress: "127.0.0.1" },
+        };
+        expect(get(req)).toBe("203.0.113.195");
+      });
+    });
+
+    describe("behind two reverse proxies", () => {
+      const twoHops = () =>
+        loadAuth({ TRUST_PROXY: "true", TRUST_PROXY_HOPS: "2" });
+
+      it("counts back two entries to find the client", () => {
+        const { getClientIP: get } = twoHops();
+        const req = {
+          headers: { "x-forwarded-for": "203.0.113.195, 70.41.3.18" },
+          socket: { remoteAddress: "127.0.0.1" },
+        };
+        expect(get(req)).toBe("203.0.113.195");
+      });
+
+      it("still ignores a client-prepended entry", () => {
+        const { getClientIP: get } = twoHops();
+        const req = {
+          headers: {
+            "x-forwarded-for": "1.2.3.4, 203.0.113.195, 70.41.3.18",
+          },
+          socket: { remoteAddress: "127.0.0.1" },
+        };
+        expect(get(req)).toBe("203.0.113.195");
+      });
+
+      it("uses the left-most entry when the chain is shorter than expected", () => {
+        const { getClientIP: get } = twoHops();
+        const req = {
+          headers: { "x-forwarded-for": "203.0.113.195" },
+          socket: { remoteAddress: "127.0.0.1" },
+        };
+        expect(get(req)).toBe("203.0.113.195");
+      });
     });
 
     it("should fall back to socket remoteAddress", () => {

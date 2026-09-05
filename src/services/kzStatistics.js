@@ -93,36 +93,39 @@ async function refreshPlayerStatistics(
 }
 
 /**
- * Refresh map statistics
- * Updates stats for maps not refreshed in 24 hours
+ * Call a refresh stored procedure, retrying with exponential backoff.
+ *
+ * @param {string} procedure - Stored procedure to CALL
+ * @param {string} label - Noun used in the log lines ("map", "server")
+ * @returns {Promise<boolean>} True if the procedure completed
  */
-async function refreshMapStatistics() {
+async function callRefreshProcedure(procedure, label) {
   const pool = getKzPool();
-  let retryCount = 0;
 
-  while (retryCount < MAX_RETRIES) {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      logger.info("Refreshing map statistics...");
+      logger.info(`Refreshing ${label} statistics...`);
       const startTime = Date.now();
 
-      await pool.query("CALL refresh_all_map_statistics()");
+      await pool.query(`CALL ${procedure}()`);
 
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      logger.info(`Map statistics refreshed successfully in ${elapsed}s`);
+      logger.info(
+        `${label[0].toUpperCase()}${label.slice(1)} statistics refreshed successfully in ${elapsed}s`,
+      );
       return true;
     } catch (error) {
-      retryCount++;
-      if (retryCount < MAX_RETRIES) {
+      if (attempt < MAX_RETRIES) {
         logger.warn(
-          `Error refreshing map statistics (attempt ${retryCount}/${MAX_RETRIES}): ${error.message}`,
+          `Error refreshing ${label} statistics (attempt ${attempt}/${MAX_RETRIES}): ${error.message}`,
         );
         await new Promise((resolve) =>
-          setTimeout(resolve, RETRY_DELAY_BASE * Math.pow(2, retryCount - 1)),
+          setTimeout(resolve, RETRY_DELAY_BASE * Math.pow(2, attempt - 1)),
         );
         continue;
       }
       logger.error(
-        `Failed to refresh map statistics after ${MAX_RETRIES} attempts: ${error.message}`,
+        `Failed to refresh ${label} statistics after ${MAX_RETRIES} attempts: ${error.message}`,
       );
       return false;
     }
@@ -130,40 +133,19 @@ async function refreshMapStatistics() {
 }
 
 /**
+ * Refresh map statistics
+ * Updates stats for maps not refreshed in 24 hours
+ */
+async function refreshMapStatistics() {
+  return callRefreshProcedure("refresh_all_map_statistics", "map");
+}
+
+/**
  * Refresh server statistics
  * Updates stats for servers not refreshed in 24 hours
  */
 async function refreshServerStatistics() {
-  const pool = getKzPool();
-  let retryCount = 0;
-
-  while (retryCount < MAX_RETRIES) {
-    try {
-      logger.info("Refreshing server statistics...");
-      const startTime = Date.now();
-
-      await pool.query("CALL refresh_all_server_statistics()");
-
-      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      logger.info(`Server statistics refreshed successfully in ${elapsed}s`);
-      return true;
-    } catch (error) {
-      retryCount++;
-      if (retryCount < MAX_RETRIES) {
-        logger.warn(
-          `Error refreshing server statistics (attempt ${retryCount}/${MAX_RETRIES}): ${error.message}`,
-        );
-        await new Promise((resolve) =>
-          setTimeout(resolve, RETRY_DELAY_BASE * Math.pow(2, retryCount - 1)),
-        );
-        continue;
-      }
-      logger.error(
-        `Failed to refresh server statistics after ${MAX_RETRIES} attempts: ${error.message}`,
-      );
-      return false;
-    }
-  }
+  return callRefreshProcedure("refresh_all_server_statistics", "server");
 }
 
 /**
@@ -182,7 +164,8 @@ async function refreshAllStatistics() {
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   // refreshPlayerStatistics resolves to an object ({ success, ... }), the other two to a boolean.
-  const succeeded = (r) => (typeof r === "object" && r !== null ? r.success : r);
+  const succeeded = (r) =>
+    typeof r === "object" && r !== null ? r.success : r;
   const successCount = Object.values(results).filter(succeeded).length;
 
   if (successCount === 3) {

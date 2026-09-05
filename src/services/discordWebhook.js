@@ -13,8 +13,9 @@
  *   DISCORD_WEBHOOK_ENABLED=true
  *
  * Message Format:
- * - Embed color: Pink (#ff00b3) (online) / Red (offline)
- * - Title: Total players across all servers
+ * - One embed per region (EU / NA / Other)
+ * - Embed color: Pink (#ff00b3) if any server in the region is online, else red
+ * - Title: region; description: that region's player and server counts
  * - Fields: One per server with status, map, player count
  * - Footer: Last updated timestamp
  */
@@ -24,6 +25,7 @@ const axios = require("axios");
 const logger = require("../utils/logger");
 const pool = require("../db");
 const { sanitizePlayerName } = require("../utils/validators");
+const { parsePlayersList } = require("../utils/playersList");
 
 // Configuration
 const WEBHOOK_ENABLED = process.env.DISCORD_WEBHOOK_ENABLED === "true";
@@ -110,19 +112,6 @@ async function getServersByGame(game) {
     );
 
     return rows.map((server) => {
-      // Parse players_list JSON
-      let playersList = [];
-      if (server.players_list) {
-        try {
-          playersList =
-            typeof server.players_list === "string"
-              ? JSON.parse(server.players_list)
-              : server.players_list;
-        } catch (e) {
-          playersList = [];
-        }
-      }
-
       return {
         ip: server.ip,
         port: server.port,
@@ -136,7 +125,7 @@ async function getServersByGame(game) {
         region: server.region,
         domain: server.domain,
         tickrate: server.tickrate,
-        playersList,
+        playersList: parsePlayersList(server),
       };
     });
   } catch (error) {

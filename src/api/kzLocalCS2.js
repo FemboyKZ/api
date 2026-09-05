@@ -3,9 +3,13 @@ const router = express.Router();
 const { getKzLocalCS2Pool } = require("../db/kzLocal");
 const {
   validatePagination,
+  paginationMeta,
   sanitizeString,
   isValidSteamID,
   convertToSteamID64,
+  validateSortField,
+  validateSortOrder,
+  defaultSortOrder,
 } = require("../utils/validators");
 const {
   CS2_MODES,
@@ -27,6 +31,26 @@ function getPool() {
 }
 
 // ==================== PLAYERS ENDPOINTS ====================
+
+// Projection shared by the jumpstat listing endpoints; each appends its own WHERE clause.
+const JUMPSTAT_SELECT = `
+      SELECT 
+        j.ID as id,
+        j.SteamID64 as steamid64,
+        p.Alias as player_name,
+        j.JumpType as jump_type,
+        j.Mode as mode,
+        j.Distance as distance,
+        j.IsBlockJump as is_block,
+        j.Block as block,
+        j.Strafes as strafes,
+        j.Sync as sync,
+        j.Pre as pre,
+        j.Max as max,
+        j.Airtime as airtime,
+        j.Created as created
+      FROM Jumpstats j
+      JOIN Players p ON j.SteamID64 = p.SteamID64`;
 
 /**
  * @swagger
@@ -76,23 +100,24 @@ router.get(
   async (req, res) => {
     try {
       const { page, limit, name, sort, order } = req.query;
-      const { limit: validLimit, offset } = validatePagination(
-        page,
-        limit,
-        100,
-      );
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit, 100);
 
       const pool = getPool();
 
-      const validSortFields = ["name", "last_played", "created", "records"];
+      // Default matches /kzlocal/players; `created` is CS2-only.
+      const validSortFields = ["records", "name", "last_played", "created"];
       const sortFieldMap = {
         name: "p.Alias",
         last_played: "p.LastPlayed",
         created: "p.Created",
         records: "records_count",
       };
-      const sortField = validSortFields.includes(sort) ? sort : "last_played";
-      const sortOrder = order === "asc" ? "ASC" : "DESC";
+      const sortField = validateSortField(sort, validSortFields, "records");
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
       let query = `
       SELECT 
@@ -121,7 +146,6 @@ router.get(
 
       const [rows] = await pool.query(query, params);
 
-      // Get total count
       let countQuery = `SELECT COUNT(*) as total FROM Players p WHERE 1=1`;
       const countParams = [];
 
@@ -141,12 +165,7 @@ router.get(
           created: row.created,
           records_count: row.records_count,
         })),
-        pagination: {
-          page: parseInt(page, 10) || 1,
-          limit: validLimit,
-          total,
-          totalPages: Math.ceil(total / validLimit),
-        },
+        pagination: paginationMeta(validPage, validLimit, total),
       });
     } catch (error) {
       logger.error(`Error fetching CS2 KZ local players: ${error.message}`);
@@ -338,7 +357,11 @@ router.get(
 router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
   try {
     const { page, limit, name, sort, order } = req.query;
-    const { limit: validLimit, offset } = validatePagination(page, limit, 100);
+    const {
+      page: validPage,
+      limit: validLimit,
+      offset,
+    } = validatePagination(page, limit, 100);
 
     const pool = getPool();
 
@@ -349,8 +372,8 @@ router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       created: "m.Created",
       records: "records_count",
     };
-    const sortField = validSortFields.includes(sort) ? sort : "name";
-    const sortOrder = order === "desc" ? "DESC" : "ASC";
+    const sortField = validateSortField(sort, validSortFields, "name");
+    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
     let query = `
       SELECT 
@@ -380,7 +403,6 @@ router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
     const [rows] = await pool.query(query, params);
 
-    // Get total count
     let countQuery = `SELECT COUNT(*) as total FROM Maps m WHERE 1=1`;
     const countParams = [];
 
@@ -400,12 +422,7 @@ router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
         courses_count: row.courses_count,
         records_count: row.records_count,
       })),
-      pagination: {
-        page: parseInt(page, 10) || 1,
-        limit: validLimit,
-        total,
-        totalPages: Math.ceil(total / validLimit),
-      },
+      pagination: paginationMeta(validPage, validLimit, total),
     });
   } catch (error) {
     logger.error(`Error fetching CS2 KZ local maps: ${error.message}`);
@@ -461,7 +478,6 @@ router.get(
 
       const map = maps[0];
 
-      // Get courses
       const [courses] = await pool.query(
         `SELECT 
         mc.ID as id,
@@ -629,11 +645,11 @@ router.get(
     try {
       const { page, limit, map, player, mode, course, teleports, sort, order } =
         req.query;
-      const { limit: validLimit, offset } = validatePagination(
-        page,
-        limit,
-        100,
-      );
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit, 100);
 
       const pool = getPool();
 
@@ -642,8 +658,8 @@ router.get(
         time: "t.RunTime",
         created: "t.Created",
       };
-      const sortField = validSortFields.includes(sort) ? sort : "created";
-      const sortOrder = order === "asc" ? "ASC" : "DESC";
+      const sortField = validateSortField(sort, validSortFields, "created");
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
       let query = `
       SELECT 
@@ -712,7 +728,6 @@ router.get(
 
       const [rows] = await pool.query(query, params);
 
-      // Get total count
       let countQuery = `
       SELECT COUNT(*) as total
       FROM Times t
@@ -777,12 +792,7 @@ router.get(
           teleports: row.teleports,
           created: row.created,
         })),
-        pagination: {
-          page: parseInt(page, 10) || 1,
-          limit: validLimit,
-          total,
-          totalPages: Math.ceil(total / validLimit),
-        },
+        pagination: paginationMeta(validPage, validLimit, total),
       });
     } catch (error) {
       logger.error(`Error fetching CS2 KZ local records: ${error.message}`);
@@ -1105,11 +1115,11 @@ router.get(
     try {
       const { page, limit, player, jump_type, mode, block, sort, order } =
         req.query;
-      const { limit: validLimit, offset } = validatePagination(
-        page,
-        limit,
-        100,
-      );
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit, 100);
 
       const pool = getPool();
 
@@ -1118,27 +1128,11 @@ router.get(
         distance: "j.Distance",
         created: "j.Created",
       };
-      const sortField = validSortFields.includes(sort) ? sort : "distance";
-      const sortOrder = order === "asc" ? "ASC" : "DESC";
+      const sortField = validateSortField(sort, validSortFields, "distance");
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
       let query = `
-      SELECT 
-        j.ID as id,
-        j.SteamID64 as steamid64,
-        p.Alias as player_name,
-        j.JumpType as jump_type,
-        j.Mode as mode,
-        j.Distance as distance,
-        j.IsBlockJump as is_block,
-        j.Block as block,
-        j.Strafes as strafes,
-        j.Sync as sync,
-        j.Pre as pre,
-        j.Max as max,
-        j.Airtime as airtime,
-        j.Created as created
-      FROM Jumpstats j
-      JOIN Players p ON j.SteamID64 = p.SteamID64
+${JUMPSTAT_SELECT}
       WHERE 1=1
     `;
 
@@ -1177,7 +1171,6 @@ router.get(
 
       const [rows] = await pool.query(query, params);
 
-      // Get total count
       let countQuery = `
       SELECT COUNT(*) as total
       FROM Jumpstats j
@@ -1233,12 +1226,7 @@ router.get(
           airtime: formatAirtime(row.airtime),
           created: row.created,
         })),
-        pagination: {
-          page: parseInt(page, 10) || 1,
-          limit: validLimit,
-          total,
-          totalPages: Math.ceil(total / validLimit),
-        },
+        pagination: paginationMeta(validPage, validLimit, total),
       });
     } catch (error) {
       logger.error(`Error fetching CS2 KZ local jumpstats: ${error.message}`);
@@ -1296,23 +1284,7 @@ router.get(
       const pool = getPool();
 
       let query = `
-      SELECT 
-        j.ID as id,
-        j.SteamID64 as steamid64,
-        p.Alias as player_name,
-        j.JumpType as jump_type,
-        j.Mode as mode,
-        j.Distance as distance,
-        j.IsBlockJump as is_block,
-        j.Block as block,
-        j.Strafes as strafes,
-        j.Sync as sync,
-        j.Pre as pre,
-        j.Max as max,
-        j.Airtime as airtime,
-        j.Created as created
-      FROM Jumpstats j
-      JOIN Players p ON j.SteamID64 = p.SteamID64
+${JUMPSTAT_SELECT}
       WHERE j.JumpType = ?
         AND p.Cheater = 0
     `;
@@ -1490,11 +1462,11 @@ router.get(
   async (req, res) => {
     try {
       const { page, limit, map } = req.query;
-      const { limit: validLimit, offset } = validatePagination(
-        page,
-        limit,
-        100,
-      );
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit, 100);
 
       const pool = getPool();
 
@@ -1527,7 +1499,6 @@ router.get(
 
       const [rows] = await pool.query(query, params);
 
-      // Get total count
       let countQuery = `
       SELECT COUNT(*) as total
       FROM MapCourses mc
@@ -1553,12 +1524,7 @@ router.get(
           created: row.created,
           records_count: row.records_count,
         })),
-        pagination: {
-          page: parseInt(page, 10) || 1,
-          limit: validLimit,
-          total,
-          totalPages: Math.ceil(total / validLimit),
-        },
+        pagination: paginationMeta(validPage, validLimit, total),
       });
     } catch (error) {
       logger.error(`Error fetching CS2 KZ courses: ${error.message}`);

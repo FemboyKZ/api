@@ -35,25 +35,52 @@ const API_IP_WHITELIST = process.env.API_IP_WHITELIST
 // Localhost IP patterns
 const LOCALHOST_IPS = ["127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"];
 
+// Binding to loopback implies a proxy; TRUST_PROXY states it for other setups.
+const TRUST_PROXY =
+  process.env.TRUST_PROXY === "true" ||
+  process.env.HOST === "127.0.0.1" ||
+  process.env.HOST === "localhost";
+
+// Proxies append to X-Forwarded-For,
+// so only the right-most this many entries were written by infrastructure we control.
+const TRUST_PROXY_HOPS = Math.max(
+  1,
+  parseInt(process.env.TRUST_PROXY_HOPS, 10) || 1,
+);
+
 /**
- * Get client IP from request
- * Handles both direct connections and proxy forwarding
+ * Get client IP from request.
+ *
+ * ADMIN_IP_WHITELIST is checked against this, so forwarding headers are only believed behind a configured proxy.
+ * Even then the left of the chain is client-supplied, hence counting back from the right.
  */
 function getClientIP(req) {
-  // Check X-Forwarded-For header (for reverse proxy setups)
-  const forwarded = req.headers["x-forwarded-for"];
-  if (forwarded) {
-    // Take the first IP in the chain (original client)
-    return forwarded.split(",")[0].trim();
+  const socketIP = req.socket?.remoteAddress || req.ip;
+
+  if (!TRUST_PROXY) {
+    return socketIP;
   }
 
-  // Check X-Real-IP header (nginx)
+  const forwarded = req.headers["x-forwarded-for"];
+  if (forwarded) {
+    const chain = forwarded
+      .split(",")
+      .map((ip) => ip.trim())
+      .filter(Boolean);
+
+    if (chain.length > 0) {
+      const index = chain.length - TRUST_PROXY_HOPS;
+      // Shorter chain than configured: fall back to its left-most entry.
+      return index >= 0 ? chain[index] : chain[0];
+    }
+  }
+
+  // Single value from the nearest proxy, no chain to walk.
   if (req.headers["x-real-ip"]) {
     return req.headers["x-real-ip"];
   }
 
-  // Fall back to socket remote address
-  return req.socket?.remoteAddress || req.ip;
+  return socketIP;
 }
 
 /**
@@ -371,6 +398,9 @@ module.exports = {
   // API key authentication (rate limit bypass)
   shouldSkipRateLimit,
   apiKeyMiddleware,
+  // Proxy configuration
+  TRUST_PROXY,
+  TRUST_PROXY_HOPS,
   // Utility functions
   getClientIP,
   isLocalhost,

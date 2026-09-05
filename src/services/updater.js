@@ -49,12 +49,20 @@ const {
  * - Cycles never overlap: a tick is skipped while the previous one is running
  */
 
+const CONFIG_PATH = "config/servers.json";
 let serversConfig = [];
+let configMtimeMs = 0; // Skips re-parsing the config when it has not changed
 let UPDATE_INTERVAL_SECONDS = 30; // Default interval in seconds
 let isUpdating = false; // Guards against overlapping update cycles
 
 function loadConfig() {
-  serversConfig = JSON.parse(fs.readFileSync("config/servers.json", "utf8"));
+  // Runs every cycle, so only re-read when the file actually changed.
+  const { mtimeMs } = fs.statSync(CONFIG_PATH);
+  if (mtimeMs === configMtimeMs) return;
+
+  serversConfig = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+  configMtimeMs = mtimeMs;
+  logger.info(`Loaded ${serversConfig.length} servers from ${CONFIG_PATH}`);
 }
 
 /**
@@ -213,42 +221,39 @@ async function runUpdateCycle() {
         }
 
         // Track individual players (only those with Steam IDs from RCON)
-        if (result.players && result.players.length > 0) {
-          for (const player of result.players) {
-            if (player.steamid) {
-              // Sanitize player name to remove control characters and color codes
-              const playerName = sanitizePlayerName(player.name);
+        const trackedPlayers = (result.players || []).filter((p) => p.steamid);
+        if (trackedPlayers.length > 0) {
+          // One multi-row upsert rather than a round-trip per player.
+          const rows = trackedPlayers.map((player) => [
+            player.steamid,
+            // Never NULL: latest_name is what every read path selects.
+            sanitizePlayerName(player.name) || "Unknown",
+            player.ip || null,
+            server.game,
+            UPDATE_INTERVAL_SECONDS,
+            server.ip,
+            server.port,
+          ]);
 
-              // Insert or update player record (separated by game)
-              await pool.query(
-                `INSERT INTO players (steamid, latest_name, latest_ip, game, playtime, server_ip, server_port, last_seen)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
-                 ON DUPLICATE KEY UPDATE 
-                   latest_name=VALUES(latest_name), 
-                   latest_ip=VALUES(latest_ip),
-                   playtime=playtime+?, 
-                   server_ip=VALUES(server_ip), 
-                   server_port=VALUES(server_port), 
-                   last_seen=NOW()`,
-                [
-                  player.steamid,
-                  playerName,
-                  player.ip || null,
-                  server.game,
-                  UPDATE_INTERVAL_SECONDS,
-                  server.ip,
-                  server.port,
-                  UPDATE_INTERVAL_SECONDS,
-                ],
-              );
+          await pool.query(
+            `INSERT INTO players (steamid, latest_name, latest_ip, game, playtime, server_ip, server_port, last_seen)
+             VALUES ${rows.map(() => "(?, ?, ?, ?, ?, ?, ?, NOW())").join(", ")}
+             ON DUPLICATE KEY UPDATE 
+               latest_name=VALUES(latest_name), 
+               latest_ip=VALUES(latest_ip),
+               playtime=playtime+VALUES(playtime), 
+               server_ip=VALUES(server_ip), 
+               server_port=VALUES(server_port), 
+               last_seen=NOW()`,
+            rows.flat(),
+          );
 
-              // Emit player update event
-              emitPlayerUpdate({
-                steamid: player.steamid,
-                name: playerName || "Unknown",
-                server: `${server.ip}:${server.port}`,
-              });
-            }
+          for (const row of rows) {
+            emitPlayerUpdate({
+              steamid: row[0],
+              name: row[1],
+              server: `${server.ip}:${server.port}`,
+            });
           }
         }
 

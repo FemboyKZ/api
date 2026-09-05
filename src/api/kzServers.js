@@ -1,7 +1,15 @@
 const express = require("express");
 const router = express.Router();
 const { getKzPool } = require("../db/kzRecords");
-const { validatePagination, sanitizeString } = require("../utils/validators");
+const {
+  validatePagination,
+  paginationMeta,
+  sanitizeString,
+  validateSortField,
+  validateSortOrder,
+  defaultSortOrder,
+} = require("../utils/validators");
+const { toCountQuery } = require("../utils/kzHelpers");
 const logger = require("../utils/logger");
 const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
 
@@ -68,11 +76,15 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       sort = "name",
       order = "asc",
     } = req.query;
-    const { limit: validLimit, offset } = validatePagination(page, limit, 100);
+    const {
+      page: validPage,
+      limit: validLimit,
+      offset,
+    } = validatePagination(page, limit, 100);
 
     const validSortFields = ["name", "created_on", "records"];
-    const sortField = validSortFields.includes(sort) ? sort : "name";
-    const sortOrder = order === "asc" ? "ASC" : "DESC";
+    const sortField = validateSortField(sort, validSortFields, "name");
+    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
     let query = `
       SELECT 
@@ -110,7 +122,6 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       params.push(parseInt(approval_status, 10));
     }
 
-    // Get total count
     const countQuery = `SELECT COUNT(DISTINCT s.id) as total FROM kz_servers s WHERE 1=1${
       name ? " AND s.server_name LIKE ?" : ""
     }${owner ? " AND s.owner_steamid64 = ?" : ""}${
@@ -142,12 +153,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
     res.json({
       data: servers,
-      pagination: {
-        page: parseInt(page, 10) || 1,
-        limit: validLimit,
-        total: total,
-        totalPages: Math.ceil(total / validLimit),
-      },
+      pagination: paginationMeta(validPage, validLimit, total),
     });
   } catch (e) {
     logger.error(`Failed to fetch KZ servers: ${e.message}`);
@@ -433,11 +439,11 @@ router.get(
       }
 
       const serverDbId = serverCheck[0].id;
-      const { limit: validLimit, offset } = validatePagination(
-        page,
-        limit,
-        100,
-      );
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit, 100);
 
       let query = `
         SELECT 
@@ -470,16 +476,12 @@ router.get(
         params.push(`%${sanitizeString(map, 255)}%`);
       }
 
-      // Count total
-      const countQuery = query.replace(
-        /SELECT.*FROM/s,
-        "SELECT COUNT(*) as total FROM",
-      );
+      const countQuery = toCountQuery(query);
       const [countResult] = await pool.query(countQuery, params);
       const total = countResult[0].total;
 
       const sortField = sort === "time" ? "time" : "created_on";
-      const sortOrder = order === "asc" ? "ASC" : "DESC";
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
       query += ` ORDER BY r.${sortField} ${sortOrder}`;
       query += ` LIMIT ? OFFSET ?`;
@@ -490,12 +492,7 @@ router.get(
       res.json({
         server_id: serverId,
         data: records,
-        pagination: {
-          page: parseInt(page, 10) || 1,
-          limit: validLimit,
-          total: total,
-          totalPages: Math.ceil(total / validLimit),
-        },
+        pagination: paginationMeta(validPage, validLimit, total),
       });
     } catch (e) {
       logger.error(

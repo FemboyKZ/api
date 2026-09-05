@@ -3,9 +3,13 @@ const router = express.Router();
 const pool = require("../db");
 const {
   validatePagination,
+  paginationMeta,
   sanitizeString,
   isValidIP,
   isValidPort,
+  validateSortField,
+  validateSortOrder,
+  defaultSortOrder,
 } = require("../utils/validators");
 const logger = require("../utils/logger");
 const {
@@ -116,11 +120,19 @@ const {
 router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
   try {
     const { page, limit, sort, order, server, name, game } = req.query;
-    const { limit: validLimit, offset } = validatePagination(page, limit, 100);
+    const {
+      page: validPage,
+      limit: validLimit,
+      offset,
+    } = validatePagination(page, limit, 100);
 
     const validSortFields = ["total_playtime", "name"];
-    const sortField = validSortFields.includes(sort) ? sort : "total_playtime";
-    const sortOrder = order === "asc" ? "ASC" : "DESC";
+    const sortField = validateSortField(
+      sort,
+      validSortFields,
+      "total_playtime",
+    );
+    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
     // Optimized: Use window function to get total count in single query
     let query = `
@@ -165,12 +177,7 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
     res.json({
       total: maps.length,
       data: maps,
-      pagination: {
-        page: parseInt(page, 10) || 1,
-        limit: validLimit,
-        total: total,
-        totalPages: Math.ceil(total / validLimit),
-      },
+      pagination: paginationMeta(validPage, validLimit, total),
     });
   } catch (e) {
     logger.error(`Failed to fetch maps: ${e.message}`);

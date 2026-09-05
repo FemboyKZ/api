@@ -52,9 +52,10 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Invalid server ip/port" });
     }
 
-    // Look up this server in our config to get game type and metadata
+    // Config metadata and previous status in one read; used for change detection below.
     const [configRows] = await pool.query(
-      "SELECT game, region, domain, api_id, kzt_id, tickrate FROM servers WHERE ip = ? AND port = ?",
+      `SELECT game, region, domain, api_id, kzt_id, tickrate, status, map, player_count
+       FROM servers WHERE ip = ? AND port = ?`,
       [ip, port],
     );
 
@@ -64,16 +65,10 @@ router.post("/", async (req, res) => {
 
     const serverConfig = configRows[0];
     const game = serverConfig.game;
+    const previousServer = serverConfig;
 
     // Mark server as receiving live data so updater skips external queries
     markServerLive(ip, port);
-
-    // Get previous server status for change detection
-    const [prevStatus] = await pool.query(
-      "SELECT status, map, player_count FROM servers WHERE ip = ? AND port = ?",
-      [ip, port],
-    );
-    const previousServer = prevStatus[0] || null;
 
     const sanitizedMap = srv.map ? sanitizeMapName(srv.map) : "";
     const playerCount = parseInt(srv.players, 10) || 0;
@@ -161,31 +156,51 @@ router.post("/", async (req, res) => {
     // want to assume. use the actual interval between reports for this server.
     const PLAYTIME_INCREMENT = 10; // seconds (matches extension default interval)
 
-    for (const player of extensionPlayers) {
-      if (!player.steamid || !player.in_game) continue;
+    const connectedPlayers = extensionPlayers.filter(
+      (p) => p.steamid && p.in_game,
+    );
 
-      const cleanName = sanitizePlayerName(player.name) || "Unknown";
-
-      // Upsert player record
+    // One multi-row upsert instead of a round-trip per player.
+    if (connectedPlayers.length > 0) {
+      const rows = connectedPlayers.map((p) => [
+        p.steamid,
+        sanitizePlayerName(p.name) || "Unknown",
+        game,
+        PLAYTIME_INCREMENT,
+        ip,
+        port,
+      ]);
       await pool.query(
         `INSERT INTO players (steamid, latest_name, latest_ip, game, playtime, server_ip, server_port, last_seen)
-         VALUES (?, ?, NULL, ?, ?, ?, ?, NOW())
+         VALUES ${rows.map(() => "(?, ?, NULL, ?, ?, ?, ?, NOW())").join(", ")}
          ON DUPLICATE KEY UPDATE 
            latest_name=VALUES(latest_name), 
-           playtime=playtime+?, 
+           playtime=playtime+VALUES(playtime), 
            server_ip=VALUES(server_ip), 
            server_port=VALUES(server_port), 
            last_seen=NOW()`,
-        [
-          player.steamid,
-          cleanName,
-          game,
-          PLAYTIME_INCREMENT,
-          ip,
-          port,
-          PLAYTIME_INCREMENT,
-        ],
+        rows.flat(),
       );
+    }
+
+    // Stored privately, never in the players table.
+    const playersWithIp = connectedPlayers.filter((p) => p.ip);
+    if (playersWithIp.length > 0) {
+      try {
+        const ipRows = playersWithIp.map((p) => [p.steamid, p.ip]);
+        await pool.query(
+          `INSERT INTO player_ips (steamid, ip, first_seen, last_seen)
+           VALUES ${ipRows.map(() => "(?, ?, NOW(), NOW())").join(", ")}
+           ON DUPLICATE KEY UPDATE last_seen = NOW()`,
+          ipRows.flat(),
+        );
+      } catch (ipErr) {
+        logger.error("Failed to store player IPs", { error: ipErr.message });
+      }
+    }
+
+    for (const player of connectedPlayers) {
+      const cleanName = sanitizePlayerName(player.name) || "Unknown";
 
       // Per-gamemode playtime:
       // merge-add the deltas the plugin reports for this interval.
@@ -215,9 +230,8 @@ router.post("/", async (req, res) => {
             );
             setVals.push(delta);
           } else {
-            // No data yet: show the mode key with null, but never clobber a
-            // value already accrued. JSON_EXTRACT returns the existing value, or
-            // SQL NULL (-> JSON null) when the key is absent.
+            // No data yet: show the mode key with null, but never clobber a value already accrued.
+            // JSON_EXTRACT returns the existing value, or SQL NULL (-> JSON null) when the key is absent.
             setExprs.push(
               `'$."${key}"', JSON_EXTRACT(playtime_modes, '$."${key}"')`,
             );
@@ -230,20 +244,6 @@ router.post("/", async (req, res) => {
              WHERE steamid = ? AND game = ?`,
             [...setVals, player.steamid, game],
           );
-        }
-      }
-
-      // Store player IP privately (not in players table)
-      if (player.ip) {
-        try {
-          await pool.query(
-            `INSERT INTO player_ips (steamid, ip, first_seen, last_seen)
-             VALUES (?, ?, NOW(), NOW())
-             ON DUPLICATE KEY UPDATE last_seen = NOW()`,
-            [player.steamid, player.ip],
-          );
-        } catch (ipErr) {
-          logger.error("Failed to store player IP", { error: ipErr.message });
         }
       }
 
@@ -291,7 +291,6 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // Invalidate caches
     await deleteCache("cache:servers:*");
     await deleteCache("cache:players:*");
     await deleteCache("cache:maps:*");
@@ -306,9 +305,8 @@ router.post("/", async (req, res) => {
 /**
  * POST /servers/status/hibernate
  *
- * Called by the plugin when the last player disconnects and the server
- * is about to hibernate. Clears the live flag so the updater immediately
- * resumes polling via Steam Master Server on its next cycle.
+ * Called by the plugin when the last player disconnects and the server is about to hibernate.
+ * Clears the live flag so the updater immediately resumes polling via Steam Master Server on its next cycle.
  *
  * Expected payload: { ip: "1.2.3.4", port: 27015 }
  */

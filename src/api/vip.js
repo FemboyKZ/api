@@ -3,7 +3,7 @@ const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
 const { adminAuth } = require("../utils/auth");
-const { isValidSteamID, convertToSteamID64 } = require("../utils/validators");
+const { resolveSteamID } = require("../utils/validators");
 const { VALID_TAG_COLORS } = require("../config/permissions");
 const {
   tierForTotal,
@@ -19,14 +19,9 @@ router.use(adminAuth);
 
 const HEX_COLOR_RE = /^#?[0-9a-fA-F]{6}$/;
 
-function resolveSteamID(input) {
-  return isValidSteamID(input) ? convertToSteamID64(input) : null;
-}
-
 /**
  * GET /vip/:steamid
- * Current VIP standing: lifetime EUR, tier, roles, gift tokens,
- * custom-perk eligibility, and any configured custom role/tag.
+ * Current VIP standing: lifetime EUR, tier, roles, gift tokens, custom-perk eligibility, and any configured custom role/tag.
  */
 router.get("/:steamid", async (req, res) => {
   try {

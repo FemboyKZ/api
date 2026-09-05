@@ -165,64 +165,54 @@ async function getMapsNeedingGlobalInfo(game) {
  * Runs periodically to keep map data fresh
  * Processes ALL maps that need updates (no limit)
  */
+/**
+ * Which upstream API serves each game's map metadata.
+ */
+const GAME_SOURCES = [
+  { game: "csgo", label: "CS:GO", fetch: fetchMapFromGOKZ },
+  { game: "counterstrike2", label: "CS2", fetch: fetchMapFromCS2KZ },
+];
+
+/**
+ * Refresh globalInfo for every stale map of one game.
+ * @param {{game: string, label: string, fetch: Function}} source
+ */
+async function updateGlobalInfoForGame({ game, label, fetch }) {
+  const maps = await getMapsNeedingGlobalInfo(game);
+
+  if (maps.length === 0) {
+    logger.info(`No ${label} maps need globalInfo updates`);
+    return;
+  }
+
+  logger.info(`Updating globalInfo for ${maps.length} ${label} maps...`);
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const mapName of maps) {
+    const globalInfo = await fetch(mapName);
+    if (globalInfo) {
+      await updateMapGlobalInfo(mapName, globalInfo, game);
+      successCount++;
+    } else {
+      failCount++;
+    }
+    // Small delay to avoid hammering the API
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  logger.info(
+    `Completed ${label} globalInfo update: ${successCount} successful, ${failCount} not found`,
+  );
+}
+
 async function updateMissingGlobalInfo() {
   logger.info("Starting map globalInfo update cycle...");
 
   try {
-    // Update CS:GO maps from GOKZ
-    const csgoMaps = await getMapsNeedingGlobalInfo("csgo");
-
-    if (csgoMaps.length > 0) {
-      logger.info(`Updating globalInfo for ${csgoMaps.length} CS:GO maps...`);
-
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const mapName of csgoMaps) {
-        const globalInfo = await fetchMapFromGOKZ(mapName);
-        if (globalInfo) {
-          await updateMapGlobalInfo(mapName, globalInfo, "csgo");
-          successCount++;
-        } else {
-          failCount++;
-        }
-        // Small delay to avoid hammering the API
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-
-      logger.info(
-        `Completed CS:GO globalInfo update: ${successCount} successful, ${failCount} not found`,
-      );
-    } else {
-      logger.info("No CS:GO maps need globalInfo updates");
-    }
-
-    // Update CS2 maps from CS2KZ
-    const cs2Maps = await getMapsNeedingGlobalInfo("counterstrike2");
-
-    if (cs2Maps.length > 0) {
-      logger.info(`Updating globalInfo for ${cs2Maps.length} CS2 maps...`);
-
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const mapName of cs2Maps) {
-        const globalInfo = await fetchMapFromCS2KZ(mapName);
-        if (globalInfo) {
-          await updateMapGlobalInfo(mapName, globalInfo, "counterstrike2");
-          successCount++;
-        } else {
-          failCount++;
-        }
-        // Small delay to avoid hammering the API
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-
-      logger.info(
-        `Completed CS2 globalInfo update: ${successCount} successful, ${failCount} not found`,
-      );
-    } else {
-      logger.info("No CS2 maps need globalInfo updates");
+    for (const source of GAME_SOURCES) {
+      await updateGlobalInfoForGame(source);
     }
 
     logger.info("Map globalInfo update cycle complete");
@@ -237,13 +227,13 @@ async function updateMissingGlobalInfo() {
  * @param {string} game - Game type ('csgo' or 'counterstrike2')
  */
 async function refreshMapGlobalInfo(mapName, game = "csgo") {
-  let globalInfo;
-
-  if (game === "csgo") {
-    globalInfo = await fetchMapFromGOKZ(mapName);
-  } else if (game === "counterstrike2") {
-    globalInfo = await fetchMapFromCS2KZ(mapName);
+  const source = GAME_SOURCES.find((s) => s.game === game);
+  if (!source) {
+    logger.warn(`No map metadata source for game "${game}"`);
+    return;
   }
+
+  const globalInfo = await source.fetch(mapName);
 
   if (globalInfo) {
     await updateMapGlobalInfo(mapName, globalInfo, game);

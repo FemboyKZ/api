@@ -2,11 +2,40 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const { isValidIP, sanitizeString } = require("../utils/validators");
+const { parsePlayersList, withoutPlayerIPs } = require("../utils/playersList");
 const logger = require("../utils/logger");
 const {
   cacheMiddleware,
   serversKeyGenerator,
 } = require("../utils/cacheMiddleware");
+
+/**
+ * Detail shape for GET /servers/:ip and /servers/:ip/:port, with player IPs stripped.
+ */
+function serverDetail(server) {
+  return {
+    ip: server.ip,
+    port: server.port,
+    game: server.game,
+    hostname: server.hostname,
+    version: server.version,
+    os: server.os,
+    secure: server.secure,
+    status: server.status,
+    map: server.map,
+    player_count: server.player_count,
+    maxplayers: server.maxplayers,
+    bot_count: server.bot_count,
+    players_list: withoutPlayerIPs(parsePlayersList(server)),
+    region: server.region,
+    domain: server.domain,
+    api_id: server.api_id,
+    kzt_id: server.kzt_id,
+    tickrate: server.tickrate,
+    last_update: server.last_update,
+    created_at: server.created_at,
+  };
+}
 
 /**
  * @swagger
@@ -202,28 +231,7 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
     logger.info(`Query returned ${rows.length} rows`);
 
     const servers = rows.map((server) => {
-      // Parse players_list - MariaDB JSON columns return as strings even with jsonStrings: false
-      let playersList = [];
-      if (server.players_list) {
-        try {
-          playersList =
-            typeof server.players_list === "string"
-              ? JSON.parse(server.players_list)
-              : server.players_list;
-
-          // Remove IP addresses from player data for privacy
-          playersList = playersList.map((player) => {
-            const { ip, ...playerWithoutIp } = player;
-            return playerWithoutIp;
-          });
-        } catch (e) {
-          logger.error(
-            `Failed to parse players_list for ${server.ip}:${server.port}`,
-            { error: e.message },
-          );
-          playersList = [];
-        }
-      }
+      const playersList = withoutPlayerIPs(parsePlayersList(server));
 
       return {
         ip: server.ip,
@@ -339,50 +347,7 @@ router.get("/:ip", async (req, res) => {
 
     // Process each server to remove player IPs from players_list
     const servers = rows.map((server) => {
-      let playersList = [];
-      if (server.players_list) {
-        try {
-          playersList =
-            typeof server.players_list === "string"
-              ? JSON.parse(server.players_list)
-              : server.players_list;
-
-          // Remove IP addresses from player data for privacy
-          playersList = playersList.map((player) => {
-            const { ip, ...playerWithoutIp } = player;
-            return playerWithoutIp;
-          });
-        } catch (e) {
-          logger.error(
-            `Failed to parse players_list for ${server.ip}:${server.port}`,
-            { error: e.message },
-          );
-          playersList = [];
-        }
-      }
-
-      return {
-        ip: server.ip,
-        port: server.port,
-        game: server.game,
-        hostname: server.hostname,
-        version: server.version,
-        os: server.os,
-        secure: server.secure,
-        status: server.status,
-        map: server.map,
-        player_count: server.player_count,
-        maxplayers: server.maxplayers,
-        bot_count: server.bot_count,
-        players_list: playersList,
-        region: server.region,
-        domain: server.domain,
-        api_id: server.api_id,
-        kzt_id: server.kzt_id,
-        tickrate: server.tickrate,
-        last_update: server.last_update,
-        created_at: server.created_at,
-      };
+      return serverDetail(server);
     });
 
     res.json({
@@ -487,51 +452,7 @@ router.get("/:ip/:port", async (req, res) => {
     }
 
     const server = rows[0];
-    let playersList = [];
-
-    if (server.players_list) {
-      try {
-        playersList =
-          typeof server.players_list === "string"
-            ? JSON.parse(server.players_list)
-            : server.players_list;
-
-        // Remove IP addresses from player data for privacy
-        playersList = playersList.map((player) => {
-          const { ip, ...playerWithoutIp } = player;
-          return playerWithoutIp;
-        });
-      } catch (e) {
-        logger.error(
-          `Failed to parse players_list for ${server.ip}:${server.port}`,
-          { error: e.message },
-        );
-        playersList = [];
-      }
-    }
-
-    const response = {
-      ip: server.ip,
-      port: server.port,
-      game: server.game,
-      hostname: server.hostname,
-      version: server.version,
-      os: server.os,
-      secure: server.secure,
-      status: server.status,
-      map: server.map,
-      player_count: server.player_count,
-      maxplayers: server.maxplayers,
-      bot_count: server.bot_count,
-      players_list: playersList,
-      region: server.region,
-      domain: server.domain,
-      api_id: server.api_id,
-      kzt_id: server.kzt_id,
-      tickrate: server.tickrate,
-      last_update: server.last_update,
-      created_at: server.created_at,
-    };
+    const response = serverDetail(server);
 
     res.json({
       total: 1,

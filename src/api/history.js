@@ -2,7 +2,12 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
-const { validatePagination, isValidIP } = require("../utils/validators");
+const {
+  validatePagination,
+  isValidIP,
+  isValidPort,
+  resolveSteamID,
+} = require("../utils/validators");
 const {
   cacheMiddleware,
   generateCacheKey,
@@ -94,6 +99,11 @@ router.get(
         return res.status(400).json({ error: "Invalid IP address" });
       }
 
+      const portNum = parseInt(port, 10);
+      if (!isValidPort(portNum)) {
+        return res.status(400).json({ error: "Invalid port number" });
+      }
+
       const hoursInt = Math.min(Math.max(parseInt(hours, 10) || 24, 1), 168); // Max 1 week
       const intervalInt = Math.max(parseInt(interval, 10) || 60, 30); // Min 30 seconds
 
@@ -112,11 +122,7 @@ router.get(
         ORDER BY recorded_at DESC
       `;
 
-      const [rows] = await pool.query(query, [
-        ip,
-        parseInt(port, 10),
-        hoursInt,
-      ]);
+      const [rows] = await pool.query(query, [ip, portNum, hoursInt]);
 
       // Downsample data based on interval
       const downsampled = [];
@@ -220,9 +226,18 @@ router.get(
   async (req, res) => {
     const startTime = Date.now();
     try {
-      const { steamid } = req.params;
+      // Sessions are stored as SteamID64
+      const steamid = resolveSteamID(req.params.steamid);
+      if (!steamid) {
+        return res.status(400).json({ error: "Invalid SteamID format" });
+      }
+
       const { page = 1, limit = 20 } = req.query;
-      const { limit: validLimit, offset } = validatePagination(page, limit);
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit);
 
       const [sessions] = await pool.query(
         `SELECT 
@@ -251,7 +266,7 @@ router.get(
         total: total,
         steamid: steamid,
         pagination: {
-          page: parseInt(page, 10),
+          page: validPage,
           limit: validLimit,
           totalPages: Math.ceil(total / validLimit),
         },
@@ -336,31 +351,38 @@ router.get(
     const startTime = Date.now();
     try {
       const { page = 1, limit = 20, server, map } = req.query;
-      const { limit: validLimit, offset } = validatePagination(page, limit);
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit);
 
-      let query = "SELECT * FROM map_history WHERE 1=1";
+      // The count must use the same filters as the page query.
+      let where = "WHERE 1=1";
       const params = [];
 
       if (server) {
         const [ip, port] = server.split(":");
         if (ip && port) {
-          query += " AND server_ip = ? AND server_port = ?";
+          where += " AND server_ip = ? AND server_port = ?";
           params.push(ip, parseInt(port, 10));
         }
       }
 
       if (map) {
-        query += " AND map_name LIKE ?";
+        where += " AND map_name LIKE ?";
         params.push(`%${map}%`);
       }
 
-      query += " ORDER BY started_at DESC LIMIT ? OFFSET ?";
-      params.push(validLimit, offset);
-
-      const [rows] = await pool.query(query, params);
+      const [rows] = await pool.query(
+        `SELECT * FROM map_history ${where}
+         ORDER BY started_at DESC LIMIT ? OFFSET ?`,
+        [...params, validLimit, offset],
+      );
 
       const [[{ total }]] = await pool.query(
-        "SELECT COUNT(*) as total FROM map_history",
+        `SELECT COUNT(*) as total FROM map_history ${where}`,
+        params,
       );
 
       logger.logRequest(req, res, Date.now() - startTime);
@@ -368,7 +390,7 @@ router.get(
       res.json({
         total: total,
         pagination: {
-          page: parseInt(page, 10),
+          page: validPage,
           limit: validLimit,
           totalPages: Math.ceil(total / validLimit),
         },

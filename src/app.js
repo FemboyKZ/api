@@ -30,15 +30,17 @@ const {
   adminAuth,
   shouldSkipRateLimit,
   apiKeyMiddleware,
+  TRUST_PROXY,
+  TRUST_PROXY_HOPS,
 } = require("./utils/auth");
 
-// Trust proxy - only when binding to localhost (behind reverse proxy like Apache, Nginx, etc.)
-// This allows Express to read the real client IP from X-Forwarded-For header
-const isUsingProxy =
-  process.env.HOST === "127.0.0.1" || process.env.HOST === "localhost";
-if (isUsingProxy) {
-  app.set("trust proxy", true);
-  logger.info("Trust proxy enabled - running behind reverse proxy");
+// Hop count rather than `true`, which would trust client-prepended X-Forwarded-For entries.
+// See TRUST_PROXY_HOPS in utils/auth.js.
+if (TRUST_PROXY) {
+  app.set("trust proxy", TRUST_PROXY_HOPS);
+  logger.info(
+    `Trust proxy enabled - running behind ${TRUST_PROXY_HOPS} reverse proxy hop(s)`,
+  );
 }
 
 // CORS configuration

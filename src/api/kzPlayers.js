@@ -3,13 +3,86 @@ const router = express.Router();
 const { getKzPool } = require("../db/kzRecords");
 const {
   validatePagination,
+  paginationMeta,
   sanitizeString,
   isValidSteamID,
   convertToSteamID64,
+  validateSortField,
+  validateSortOrder,
+  defaultSortOrder,
 } = require("../utils/validators");
-const { getPlayerPartitionHint } = require("../utils/kzHelpers");
+const {
+  toCountQuery,
+  getPlayerPartitionHint,
+  computeCompletionStats,
+} = require("../utils/kzHelpers");
 const logger = require("../utils/logger");
 const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
+
+/**
+ * The identity fields returned alongside a player's statistics.
+ */
+function playerIdentity(player) {
+  return {
+    steamid64: player.steamid64,
+    steam_id: player.steam_id,
+    player_name: player.player_name,
+    is_banned: player.is_banned,
+    created_at: player.created_at,
+    updated_at: player.updated_at,
+  };
+}
+
+/**
+ * Per-mode record counts, points and times for one player.
+ */
+async function fetchModeBreakdown(pool, steamid64) {
+  const [rows] = await pool.query(
+    `
+    SELECT 
+      mode,
+      COUNT(*) as records,
+      SUM(points) as points,
+      AVG(time) as avg_time,
+      MIN(time) as best_time
+    FROM kz_records_partitioned
+    WHERE steamid64 = ?
+    GROUP BY mode
+  `,
+    [steamid64],
+  );
+  return rows;
+}
+
+/**
+ * A player's most recent records. Restricted to the recent partitions.
+ */
+async function fetchRecentRecords(pool, steamid64, limit = 10) {
+  const currentYear = new Date().getFullYear();
+  const [rows] = await pool.query(
+    `
+    SELECT 
+      r.id,
+      r.original_id,
+      m.map_name,
+      r.mode,
+      r.stage,
+      r.time,
+      r.teleports,
+      r.points,
+      s.server_name,
+      r.created_on
+    FROM kz_records_partitioned PARTITION (p${currentYear}, p${currentYear - 1}, pfuture) r
+    INNER JOIN kz_maps m ON r.map_id = m.id
+    LEFT JOIN kz_servers s ON r.server_id = s.id
+    WHERE r.steamid64 = ?
+    ORDER BY r.created_on DESC
+    LIMIT ?
+  `,
+    [steamid64, limit],
+  );
+  return rows;
+}
 
 /**
  * @swagger
@@ -71,11 +144,15 @@ const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
 router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
   try {
     const { page, limit, name, sort, order, banned, active_since } = req.query;
-    const { limit: validLimit, offset } = validatePagination(page, limit, 100);
+    const {
+      page: validPage,
+      limit: validLimit,
+      offset,
+    } = validatePagination(page, limit, 100);
 
     const validSortFields = ["records", "points", "name"];
-    const sortField = validSortFields.includes(sort) ? sort : "records";
-    const sortOrder = order === "asc" ? "ASC" : "DESC";
+    const sortField = validateSortField(sort, validSortFields, "records");
+    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
     const pool = getKzPool();
 
@@ -176,7 +253,6 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       }
     }
 
-    // Get total count
     let countQuery;
     const countParams = [];
 
@@ -222,12 +298,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
     res.json({
       data: players,
-      pagination: {
-        page: parseInt(page, 10) || 1,
-        limit: validLimit,
-        total: total,
-        totalPages: Math.ceil(total / validLimit),
-      },
+      pagination: paginationMeta(validPage, validLimit, total),
     });
   } catch (e) {
     logger.error(`Failed to fetch players: ${e.message}`);
@@ -345,56 +416,11 @@ router.get(
           );
 
           const statistics = { ...cachedStats[0], ...realtimeStats[0] };
-
-          // Get mode breakdown from recent partitions for accuracy
-          const [modeStats] = await pool.query(
-            `
-            SELECT 
-              mode,
-              COUNT(*) as records,
-              SUM(points) as points,
-              AVG(time) as avg_time,
-              MIN(time) as best_time
-            FROM kz_records_partitioned
-            WHERE steamid64 = ?
-            GROUP BY mode
-          `,
-            [steamid64],
-          );
-
-          // Get recent records from recent partitions only
-          const [recentRecords] = await pool.query(
-            `
-            SELECT 
-              r.id,
-              r.original_id,
-              m.map_name,
-              r.mode,
-              r.stage,
-              r.time,
-              r.teleports,
-              r.points,
-              s.server_name,
-              r.created_on
-            FROM kz_records_partitioned PARTITION (p${currentYear}, p${currentYear - 1}, pfuture) r
-            INNER JOIN kz_maps m ON r.map_id = m.id
-            LEFT JOIN kz_servers s ON r.server_id = s.id
-            WHERE r.steamid64 = ?
-            ORDER BY r.created_on DESC
-            LIMIT 10
-          `,
-            [steamid64],
-          );
+          const modeStats = await fetchModeBreakdown(pool, steamid64);
+          const recentRecords = await fetchRecentRecords(pool, steamid64);
 
           return res.json({
-            player: {
-              steamid64: player.steamid64,
-              steam_id: player.steam_id,
-              player_name: player.player_name,
-              is_banned: player.is_banned,
-              created_at: player.created_at,
-              updated_at: player.updated_at,
-            },
+            player: playerIdentity(player),
             statistics: {
               ...statistics,
               mode_breakdown: modeStats,
@@ -460,56 +486,11 @@ router.get(
         worldRecords = wrStats[0].world_records;
       }
 
-      // Get mode breakdown
-      const [modeStats] = await pool.query(
-        `
-        SELECT 
-          mode,
-          COUNT(*) as records,
-          SUM(points) as points,
-          AVG(time) as avg_time,
-          MIN(time) as best_time
-        FROM kz_records_partitioned
-        WHERE steamid64 = ?
-        GROUP BY mode
-      `,
-        [steamid64],
-      );
-
-      // Get recent records - only scan recent partitions
-      const currentYear = new Date().getFullYear();
-      const [recentRecords] = await pool.query(
-        `
-        SELECT 
-          r.id,
-          r.original_id,
-          m.map_name,
-          r.mode,
-          r.stage,
-          r.time,
-          r.teleports,
-          r.points,
-          s.server_name,
-          r.created_on
-        FROM kz_records_partitioned PARTITION (p${currentYear}, p${currentYear - 1}, pfuture) r
-        INNER JOIN kz_maps m ON r.map_id = m.id
-        LEFT JOIN kz_servers s ON r.server_id = s.id
-        WHERE r.steamid64 = ?
-        ORDER BY r.created_on DESC
-        LIMIT 10
-      `,
-        [steamid64],
-      );
+      const modeStats = await fetchModeBreakdown(pool, steamid64);
+      const recentRecords = await fetchRecentRecords(pool, steamid64);
 
       res.json({
-        player: {
-          steamid64: player.steamid64,
-          steam_id: player.steam_id,
-          player_name: player.player_name,
-          is_banned: player.is_banned,
-          created_at: player.created_at,
-          updated_at: player.updated_at,
-        },
+        player: playerIdentity(player),
         statistics: {
           ...stats[0],
           world_records: worldRecords,
@@ -601,15 +582,15 @@ router.get(
       }
 
       const steamid64 = convertToSteamID64(steamid);
-      const { limit: validLimit, offset } = validatePagination(
-        page,
-        limit,
-        100,
-      );
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit, 100);
 
       const validSortFields = ["time", "created_on", "points"];
-      const sortField = validSortFields.includes(sort) ? sort : "created_on";
-      const sortOrder = order === "asc" ? "ASC" : "DESC";
+      const sortField = validateSortField(sort, validSortFields, "created_on");
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
       // Determine partition hint based on year filter ONLY
       let partitionHint = "";
@@ -654,16 +635,12 @@ router.get(
         params.push(parseInt(year, 10));
       }
 
-      // Count total
       const pool = getKzPool();
       let total;
 
       // Always count from live data - kz_player_statistics may be stale
       {
-        const countQuery = query.replace(
-          /SELECT.*FROM/s,
-          "SELECT COUNT(*) as total FROM",
-        );
+        const countQuery = toCountQuery(query);
         const [countResult] = await pool.query(countQuery, params);
         total = countResult[0].total;
       }
@@ -676,12 +653,7 @@ router.get(
 
       res.json({
         data: records,
-        pagination: {
-          page: parseInt(page, 10) || 1,
-          limit: validLimit,
-          total: total,
-          totalPages: Math.ceil(total / validLimit),
-        },
+        pagination: paginationMeta(validPage, validLimit, total),
       });
     } catch (e) {
       logger.error(
@@ -1059,48 +1031,8 @@ router.get(
       }
 
       query += " ORDER BY m.map_name ASC";
-
       const [maps] = await pool.query(query, params);
-
-      // Calculate stats
-      const stats = {
-        total_maps: 0,
-        completed_pro: 0,
-        completed_tp_only: 0,
-        not_completed: 0,
-        by_difficulty: {},
-      };
-
-      for (const map of maps) {
-        stats.total_maps++;
-        if (map.pro_time !== null) {
-          stats.completed_pro++;
-        } else if (map.tp_time !== null) {
-          stats.completed_tp_only++;
-        } else {
-          stats.not_completed++;
-        }
-
-        const tier = map.difficulty || 0;
-        if (!stats.by_difficulty[tier]) {
-          stats.by_difficulty[tier] = {
-            total: 0,
-            completed_pro: 0,
-            completed_tp: 0,
-            completed_any: 0,
-          };
-        }
-        stats.by_difficulty[tier].total++;
-        if (map.pro_time !== null) {
-          stats.by_difficulty[tier].completed_pro++;
-        }
-        if (map.tp_time !== null) {
-          stats.by_difficulty[tier].completed_tp++;
-        }
-        if (map.pro_time !== null || map.tp_time !== null) {
-          stats.by_difficulty[tier].completed_any++;
-        }
-      }
+      const stats = computeCompletionStats(maps);
 
       res.json({
         steamid64,
@@ -1292,17 +1224,36 @@ router.post("/:steamid/refresh-pbs", async (req, res) => {
 });
 
 // Helper function to check if a table exists
+// information_schema lookups are slow and this is called on every request, so remember the answer.
+// Missing tables are re-probed periodically so a migration lands without a restart.
+const tableExistsCache = new Map();
+const MISSING_TABLE_RECHECK_MS = 60_000;
+
 async function tableExists(tableName) {
+  const cached = tableExistsCache.get(tableName);
+  if (
+    cached &&
+    (cached.exists || Date.now() - cached.checkedAt < MISSING_TABLE_RECHECK_MS)
+  ) {
+    return cached.exists;
+  }
+
   try {
     const pool = getKzPool();
     const [result] = await pool.query(
       "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?",
       [tableName],
     );
-    return result[0].count > 0;
+    const exists = result[0].count > 0;
+    tableExistsCache.set(tableName, { exists, checkedAt: Date.now() });
+    return exists;
   } catch (e) {
+    // Not cached: the next request should retry.
     return false;
   }
 }
 
 module.exports = router;
+// Exported for tests.
+module.exports.tableExists = tableExists;
+module.exports.resetTableExistsCache = () => tableExistsCache.clear();

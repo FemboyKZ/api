@@ -19,9 +19,8 @@ const dbConfig = {
   queueLimit: 100, // Limit queue to fail fast vs. waiting indefinitely
 };
 
-// One pool for the lifetime of the process.
-// It is created on require (callers do `const pool = require("../db")`),
-// and initDatabase()/closeDatabase() operate on this same instance rather than replacing it.
+// One pool for the process. Created on require, since callers do `const pool = require("../db")`;
+// init/close operate on this same instance.
 const pool = createPool(dbConfig);
 
 /**
