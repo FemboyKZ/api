@@ -296,8 +296,8 @@ router.post("/", async (req, res) => {
     await deleteCache("cache:maps:*");
 
     res.json({ ok: true });
-  } catch (e) {
-    logger.error(`Extension status ingest failed: ${e.message}`);
+  } catch (error) {
+    logger.error(`Extension status ingest failed: ${error.message}`);
     res.status(500).json({ error: "Failed to process server status" });
   }
 });
@@ -325,8 +325,8 @@ router.post("/hibernate", async (req, res) => {
     );
 
     res.json({ ok: true });
-  } catch (e) {
-    logger.error(`Hibernate signal failed: ${e.message}`);
+  } catch (error) {
+    logger.error(`Hibernate signal failed: ${error.message}`);
     res.status(500).json({ error: "Failed to process hibernate signal" });
   }
 });

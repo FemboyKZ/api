@@ -55,16 +55,16 @@ const { upsertBansWithChangeTracking } = require("./kzBanChanges");
 // Configuration
 const GOKZ_API_URL =
   process.env.GOKZ_API_URL || "https://kztimerglobal.com/api/v2";
-const CONCURRENCY = parseInt(process.env.KZ_SCRAPER_CONCURRENCY) || 5;
+const CONCURRENCY = parseInt(process.env.KZ_SCRAPER_CONCURRENCY, 10) || 5;
 const RETRY_ATTEMPTS = 3;
 const RETRY_DELAY = 2000; // Initial retry delay in ms (exponential backoff)
-const REQUEST_DELAY = parseInt(process.env.KZ_SCRAPER_REQUEST_DELAY) || 100;
+const REQUEST_DELAY = parseInt(process.env.KZ_SCRAPER_REQUEST_DELAY, 10) || 100;
 const STATE_FILE = path.join(__dirname, "../../logs/kz-scraper-state.json");
 const REQUEST_TIMEOUT = 10000;
 const BANS_CHECK_INTERVAL =
-  parseInt(process.env.KZ_SCRAPER_BANS_INTERVAL) || 300000; // 5 minutes
+  parseInt(process.env.KZ_SCRAPER_BANS_INTERVAL, 10) || 300000; // 5 minutes
 const BANS_FULL_SWEEP_INTERVAL =
-  parseInt(process.env.KZ_SCRAPER_BANS_FULL_INTERVAL) || 21600000; // 6 hours
+  parseInt(process.env.KZ_SCRAPER_BANS_FULL_INTERVAL, 10) || 21600000; // 6 hours
 const BANS_FULL_SWEEP_ENABLED =
   process.env.KZ_SCRAPER_BANS_FULL_ENABLED !== "false"; // Default true
 const BANS_FULL_SWEEP_PAGE_SIZE = 1000;
@@ -238,7 +238,7 @@ function convertTimestamp(isoString) {
     .replace(/\.\d+Z?$/, "")
     .substring(0, 19);
 
-  const year = parseInt(timestamp.substring(0, 4));
+  const year = parseInt(timestamp.substring(0, 4), 10);
   if (year < 1970) {
     return "1970-01-01 00:00:01";
   }
@@ -326,7 +326,7 @@ async function getOrCreatePlayer(connection, record) {
 async function getOrCreateMap(connection, record) {
   const mapId =
     record.map_id !== undefined && record.map_id !== null
-      ? parseInt(record.map_id)
+      ? parseInt(record.map_id, 10)
       : -1;
   const mapName = sanitizeString(record.map_name, 255, "unknown_map");
 
@@ -361,7 +361,7 @@ async function getOrCreateMap(connection, record) {
 async function getOrCreateServer(connection, record) {
   const serverId =
     record.server_id !== undefined && record.server_id !== null
-      ? parseInt(record.server_id)
+      ? parseInt(record.server_id, 10)
       : null;
 
   if (serverId === null || isNaN(serverId)) {
@@ -479,7 +479,7 @@ async function processRecord(connection, record) {
   const mode = sanitizeString(record.mode, 32, "kz_timer");
   const stage =
     record.stage !== undefined && record.stage !== null
-      ? parseInt(record.stage)
+      ? parseInt(record.stage, 10)
       : 0;
   const time =
     record.time !== undefined && record.time !== null
@@ -487,27 +487,27 @@ async function processRecord(connection, record) {
       : 0;
   const teleports =
     record.teleports !== undefined && record.teleports !== null
-      ? parseInt(record.teleports)
+      ? parseInt(record.teleports, 10)
       : 0;
   const points =
     record.points !== undefined && record.points !== null
-      ? parseInt(record.points)
+      ? parseInt(record.points, 10)
       : 0;
   const tickrate =
     record.tickrate !== undefined && record.tickrate !== null
-      ? parseInt(record.tickrate)
+      ? parseInt(record.tickrate, 10)
       : 128;
   const recordFilterId =
     record.record_filter_id !== undefined && record.record_filter_id !== null
-      ? parseInt(record.record_filter_id)
+      ? parseInt(record.record_filter_id, 10)
       : 0;
   const replayId =
     record.replay_id !== undefined && record.replay_id !== null
-      ? parseInt(record.replay_id)
+      ? parseInt(record.replay_id, 10)
       : 0;
   const updatedBy =
     record.updated_by !== undefined && record.updated_by !== null
-      ? parseInt(record.updated_by)
+      ? parseInt(record.updated_by, 10)
       : 0;
 
   // Insert record (use INSERT IGNORE to skip duplicates silently)

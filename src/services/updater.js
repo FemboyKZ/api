@@ -311,9 +311,9 @@ async function runUpdateCycle() {
           });
         }
       }
-    } catch (e) {
+    } catch (error) {
       logger.error(
-        `Failed to update server ${server.ip}:${server.port} - ${e.message}`,
+        `Failed to update server ${server.ip}:${server.port} - ${error.message}`,
       );
     }
   });

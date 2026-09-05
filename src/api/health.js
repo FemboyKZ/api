@@ -20,13 +20,13 @@ router.get("/", async (req, res) => {
       websocket: wsStats.connected ? "active" : "inactive",
       websocketClients: wsStats.clients,
     });
-  } catch (e) {
-    logger.error(`Health check failed: ${e.message}`);
+  } catch (error) {
+    logger.error(`Health check failed: ${error.message}`);
     res.status(503).json({
       status: "error",
       timestamp: new Date().toISOString(),
       database: "disconnected",
-      error: e.message,
+      error: error.message,
     });
   }
 });
@@ -71,8 +71,8 @@ router.get("/stats", async (req, res) => {
       },
       uptime: Math.floor(uptime),
     });
-  } catch (e) {
-    logger.error(`Failed to fetch stats: ${e.message}`);
+  } catch (error) {
+    logger.error(`Failed to fetch stats: ${error.message}`);
     res.status(500).json({ error: "Failed to fetch statistics" });
   }
 });

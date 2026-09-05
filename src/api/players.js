@@ -318,8 +318,8 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
       data: players,
       pagination: paginationMeta(validPage, validLimit, total),
     });
-  } catch (e) {
-    logger.error(`Failed to fetch players: ${e.message}`);
+  } catch (error) {
+    logger.error(`Failed to fetch players: ${error.message}`);
     res.status(500).json({ error: "Failed to fetch players" });
   }
 });
@@ -496,8 +496,8 @@ router.get(
         total: onlinePlayers.length,
         data: onlinePlayers,
       });
-    } catch (e) {
-      logger.error(`Failed to fetch online players: ${e.message}`);
+    } catch (error) {
+      logger.error(`Failed to fetch online players: ${error.message}`);
       res.status(500).json({ error: "Failed to fetch online players" });
     }
   },
@@ -697,8 +697,8 @@ router.get("/:steamid", async (req, res) => {
       total: 1,
       data: [response],
     });
-  } catch (e) {
-    logger.error(`Player fetch error for ${req.params.steamid}: ${e.message}`);
+  } catch (error) {
+    logger.error(`Player fetch error for ${req.params.steamid}: ${error.message}`);
     res.status(500).json({ error: "Player fetch error" });
   }
 });

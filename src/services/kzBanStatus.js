@@ -30,7 +30,7 @@ const { getKzPool } = require("../db/kzRecords");
 
 // Configuration
 const CLEANUP_INTERVAL =
-  parseInt(process.env.KZ_BAN_CLEANUP_INTERVAL) || 3600000; // 1 hour
+  parseInt(process.env.KZ_BAN_CLEANUP_INTERVAL, 10) || 3600000; // 1 hour
 const CLEANUP_ENABLED = process.env.KZ_BAN_CLEANUP_ENABLED !== "false"; // Default true
 const DEADLOCK_MAX_RETRIES = 5; // Increased for lock wait timeouts
 const DEADLOCK_RETRY_DELAY = 500; // ms - base delay, will use exponential backoff

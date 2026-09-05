@@ -45,7 +45,7 @@ async function startServer() {
     logger.info("Initializing KZ Records database connection...");
     await initKzDatabase();
 
-    // Step 2b: Initialize FKZ Local Records database
+    // Step 2c: Initialize FKZ Local Records database
     logger.info("Initializing FKZ Local Records database connections...");
     await initAllKzLocalDatabases();
 
@@ -94,9 +94,9 @@ async function startServer() {
       // Step 11: Start KZ records scraper (runs every 3.75s for 80% rate limit utilization)
       if (process.env.KZ_SCRAPER_ENABLED !== "false") {
         const scraperInterval =
-          parseInt(process.env.KZ_SCRAPER_INTERVAL) || 3750; // 3.75 seconds for 80% rate limit (400 req/5min)
+          parseInt(process.env.KZ_SCRAPER_INTERVAL, 10) || 3750; // 3.75 seconds for 80% rate limit (400 req/5min)
         const scraperIdleInterval =
-          parseInt(process.env.KZ_SCRAPER_IDLE_INTERVAL) || 30000; // 30 seconds when caught up
+          parseInt(process.env.KZ_SCRAPER_IDLE_INTERVAL, 10) || 30000; // 30 seconds when caught up
         startScraperJob(scraperInterval, scraperIdleInterval);
         logger.info(
           `KZ Records scraper enabled (normal: ${scraperInterval}ms, idle: ${scraperIdleInterval}ms)`,
@@ -104,7 +104,7 @@ async function startServer() {
 
         // Step 12: Start ban status cleanup job (runs every hour by default)
         const banCleanupInterval =
-          parseInt(process.env.KZ_BAN_CLEANUP_INTERVAL) || 3600000; // 1 hour
+          parseInt(process.env.KZ_BAN_CLEANUP_INTERVAL, 10) || 3600000; // 1 hour
         startBanCleanupJob(banCleanupInterval);
         logger.info(
           `KZ Ban cleanup job enabled (interval: ${banCleanupInterval / 1000}s)`,
@@ -112,7 +112,7 @@ async function startServer() {
 
         // Step 13: Start KZ statistics refresh job (runs every 6 hours by default)
         const statsInterval =
-          parseInt(process.env.KZ_STATS_INTERVAL) || 6 * 60 * 60 * 1000; // 6 hours
+          parseInt(process.env.KZ_STATS_INTERVAL, 10) || 6 * 60 * 60 * 1000; // 6 hours
         startStatisticsJob(statsInterval);
         logger.info(
           `KZ Statistics refresh job enabled (interval: ${statsInterval / 1000 / 60} minutes)`,

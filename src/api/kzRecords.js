@@ -297,8 +297,8 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
       data: records,
       pagination: paginationMeta(validPage, validLimit, total),
     });
-  } catch (e) {
-    logger.error(`Failed to fetch KZ records: ${e.message}`);
+  } catch (error) {
+    logger.error(`Failed to fetch KZ records: ${error.message}`);
     logger.error(
       `Query params: ${JSON.stringify({ page, limit, sort, order, map, map_id, player, mode, stage, server, teleports, date_from, date_to, include_banned })}`,
     );
@@ -464,9 +464,9 @@ router.get(
         data: leaderboard,
         total: leaderboard.length,
       });
-    } catch (e) {
+    } catch (error) {
       logger.error(
-        `Failed to fetch leaderboard for ${req.params.mapname}: ${e.message}`,
+        `Failed to fetch leaderboard for ${req.params.mapname}: ${error.message}`,
       );
       res.status(500).json({ error: "Failed to fetch leaderboard" });
     }
@@ -569,8 +569,8 @@ router.get("/recent", cacheMiddleware(15, kzKeyGenerator), async (req, res) => {
       data: records,
       total: records.length,
     });
-  } catch (e) {
-    logger.error(`Failed to fetch recent KZ records: ${e.message}`);
+  } catch (error) {
+    logger.error(`Failed to fetch recent KZ records: ${error.message}`);
     res.status(500).json({ error: "Failed to fetch recent records" });
   }
 });
@@ -683,8 +683,8 @@ router.get(
         data: records,
         total: records.length,
       });
-    } catch (e) {
-      logger.error(`Failed to fetch world records: ${e.message}`);
+    } catch (error) {
+      logger.error(`Failed to fetch world records: ${error.message}`);
       res.status(500).json({ error: "Failed to fetch world records" });
     }
   },
@@ -769,8 +769,8 @@ router.get("/:id", cacheMiddleware(1800, kzKeyGenerator), async (req, res) => {
     res.json({
       data: records[0],
     });
-  } catch (e) {
-    logger.error(`Failed to fetch KZ record ${req.params.id}: ${e.message}`);
+  } catch (error) {
+    logger.error(`Failed to fetch KZ record ${req.params.id}: ${error.message}`);
     res.status(500).json({ error: "Failed to fetch KZ record" });
   }
 });

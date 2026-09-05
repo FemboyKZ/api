@@ -18,6 +18,11 @@ const {
 } = require("../utils/kzHelpers");
 const logger = require("../utils/logger");
 const { cacheMiddleware, kzKeyGenerator } = require("../utils/cacheMiddleware");
+const {
+  getPlayerPBs,
+  getPlayerMapCompletions,
+  refreshPlayerPBs,
+} = require("../services/playerPBsSync");
 
 /**
  * The identity fields returned alongside a player's statistics.
@@ -300,8 +305,8 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       data: players,
       pagination: paginationMeta(validPage, validLimit, total),
     });
-  } catch (e) {
-    logger.error(`Failed to fetch players: ${e.message}`);
+  } catch (error) {
+    logger.error(`Failed to fetch players: ${error.message}`);
     logger.error(
       `Query params: ${JSON.stringify({ page, limit, name, sort, order, banned, active_since })}`,
     );
@@ -498,9 +503,9 @@ router.get(
         },
         recent_records: recentRecords,
       });
-    } catch (e) {
+    } catch (error) {
       logger.error(
-        `Failed to fetch KZ player ${req.params.steamid}: ${e.message}`,
+        `Failed to fetch KZ player ${req.params.steamid}: ${error.message}`,
       );
       res.status(500).json({ error: "Failed to fetch KZ player" });
     }
@@ -655,9 +660,9 @@ router.get(
         data: records,
         pagination: paginationMeta(validPage, validLimit, total),
       });
-    } catch (e) {
+    } catch (error) {
       logger.error(
-        `Failed to fetch records for player ${req.params.steamid}: ${e.message}`,
+        `Failed to fetch records for player ${req.params.steamid}: ${error.message}`,
       );
       res.status(500).json({ error: "Failed to fetch player records" });
     }
@@ -728,7 +733,6 @@ router.get(
 
       if (pbsTableExists) {
         // Use cached PBs
-        const { getPlayerPBs } = require("../services/playerPBsSync");
         const pbs = await getPlayerPBs(steamid64, {
           mode: sanitizeString(mode, 32),
           stage: parseInt(stage, 10) || 0,
@@ -834,9 +838,9 @@ router.get(
         total: pbs.length,
         source: "live",
       });
-    } catch (e) {
+    } catch (error) {
       logger.error(
-        `Failed to fetch PBs for player ${req.params.steamid}: ${e.message}`,
+        `Failed to fetch PBs for player ${req.params.steamid}: ${error.message}`,
       );
       res.status(500).json({ error: "Failed to fetch player PBs" });
     }
@@ -929,9 +933,6 @@ router.get(
       const pbsTableExists = await tableExists("kz_player_map_pbs");
 
       if (pbsTableExists) {
-        const {
-          getPlayerMapCompletions,
-        } = require("../services/playerPBsSync");
         const result = await getPlayerMapCompletions(steamid64, {
           mode: sanitizeString(mode, 32),
           stage: parseInt(stage, 10) || 0,
@@ -1041,9 +1042,9 @@ router.get(
         data: maps,
         stats,
       });
-    } catch (e) {
+    } catch (error) {
       logger.error(
-        `Failed to fetch completions for player ${req.params.steamid}: ${e.message}`,
+        `Failed to fetch completions for player ${req.params.steamid}: ${error.message}`,
       );
       res.status(500).json({ error: "Failed to fetch player completions" });
     }
@@ -1206,7 +1207,6 @@ router.post("/:steamid/refresh-pbs", async (req, res) => {
     }
 
     // Refresh PBs
-    const { refreshPlayerPBs } = require("../services/playerPBsSync");
     const pbCount = await refreshPlayerPBs(playerId);
 
     res.json({
@@ -1215,9 +1215,9 @@ router.post("/:steamid/refresh-pbs", async (req, res) => {
       player_name: playerName,
       pbs_count: pbCount,
     });
-  } catch (e) {
+  } catch (error) {
     logger.error(
-      `Failed to refresh PBs for player ${req.params.steamid}: ${e.message}`,
+      `Failed to refresh PBs for player ${req.params.steamid}: ${error.message}`,
     );
     res.status(500).json({ error: "Failed to refresh player PBs" });
   }
@@ -1247,7 +1247,7 @@ async function tableExists(tableName) {
     const exists = result[0].count > 0;
     tableExistsCache.set(tableName, { exists, checkedAt: Date.now() });
     return exists;
-  } catch (e) {
+  } catch (error) {
     // Not cached: the next request should retry.
     return false;
   }

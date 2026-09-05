@@ -155,8 +155,8 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       data: servers,
       pagination: paginationMeta(validPage, validLimit, total),
     });
-  } catch (e) {
-    logger.error(`Failed to fetch KZ servers: ${e.message}`);
+  } catch (error) {
+    logger.error(`Failed to fetch KZ servers: ${error.message}`);
     res.status(500).json({ error: "Failed to fetch KZ servers" });
   }
 });
@@ -218,8 +218,8 @@ router.get(
         data: rankedServers,
         total: rankedServers.length,
       });
-    } catch (e) {
-      logger.error(`Failed to fetch top servers: ${e.message}`);
+    } catch (error) {
+      logger.error(`Failed to fetch top servers: ${error.message}`);
       res.status(500).json({ error: "Failed to fetch top servers" });
     }
   },
@@ -354,8 +354,8 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       },
       recent_records: recentRecords,
     });
-  } catch (e) {
-    logger.error(`Failed to fetch KZ server ${req.params.id}: ${e.message}`);
+  } catch (error) {
+    logger.error(`Failed to fetch KZ server ${req.params.id}: ${error.message}`);
     res.status(500).json({ error: "Failed to fetch KZ server" });
   }
 });
@@ -494,9 +494,9 @@ router.get(
         data: records,
         pagination: paginationMeta(validPage, validLimit, total),
       });
-    } catch (e) {
+    } catch (error) {
       logger.error(
-        `Failed to fetch records for server ${req.params.id}: ${e.message}`,
+        `Failed to fetch records for server ${req.params.id}: ${error.message}`,
       );
       res.status(500).json({ error: "Failed to fetch server records" });
     }

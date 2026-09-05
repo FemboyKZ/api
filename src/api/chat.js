@@ -96,8 +96,8 @@ router.get("/stream", (req, res) => {
       if (result.aborted) return; // client went away, nothing to send
       res.json({ cursor: result.cursor, messages: result.messages });
     })
-    .catch((e) => {
-      logger.error(`Cross-chat stream error: ${e.message}`);
+    .catch((error) => {
+      logger.error(`Cross-chat stream error: ${error.message}`);
       if (!res.headersSent) res.status(500).json({ error: "Stream error" });
     });
 });
@@ -118,8 +118,8 @@ router.get("/history", async (req, res) => {
       [limit],
     );
     res.json({ total: rows.length, data: rows });
-  } catch (e) {
-    logger.error(`Cross-chat history error: ${e.message}`);
+  } catch (error) {
+    logger.error(`Cross-chat history error: ${error.message}`);
     res.status(500).json({ error: "Failed to fetch chat history" });
   }
 });

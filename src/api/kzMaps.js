@@ -10,6 +10,7 @@ const {
   defaultSortOrder,
 } = require("../utils/validators");
 const { toCountQuery } = require("../utils/kzHelpers");
+const { refreshMapWorldRecord } = require("../services/wrSync");
 
 /**
  * WHERE conditions shared by the map listing endpoints.
@@ -181,11 +182,11 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       data: maps,
       pagination: paginationMeta(validPage, validLimit, total),
     });
-  } catch (e) {
-    logger.error(`Failed to fetch KZ maps: ${e.message}`, { stack: e.stack });
+  } catch (error) {
+    logger.error(`Failed to fetch KZ maps: ${error.message}`, { stack: error.stack });
 
     // Provide more specific error messages
-    if (e.code === "ECONNREFUSED") {
+    if (error.code === "ECONNREFUSED") {
       return res.status(503).json({
         error: "Database connection refused",
         message:
@@ -193,7 +194,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       });
     }
 
-    if (e.code === "ETIMEDOUT" || e.code === "PROTOCOL_CONNECTION_LOST") {
+    if (error.code === "ETIMEDOUT" || error.code === "PROTOCOL_CONNECTION_LOST") {
       return res.status(504).json({
         error: "Database connection timeout",
         message:
@@ -203,7 +204,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
 
     res
       .status(500)
-      .json({ error: "Failed to fetch KZ maps", details: e.message });
+      .json({ error: "Failed to fetch KZ maps", details: error.message });
   }
 });
 
@@ -290,8 +291,8 @@ router.get(
         data: maps,
         total: maps.length,
       });
-    } catch (e) {
-      logger.error(`Failed to fetch maps by difficulty: ${e.message}`);
+    } catch (error) {
+      logger.error(`Failed to fetch maps by difficulty: ${error.message}`);
       res.status(500).json({ error: "Failed to fetch maps by difficulty" });
     }
   },
@@ -646,12 +647,12 @@ router.get(
         data: enrichedMaps,
         pagination: paginationMeta(validPage, validLimit, total),
       });
-    } catch (e) {
-      logger.error(`Failed to fetch enriched KZ maps: ${e.message}`, {
-        stack: e.stack,
+    } catch (error) {
+      logger.error(`Failed to fetch enriched KZ maps: ${error.message}`, {
+        stack: error.stack,
       });
 
-      if (e.code === "ECONNREFUSED") {
+      if (error.code === "ECONNREFUSED") {
         return res.status(503).json({
           error: "Database connection refused",
           message: "Cannot connect to KZ records database.",
@@ -660,7 +661,7 @@ router.get(
 
       res.status(500).json({
         error: "Failed to fetch enriched KZ maps",
-        details: e.message,
+        details: error.message,
       });
     }
   },
@@ -753,8 +754,8 @@ router.get(
           allowed_modes: m.allowed_modes ? m.allowed_modes.split(",") : [],
         })),
       });
-    } catch (e) {
-      logger.error(`Failed to get map mode filters: ${e.message}`);
+    } catch (error) {
+      logger.error(`Failed to get map mode filters: ${error.message}`);
       res.status(500).json({ error: "Failed to fetch map mode filters" });
     }
   },
@@ -853,9 +854,9 @@ router.get(
         restricted_only: restrictedOnly,
         maps,
       });
-    } catch (e) {
+    } catch (error) {
       logger.error(
-        `Failed to get maps for mode ${req.params.mode}: ${e.message}`,
+        `Failed to get maps for mode ${req.params.mode}: ${error.message}`,
       );
       res.status(500).json({ error: "Failed to fetch maps for mode" });
     }
@@ -1087,9 +1088,9 @@ router.get(
         },
         top_records: recentWRs,
       });
-    } catch (e) {
+    } catch (error) {
       logger.error(
-        `Failed to fetch KZ map ${req.params.mapname}: ${e.message}`,
+        `Failed to fetch KZ map ${req.params.mapname}: ${error.message}`,
       );
       res.status(500).json({ error: "Failed to fetch KZ map" });
     }
@@ -1240,9 +1241,9 @@ router.get(
         data: records,
         pagination: paginationMeta(validPage, validLimit, total),
       });
-    } catch (e) {
+    } catch (error) {
       logger.error(
-        `Failed to fetch records for map ${req.params.mapname}: ${e.message}`,
+        `Failed to fetch records for map ${req.params.mapname}: ${error.message}`,
       );
       res.status(500).json({ error: "Failed to fetch map records" });
     }
@@ -1276,7 +1277,6 @@ router.get(
 router.post("/:mapname/refresh-wr", async (req, res) => {
   try {
     const { mapname } = req.params;
-    const { refreshMapWorldRecord } = require("../services/wrSync");
 
     const pool = getKzPool();
     if (!pool) {
@@ -1315,9 +1315,9 @@ router.post("/:mapname/refresh-wr", async (req, res) => {
         map_name: mapname,
       });
     }
-  } catch (e) {
+  } catch (error) {
     logger.error(
-      `Failed to refresh WR for map ${req.params.mapname}: ${e.message}`,
+      `Failed to refresh WR for map ${req.params.mapname}: ${error.message}`,
     );
     res.status(500).json({ error: "Failed to refresh world record" });
   }
@@ -1429,9 +1429,9 @@ router.get(
         courses: result,
         total_courses: result.length,
       });
-    } catch (e) {
+    } catch (error) {
       logger.error(
-        `Failed to get courses for map ${req.params.mapname}: ${e.message}`,
+        `Failed to get courses for map ${req.params.mapname}: ${error.message}`,
       );
       res.status(500).json({ error: "Failed to fetch map courses" });
     }

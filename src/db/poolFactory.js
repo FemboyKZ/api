@@ -100,8 +100,8 @@ function setupPoolErrorHandler(pool, name) {
     logger.error(`${name} Database pool error: ${err.message}`);
     if (err.code === "PROTOCOL_CONNECTION_LOST") {
       logger.info(`${name} Database connection lost, reconnecting...`);
-      testConnection(pool, name).catch((e) => {
-        logger.error(`${name} Reconnection failed: ${e.message}`);
+      testConnection(pool, name).catch((error) => {
+        logger.error(`${name} Reconnection failed: ${error.message}`);
       });
     }
   });

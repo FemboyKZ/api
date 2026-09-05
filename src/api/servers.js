@@ -264,8 +264,8 @@ router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
       serversOnline: serversOnline,
       data: servers,
     });
-  } catch (e) {
-    logger.error(`Failed to fetch servers: ${e.message}`);
+  } catch (error) {
+    logger.error(`Failed to fetch servers: ${error.message}`);
     res.status(500).json({ error: "Failed to fetch servers" });
   }
 });
@@ -354,8 +354,8 @@ router.get("/:ip", async (req, res) => {
       total: servers.length,
       data: servers,
     });
-  } catch (e) {
-    logger.error(`Server fetch error for IP ${req.params.ip}: ${e.message}`);
+  } catch (error) {
+    logger.error(`Server fetch error for IP ${req.params.ip}: ${error.message}`);
     res.status(500).json({ error: "Server fetch error" });
   }
 });
@@ -458,9 +458,9 @@ router.get("/:ip/:port", async (req, res) => {
       total: 1,
       data: [response],
     });
-  } catch (e) {
+  } catch (error) {
     logger.error(
-      `Server fetch error for ${req.params.ip}:${req.params.port}: ${e.message}`,
+      `Server fetch error for ${req.params.ip}:${req.params.port}: ${error.message}`,
     );
     res.status(500).json({ error: "Server fetch error" });
   }

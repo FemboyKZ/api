@@ -179,8 +179,8 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
       data: maps,
       pagination: paginationMeta(validPage, validLimit, total),
     });
-  } catch (e) {
-    logger.error(`Failed to fetch maps: ${e.message}`);
+  } catch (error) {
+    logger.error(`Failed to fetch maps: ${error.message}`);
     res.status(500).json({ error: "Failed to fetch maps" });
   }
 });
@@ -302,8 +302,8 @@ router.get("/:mapname", async (req, res) => {
         },
       ],
     });
-  } catch (e) {
-    logger.error(`Map fetch error for ${req.params.mapname}: ${e.message}`);
+  } catch (error) {
+    logger.error(`Map fetch error for ${req.params.mapname}: ${error.message}`);
     res.status(500).json({ error: "Map fetch error" });
   }
 });

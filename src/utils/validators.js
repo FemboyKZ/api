@@ -232,7 +232,7 @@ function sanitizeMapName(mapName) {
   let decoded = mapName;
   try {
     decoded = decodeURIComponent(mapName);
-  } catch (e) {
+  } catch (error) {
     // If decoding fails, use original
     decoded = mapName;
   }

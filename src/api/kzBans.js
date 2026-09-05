@@ -173,8 +173,8 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       data: bans,
       pagination: paginationMeta(validPage, validLimit, total),
     });
-  } catch (e) {
-    logger.error(`Failed to fetch KZ bans: ${e.message}`);
+  } catch (error) {
+    logger.error(`Failed to fetch KZ bans: ${error.message}`);
     res.status(500).json({ error: "Failed to fetch KZ bans" });
   }
 });
@@ -256,8 +256,8 @@ router.get("/active", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       data: bans,
       pagination: paginationMeta(validPage, validLimit, total),
     });
-  } catch (e) {
-    logger.error(`Failed to fetch active bans: ${e.message}`);
+  } catch (error) {
+    logger.error(`Failed to fetch active bans: ${error.message}`);
     res.status(500).json({ error: "Failed to fetch active bans" });
   }
 });
@@ -323,8 +323,8 @@ router.get("/stats", cacheMiddleware(300, kzKeyGenerator), async (req, res) => {
       ban_type_breakdown: banTypes,
       recent_bans: recentBans,
     });
-  } catch (e) {
-    logger.error(`Failed to fetch ban statistics: ${e.message}`);
+  } catch (error) {
+    logger.error(`Failed to fetch ban statistics: ${error.message}`);
     res.status(500).json({ error: "Failed to fetch ban statistics" });
   }
 });
@@ -469,14 +469,14 @@ router.get(
         data: changes,
         pagination: paginationMeta(validPage, validLimit, total),
       });
-    } catch (e) {
-      if (e.code === "ER_NO_SUCH_TABLE") {
+    } catch (error) {
+      if (error.code === "ER_NO_SUCH_TABLE") {
         return res.status(503).json({
           error:
             "Ban change tracking not initialized. Run db/migrations/add_ban_change_tracking.sql",
         });
       }
-      logger.error(`Failed to fetch ban changes: ${e.message}`);
+      logger.error(`Failed to fetch ban changes: ${error.message}`);
       res.status(500).json({ error: "Failed to fetch ban changes" });
     }
   },
@@ -555,8 +555,8 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
     res.json({
       data: bans[0],
     });
-  } catch (e) {
-    logger.error(`Failed to fetch KZ ban ${req.params.id}: ${e.message}`);
+  } catch (error) {
+    logger.error(`Failed to fetch KZ ban ${req.params.id}: ${error.message}`);
     res.status(500).json({ error: "Failed to fetch KZ ban" });
   }
 });
@@ -646,9 +646,9 @@ router.get(
         data: bans,
         total: bans.length,
       });
-    } catch (e) {
+    } catch (error) {
       logger.error(
-        `Failed to fetch bans for player ${req.params.steamid}: ${e.message}`,
+        `Failed to fetch bans for player ${req.params.steamid}: ${error.message}`,
       );
       res.status(500).json({ error: "Failed to fetch player bans" });
     }

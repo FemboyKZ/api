@@ -20,10 +20,10 @@ function parsePlayersList(server) {
         ? JSON.parse(server.players_list)
         : server.players_list;
     return Array.isArray(parsed) ? parsed : [];
-  } catch (e) {
+  } catch (error) {
     logger.error(
       `Failed to parse players_list for ${server.ip}:${server.port}`,
-      { error: e.message },
+      { error: error.message },
     );
     return [];
   }

@@ -60,8 +60,8 @@ function loadServerLookup() {
     }
     serverLookup = map;
     logger.info(`Cross-chat: loaded ${map.size} server aliases`);
-  } catch (e) {
-    logger.error(`Cross-chat: failed to load server aliases: ${e.message}`);
+  } catch (error) {
+    logger.error(`Cross-chat: failed to load server aliases: ${error.message}`);
   }
 }
 
@@ -189,7 +189,7 @@ function persist(record) {
         record.team,
       ],
     )
-    .catch((e) => logger.error(`Cross-chat persist failed: ${e.message}`));
+    .catch((error) => logger.error(`Cross-chat persist failed: ${error.message}`));
 }
 
 function wakeWaiters() {
@@ -270,8 +270,8 @@ async function purgeOldMessages() {
         `Cross-chat: pruned ${result.affectedRows} message(s) older than ${RETENTION_DAYS}d`,
       );
     }
-  } catch (e) {
-    logger.error(`Cross-chat prune failed: ${e.message}`);
+  } catch (error) {
+    logger.error(`Cross-chat prune failed: ${error.message}`);
   }
 }
 
