@@ -1,3 +1,10 @@
+/**
+ * Reads kz_players plus the PB cache maintained by services/playerPBsSync.js.
+ *
+ * tableExists/resetTableExistsCache are exported below the router only so
+ * tests/tableExistsCache.test.js can reach the cache.
+ */
+
 const express = require("express");
 const router = express.Router();
 const { getKzPool } = require("../db/kzRecords");

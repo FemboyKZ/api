@@ -325,4 +325,33 @@ describe("KZ Servers Endpoints", () => {
       await request(app).get("/kzglobal/servers/999999/records").expect(404);
     });
   });
+  describe("kz_players join key", () => {
+    // player_id is INT FK to kz_players.id;
+    // joining it to the VARCHAR steamid64 coerces silently and yields wrong/NULL names.
+    it("joins /:id/records on kz_players.id, not steamid64", async () => {
+      mockPool.query
+        .mockResolvedValueOnce([[{ id: 1 }]])
+        .mockResolvedValueOnce([[{ total: 0 }]])
+        .mockResolvedValueOnce([[]]);
+
+      await request(app).get("/kzglobal/servers/123/records").expect(200);
+
+      const sql = mockPool.query.mock.calls[2][0];
+      expect(sql).toContain("JOIN kz_players p ON r.player_id = p.id");
+      expect(sql).not.toContain("r.player_id = p.steamid64");
+    });
+
+    it("joins /:id recent_records on kz_players.id, not steamid64", async () => {
+      mockPool.query
+        .mockResolvedValueOnce([[{ id: 1, server_id: 123 }]])
+        .mockResolvedValueOnce([[]])
+        .mockResolvedValueOnce([[]]);
+
+      await request(app).get("/kzglobal/servers/123").expect(200);
+
+      const sql = mockPool.query.mock.calls[2][0];
+      expect(sql).toContain("JOIN kz_players p ON r.player_id = p.id");
+      expect(sql).not.toContain("r.player_id = p.steamid64");
+    });
+  });
 });

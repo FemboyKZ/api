@@ -1,3 +1,13 @@
+/**
+ * Queries one game server, preferring the extension's own report and falling back to GameDig.
+ *
+ * The GameDig timeout is deliberately far shorter than the HTTP timeouts elsewhere:
+ * a game server answers in well under a second or it is down, and this runs inside the update loop.
+ *
+ * Returns { status: 0 } rather than null on failure -
+ * services/updater.js branches on result.status, and 0 maps to the servers.status column.
+ */
+
 const { GameDig } = require("gamedig");
 const logger = require("../utils/logger");
 const { querySteamMaster } = require("./steamMasterQuery");

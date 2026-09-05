@@ -1,3 +1,8 @@
+/**
+ * Several independent local timer databases (CS:GO 128, CS:GO 64, CS2), opened lazily -
+ * hence the plural init/close pair rather than the singular form used by db/index.js and db/kzRecords.js.
+ */
+
 const { createPool, initPool, createLazyPool } = require("./poolFactory");
 require("dotenv").config();
 

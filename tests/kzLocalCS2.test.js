@@ -13,11 +13,6 @@ jest.mock("../src/utils/logger", () => ({
   debug: jest.fn(),
 }));
 
-jest.mock("../src/utils/cacheMiddleware", () => ({
-  cacheMiddleware: () => (req, res, next) => next(),
-  kzKeyGenerator: jest.fn(),
-}));
-
 const { getKzLocalCS2Pool } = require("../src/db/kzLocal");
 const kzLocalCS2Router = require("../src/api/kzLocalCS2");
 

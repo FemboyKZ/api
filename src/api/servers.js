@@ -1,7 +1,12 @@
+/**
+ * Read path only. Rows are written by services/updater.js and services/serverTracking.js;
+ * nothing here queries game servers directly.
+ */
+
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
-const { isValidIP, sanitizeString } = require("../utils/validators");
+const { isValidIP, parsePort, sanitizeString } = require("../utils/validators");
 const { parsePlayersList, withoutPlayerIPs } = require("../utils/playersList");
 const logger = require("../utils/logger");
 const {
@@ -355,7 +360,9 @@ router.get("/:ip", async (req, res) => {
       data: servers,
     });
   } catch (error) {
-    logger.error(`Server fetch error for IP ${req.params.ip}: ${error.message}`);
+    logger.error(
+      `Server fetch error for IP ${req.params.ip}: ${error.message}`,
+    );
     res.status(500).json({ error: "Server fetch error" });
   }
 });
@@ -437,8 +444,8 @@ router.get("/:ip/:port", async (req, res) => {
       return res.status(400).json({ error: "Invalid IP address format" });
     }
 
-    const portNum = parseInt(port, 10);
-    if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+    const portNum = parsePort(port);
+    if (!portNum) {
       return res.status(400).json({ error: "Invalid port number" });
     }
 

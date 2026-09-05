@@ -1,3 +1,8 @@
+/**
+ * Winston logger. Console output is colorized in development, JSON elsewhere;
+ * file transports are disabled in tests.
+ */
+
 const winston = require("winston");
 const path = require("path");
 

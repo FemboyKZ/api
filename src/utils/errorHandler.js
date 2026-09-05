@@ -1,3 +1,10 @@
+/**
+ * Backstop for anything route handlers do not catch themselves.
+ * Express 5 forwards both synchronous throws and rejected async handlers here.
+ *
+ * Stack traces are only exposed in development.
+ */
+
 const logger = require("./logger");
 
 function errorHandler(err, req, res, next) {

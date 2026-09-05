@@ -1,3 +1,7 @@
+/**
+ * kz_bans references players by steamid64, not by kz_players.id.
+ */
+
 const express = require("express");
 const router = express.Router();
 const { getKzPool } = require("../db/kzRecords");

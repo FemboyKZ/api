@@ -1,3 +1,7 @@
+/**
+ * Discovers servers from Valve's master list that have not self-reported.
+ */
+
 const axios = require("axios");
 const logger = require("../utils/logger");
 

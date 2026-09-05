@@ -1,3 +1,7 @@
+/**
+ * Redis is optional. When unavailable, getCache/setCache degrade to no-ops so requests continue uncached rather than failing.
+ */
+
 const redis = require("redis");
 const logger = require("../utils/logger");
 

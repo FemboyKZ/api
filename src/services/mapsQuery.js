@@ -1,3 +1,8 @@
+/**
+ * Refreshes cached per-map metadata from the GOKZ/CS2KZ APIs.
+ * Each map is only re-fetched once its cached copy is a week old, so a full pass stays cheap.
+ */
+
 const axios = require("axios");
 const pool = require("../db");
 const logger = require("../utils/logger");

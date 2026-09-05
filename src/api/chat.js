@@ -16,15 +16,10 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
-const { isValidIP } = require("../utils/validators");
+const { isValidIP, parsePort } = require("../utils/validators");
 const { addMessage, wait } = require("../services/crossChat");
 
 const STREAM_HOLD_MS = 25000; // keep < the plugins' 30s request timeout
-
-function parsePort(value) {
-  const port = parseInt(value, 10);
-  return port >= 1 && port <= 65535 ? port : null;
-}
 
 /**
  * POST /chat/messages
@@ -56,10 +51,10 @@ router.post("/messages", (req, res) => {
   }
   if (!result) {
     // Sanitized to nothing (e.g. message was only color codes), drop quietly.
-    return res.json({ ok: true, dropped: true });
+    return res.json({ success: true, dropped: true });
   }
 
-  res.json({ ok: true, id: result.id });
+  res.json({ success: true, id: result.id });
 });
 
 /**

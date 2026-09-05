@@ -1,3 +1,9 @@
+/**
+ * Refreshes the kz_worldrecords_cache table from data already stored.
+ *
+ * Not to be confused with services/wrSync.js.
+ */
+
 const { getKzPool } = require("../db/kzRecords");
 const logger = require("../utils/logger");
 

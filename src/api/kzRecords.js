@@ -1,3 +1,8 @@
+/**
+ * Static paths are registered before /:id so they are not swallowed by it -
+ * see tests/routeOrder.test.js.
+ */
+
 const express = require("express");
 const router = express.Router();
 const { getKzPool } = require("../db/kzRecords");
@@ -770,7 +775,9 @@ router.get("/:id", cacheMiddleware(1800, kzKeyGenerator), async (req, res) => {
       data: records[0],
     });
   } catch (error) {
-    logger.error(`Failed to fetch KZ record ${req.params.id}: ${error.message}`);
+    logger.error(
+      `Failed to fetch KZ record ${req.params.id}: ${error.message}`,
+    );
     res.status(500).json({ error: "Failed to fetch KZ record" });
   }
 });

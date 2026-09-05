@@ -1,3 +1,8 @@
+/**
+ * Primary application database. Exports the pool directly, so callers use pool.query(...);
+ * the KZ pools are created lazily and expose getters instead.
+ */
+
 const {
   createPool,
   setupPoolErrorHandler,

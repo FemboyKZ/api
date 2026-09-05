@@ -1,3 +1,7 @@
+/**
+ * Resolves display names for unseen SteamIDs, optionally inserting a placeholder player row so later joins resolve.
+ */
+
 const axios = require("axios");
 const pool = require("../db");
 const logger = require("../utils/logger");

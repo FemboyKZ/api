@@ -1,3 +1,7 @@
+/**
+ * Public. The plugins poll /health before every other request to decide whether the API is reachable.
+ */
+
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");

@@ -189,7 +189,9 @@ function persist(record) {
         record.team,
       ],
     )
-    .catch((error) => logger.error(`Cross-chat persist failed: ${error.message}`));
+    .catch((error) =>
+      logger.error(`Cross-chat persist failed: ${error.message}`),
+    );
 }
 
 function wakeWaiters() {

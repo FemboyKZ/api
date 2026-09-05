@@ -1,3 +1,8 @@
+/**
+ * closeWebSocket must run before the HTTP server closes,
+ * or the HTTP close callback waits on connected sockets forever - see server.js.
+ */
+
 const { Server } = require("socket.io");
 const logger = require("../utils/logger");
 require("dotenv").config();

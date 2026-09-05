@@ -1,3 +1,8 @@
+/**
+ * Reads the rollup tables written by services/serverTracking.js
+ * and the daily aggregation job, not the live servers/players tables.
+ */
+
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");

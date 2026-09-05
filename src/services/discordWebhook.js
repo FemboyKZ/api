@@ -27,6 +27,8 @@ const pool = require("../db");
 const { sanitizePlayerName } = require("../utils/validators");
 const { parsePlayersList } = require("../utils/playersList");
 
+const DISCORD_TIMEOUT_MS = 10000;
+
 // Configuration
 const WEBHOOK_ENABLED = process.env.DISCORD_WEBHOOK_ENABLED === "true";
 const WEBHOOK_CSGO = process.env.DISCORD_WEBHOOK_CSGO;
@@ -314,17 +316,21 @@ async function sendOrUpdateMessage(webhookUrl, embeds, messageId = null) {
     if (messageId) {
       // Edit existing message
       const editUrl = `https://discord.com/api/webhooks/${webhook.id}/${webhook.token}/messages/${messageId}`;
-      await axios.patch(editUrl, {
-        embeds: embeds,
-      });
+      await axios.patch(
+        editUrl,
+        { embeds: embeds },
+        { timeout: DISCORD_TIMEOUT_MS },
+      );
       logger.debug("Updated Discord message", { messageId });
       return messageId;
     } else {
       // Create new message
       const createUrl = `https://discord.com/api/webhooks/${webhook.id}/${webhook.token}?wait=true`;
-      const response = await axios.post(createUrl, {
-        embeds: embeds,
-      });
+      const response = await axios.post(
+        createUrl,
+        { embeds: embeds },
+        { timeout: DISCORD_TIMEOUT_MS },
+      );
       return response.data.id;
     }
   } catch (error) {

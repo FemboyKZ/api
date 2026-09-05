@@ -1,3 +1,7 @@
+/**
+ * CS2 local timer. CS:GO counterpart is api/kzLocal.js.
+ */
+
 const express = require("express");
 const router = express.Router();
 const { getKzLocalCS2Pool } = require("../db/kzLocal");
@@ -211,7 +215,7 @@ router.get(
       }
 
       if (!steamid64) {
-        return res.status(400).json({ error: "Invalid SteamID" });
+        return res.status(400).json({ error: "Invalid SteamID format" });
       }
 
       // Get player info

@@ -1,13 +1,15 @@
+/**
+ * Auth is per-route, not at mount time: /kofi/webhook stays public for Ko-fi to reach
+ * and is verified against its verification_token in services/kofi.js before any write. 
+ * Everything else is adminAuth'd.
+ */
+
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
 const { adminAuth } = require("../utils/auth");
-const {
-  isValidSteamID,
-  convertToSteamID64,
-  validatePagination,
-} = require("../utils/validators");
+const { resolveSteamID, validatePagination } = require("../utils/validators");
 const { processKofiWebhook } = require("../services/kofi");
 const { isValidEmail, normalizeEmail } = require("../services/playerContacts");
 const { creditSpend } = require("../services/entitlements");
@@ -79,7 +81,7 @@ router.get("/transactions", adminAuth, async (req, res) => {
       params.push(req.query.type);
     }
     if (req.query.steamid) {
-      const id64 = convertToSteamID64(req.query.steamid);
+      const id64 = resolveSteamID(req.query.steamid);
       where.push("(steamid = ? OR beneficiary_steamid = ?)");
       params.push(id64 || req.query.steamid, id64 || req.query.steamid);
     }
@@ -123,7 +125,7 @@ router.get("/claims", adminAuth, async (req, res) => {
     const clauses = [];
     const params = [];
     if (steamid) {
-      const id64 = convertToSteamID64(steamid) || steamid;
+      const id64 = resolveSteamID(steamid) || steamid;
       clauses.push("steamid = ?");
       params.push(id64);
     }
@@ -195,7 +197,7 @@ router.post("/transactions/:id/claim", adminAuth, async (req, res) => {
   if (decision !== "self" && decision !== "gift") {
     return res.status(400).json({ error: "decision must be 'self' or 'gift'" });
   }
-  const actor = isValidSteamID(steamid) ? convertToSteamID64(steamid) : null;
+  const actor = resolveSteamID(steamid);
 
   const conn = await pool.getConnection();
   try {
@@ -231,9 +233,7 @@ router.post("/transactions/:id/claim", adminAuth, async (req, res) => {
       claimStatus = "claimed";
     } else {
       // gift
-      const giftTo = isValidSteamID(targetSteamid)
-        ? convertToSteamID64(targetSteamid)
-        : null;
+      const giftTo = resolveSteamID(targetSteamid);
       if (giftTo) {
         beneficiary = giftTo;
         await creditSpend(conn, beneficiary, tx.amount_eur);

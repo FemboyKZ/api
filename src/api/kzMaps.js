@@ -1,3 +1,7 @@
+/**
+ * Reads kz_maps plus the statistics tables refreshed by services/kzStatistics.js and services/wrSync.js.
+ */
+
 const express = require("express");
 const router = express.Router();
 const { getKzPool } = require("../db/kzRecords");
@@ -207,9 +211,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       });
     }
 
-    res
-      .status(500)
-      .json({ error: "Failed to fetch KZ maps", details: error.message });
+    res.status(500).json({ error: "Failed to fetch KZ maps" });
   }
 });
 
@@ -664,10 +666,7 @@ router.get(
         });
       }
 
-      res.status(500).json({
-        error: "Failed to fetch enriched KZ maps",
-        details: error.message,
-      });
+      res.status(500).json({ error: "Failed to fetch enriched KZ maps" });
     }
   },
 );
@@ -807,8 +806,7 @@ router.get(
       const validModes = ["kz_timer", "kz_simple", "kz_vanilla"];
       if (!validModes.includes(mode)) {
         return res.status(400).json({
-          error: "Invalid mode",
-          valid_modes: validModes,
+          error: "Invalid mode. Must be kz_timer, kz_simple, or kz_vanilla",
         });
       }
 

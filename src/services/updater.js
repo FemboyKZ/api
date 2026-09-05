@@ -1,3 +1,7 @@
+/**
+ * Background loop: polls every tracked server, writes results, records history, pushes WebSocket updates.
+ */
+
 const pool = require("../db");
 const { queryServer } = require("./serverQuery");
 const logger = require("../utils/logger");

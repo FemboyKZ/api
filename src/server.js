@@ -1,3 +1,11 @@
+/**
+ * Startup order: validate env, open databases, open Redis, start WebSocket,
+ * listen, then start background jobs. gracefulShutdown reverses it.
+ *
+ * The WebSocket closes before the HTTP server:
+ * the HTTP close callback would otherwise wait on live sockets forever.
+ */
+
 require("dotenv").config();
 const http = require("http");
 const app = require("./app");

@@ -1,3 +1,11 @@
+/**
+ * Middleware order matters: body parsing before compression,
+ * compression before rate limiting so the limiter sees compressed sizes, errorHandler last.
+ *
+ * adminAuth is applied at mount time for /servers/status, /admin and /chat;
+ * /kofi, /links and /vip apply it per-route instead.
+ */
+
 const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");

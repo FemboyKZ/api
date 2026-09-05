@@ -1,9 +1,18 @@
+/**
+ * Write path for plugin self-reports; api/servers.js is the read counterpart.
+ * Mounted under adminAuth in app.js.
+ *
+ * Inner catches are deliberate:
+ * optional side-effects (history rows, player IPs) are best-effort and must not fail the ingest.
+ */
+
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
 const {
   isValidIP,
+  parsePort,
   sanitizeMapName,
   sanitizePlayerName,
 } = require("../utils/validators");
@@ -46,9 +55,9 @@ router.post("/", async (req, res) => {
 
     const srv = payload.server;
     const ip = srv.ip;
-    const port = parseInt(srv.port, 10);
+    const port = parsePort(srv.port);
 
-    if (!ip || !isValidIP(ip) || !port || port < 1 || port > 65535) {
+    if (!ip || !isValidIP(ip) || !port) {
       return res.status(400).json({ error: "Invalid server ip/port" });
     }
 
@@ -295,7 +304,7 @@ router.post("/", async (req, res) => {
     await deleteCache("cache:players:*");
     await deleteCache("cache:maps:*");
 
-    res.json({ ok: true });
+    res.json({ success: true });
   } catch (error) {
     logger.error(`Extension status ingest failed: ${error.message}`);
     res.status(500).json({ error: "Failed to process server status" });
@@ -313,9 +322,9 @@ router.post("/", async (req, res) => {
 router.post("/hibernate", async (req, res) => {
   try {
     const { ip, port } = req.body || {};
-    const portNum = parseInt(port, 10);
+    const portNum = parsePort(port);
 
-    if (!ip || !isValidIP(ip) || !portNum || portNum < 1 || portNum > 65535) {
+    if (!ip || !isValidIP(ip) || !portNum) {
       return res.status(400).json({ error: "Invalid ip/port" });
     }
 
@@ -324,7 +333,7 @@ router.post("/hibernate", async (req, res) => {
       `Server ${ip}:${portNum} hibernate signal received, updater will resume polling`,
     );
 
-    res.json({ ok: true });
+    res.json({ success: true });
   } catch (error) {
     logger.error(`Hibernate signal failed: ${error.message}`);
     res.status(500).json({ error: "Failed to process hibernate signal" });

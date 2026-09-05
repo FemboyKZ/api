@@ -1,3 +1,7 @@
+/**
+ * Scans @swagger blocks in src/api/*.js; served at /docs from app.js.
+ */
+
 const swaggerJsdoc = require("swagger-jsdoc");
 
 const options = {

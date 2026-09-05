@@ -1,3 +1,10 @@
+/**
+ * Caches successful (200) responses by intercepting res.json.
+ *
+ * Each endpoint family needs its own key generator:
+ * sharing one between routes that take different query parameters makes them serve each other's cached bodies.
+ */
+
 const { getCache, setCache } = require("../db/redis");
 const logger = require("./logger");
 

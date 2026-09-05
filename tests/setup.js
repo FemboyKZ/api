@@ -22,12 +22,14 @@ jest.mock("../src/utils/logger", () => ({
   logQuery: jest.fn(),
 }));
 
-// Mock cache middleware
+// Must list every real export - a missing generator is undefined in all suites.
 jest.mock("../src/utils/cacheMiddleware", () => ({
   cacheMiddleware: () => (req, res, next) => next(),
   serversKeyGenerator: jest.fn(),
   playersKeyGenerator: jest.fn(),
+  onlinePlayersKeyGenerator: jest.fn(),
   mapsKeyGenerator: jest.fn(),
+  kzKeyGenerator: jest.fn(),
   generateCacheKey: jest.fn(),
 }));
 

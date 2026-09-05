@@ -26,6 +26,8 @@ const { findSteamIDByEmail } = require("./playerContacts");
 const { convertToEUR } = require("./currency");
 const { creditSpend } = require("./entitlements");
 
+const DISCORD_TIMEOUT_MS = 10000;
+
 const VERIFICATION_TOKEN = process.env.KOFI_VERIFICATION_TOKEN || "";
 const WEBHOOK_ENABLED =
   process.env.KOFI_WEBHOOK_ENABLED === "true" ||
@@ -75,16 +77,20 @@ async function notifyDiscord(row) {
       `**Buyer SteamID:** ${row.steamid || "_unmatched_"}`,
       `**Status:** ${row.claim_status || "unclaimed"}`,
     ];
-    await axios.post(DISCORD_WEBHOOK, {
-      embeds: [
-        {
-          title: "New Ko-fi transaction",
-          description: lines.join("\n"),
-          color: 0x3498db,
-          timestamp: new Date().toISOString(),
-        },
-      ],
-    });
+    await axios.post(
+      DISCORD_WEBHOOK,
+      {
+        embeds: [
+          {
+            title: "New Ko-fi transaction",
+            description: lines.join("\n"),
+            color: 0x3498db,
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      },
+      { timeout: DISCORD_TIMEOUT_MS },
+    );
   } catch (error) {
     logger.warn("Ko-fi: Discord notification failed", { error: error.message });
   }

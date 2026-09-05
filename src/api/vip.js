@@ -1,3 +1,8 @@
+/**
+ * adminAuth on the whole router.
+ * Tier thresholds live in config/tiers.js and are resolved through services/entitlements.js.
+ */
+
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
@@ -26,7 +31,8 @@ const HEX_COLOR_RE = /^#?[0-9a-fA-F]{6}$/;
 router.get("/:steamid", async (req, res) => {
   try {
     const steamid = resolveSteamID(req.params.steamid);
-    if (!steamid) return res.status(400).json({ error: "Invalid SteamID" });
+    if (!steamid)
+      return res.status(400).json({ error: "Invalid SteamID format" });
 
     const [rows] = await pool.query(
       `SELECT total_spent_eur, gift_tokens, permissions
@@ -181,7 +187,8 @@ async function setCustomField(steamid, min, mutate) {
 router.put("/:steamid/custom-role", async (req, res) => {
   try {
     const steamid = resolveSteamID(req.params.steamid);
-    if (!steamid) return res.status(400).json({ error: "Invalid SteamID" });
+    if (!steamid)
+      return res.status(400).json({ error: "Invalid SteamID format" });
     const { color, name } = req.body || {};
     if (!HEX_COLOR_RE.test(String(color || ""))) {
       return res
@@ -220,7 +227,8 @@ router.put("/:steamid/custom-role", async (req, res) => {
 router.delete("/:steamid/custom-role", async (req, res) => {
   try {
     const steamid = resolveSteamID(req.params.steamid);
-    if (!steamid) return res.status(400).json({ error: "Invalid SteamID" });
+    if (!steamid)
+      return res.status(400).json({ error: "Invalid SteamID format" });
     // No eligibility gate to remove (min 0).
     const result = await setCustomField(steamid, 0, (perms) => {
       perms.customRole = null;
@@ -240,7 +248,8 @@ router.delete("/:steamid/custom-role", async (req, res) => {
 router.put("/:steamid/custom-tag", async (req, res) => {
   try {
     const steamid = resolveSteamID(req.params.steamid);
-    if (!steamid) return res.status(400).json({ error: "Invalid SteamID" });
+    if (!steamid)
+      return res.status(400).json({ error: "Invalid SteamID format" });
     const { color, name } = req.body || {};
     if (!VALID_TAG_COLORS.includes(color)) {
       return res.status(400).json({
@@ -274,7 +283,8 @@ router.put("/:steamid/custom-tag", async (req, res) => {
 router.delete("/:steamid/custom-tag", async (req, res) => {
   try {
     const steamid = resolveSteamID(req.params.steamid);
-    if (!steamid) return res.status(400).json({ error: "Invalid SteamID" });
+    if (!steamid)
+      return res.status(400).json({ error: "Invalid SteamID format" });
     const result = await setCustomField(steamid, 0, (perms) => {
       perms.customTag = null;
     });

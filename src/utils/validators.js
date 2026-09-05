@@ -1,8 +1,6 @@
 /**
- * Validation utilities for API input.
- *
- * SteamID parsing/conversion, IP and port checks, string sanitization for
- * player and map names, and the shared pagination/sort helpers every router uses.
+ * Shared input validation: SteamID conversion, IP/port checks, string
+ * sanitization, and the pagination/sort helpers the routers use.
  */
 
 /**
@@ -25,6 +23,12 @@ function isValidIP(ip) {
 function isValidPort(port) {
   const portNum = parseInt(port, 10);
   return !isNaN(portNum) && portNum >= 1 && portNum <= 65535;
+}
+
+/** Numeric port, or null if invalid. */
+function parsePort(port) {
+  const portNum = parseInt(port, 10);
+  return isValidPort(portNum) ? portNum : null;
 }
 
 function isValidSteamID(steamid) {
@@ -287,6 +291,7 @@ module.exports = {
   // IP/Port validation
   isValidIP,
   isValidPort,
+  parsePort,
   // SteamID functions
   isValidSteamID,
   convertToSteamID64,

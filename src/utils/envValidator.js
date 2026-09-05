@@ -1,3 +1,7 @@
+/**
+ * Runs first in server.js startup so a missing required variable fails before any connection is attempted.
+ */
+
 const logger = require("./logger");
 
 /**

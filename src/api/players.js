@@ -1,3 +1,7 @@
+/**
+ * Live player data.
+ */
+
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
@@ -698,7 +702,9 @@ router.get("/:steamid", async (req, res) => {
       data: [response],
     });
   } catch (error) {
-    logger.error(`Player fetch error for ${req.params.steamid}: ${error.message}`);
+    logger.error(
+      `Player fetch error for ${req.params.steamid}: ${error.message}`,
+    );
     res.status(500).json({ error: "Player fetch error" });
   }
 });

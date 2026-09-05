@@ -1,3 +1,8 @@
+/**
+ * Reached through getKzPool() rather than exported directly:
+ * the scraper may be disabled, in which case the pool is never opened.
+ */
+
 const {
   createPool,
   initPool,

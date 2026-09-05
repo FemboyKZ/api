@@ -1,8 +1,13 @@
+/**
+ * Operator-only maintenance endpoints. Mounted under adminAuth in app.js.
+ * Not called by the game-server plugins.
+ */
+
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
-const { isValidSteamID, convertToSteamID64 } = require("../utils/validators");
+const { resolveSteamID } = require("../utils/validators");
 
 const { VALID_ROLES, VALID_TAG_COLORS } = require("../config/permissions");
 const {
@@ -599,12 +604,9 @@ router.put("/players/:steamid/discord", async (req, res) => {
     const { steamid } = req.params;
     const { discord_id } = req.body || {};
 
-    if (!isValidSteamID(steamid)) {
-      return res.status(400).json({ error: "Invalid SteamID format" });
-    }
-    const steamid64 = convertToSteamID64(steamid);
+    const steamid64 = resolveSteamID(steamid);
     if (!steamid64) {
-      return res.status(400).json({ error: "Failed to convert SteamID" });
+      return res.status(400).json({ error: "Invalid SteamID format" });
     }
 
     if (!discord_id || !/^\d{17,19}$/.test(String(discord_id))) {
@@ -640,12 +642,9 @@ router.delete("/players/:steamid/discord", async (req, res) => {
   try {
     const { steamid } = req.params;
 
-    if (!isValidSteamID(steamid)) {
-      return res.status(400).json({ error: "Invalid SteamID format" });
-    }
-    const steamid64 = convertToSteamID64(steamid);
+    const steamid64 = resolveSteamID(steamid);
     if (!steamid64) {
-      return res.status(400).json({ error: "Failed to convert SteamID" });
+      return res.status(400).json({ error: "Invalid SteamID format" });
     }
 
     await pool.query(
@@ -673,12 +672,9 @@ router.post("/players/register", async (req, res) => {
   try {
     const { steamid, name } = req.body || {};
 
-    if (!isValidSteamID(steamid)) {
-      return res.status(400).json({ error: "Invalid SteamID format" });
-    }
-    const steamid64 = convertToSteamID64(steamid);
+    const steamid64 = resolveSteamID(steamid);
     if (!steamid64) {
-      return res.status(400).json({ error: "Failed to convert SteamID" });
+      return res.status(400).json({ error: "Invalid SteamID format" });
     }
 
     const safeName = typeof name === "string" ? name.slice(0, 255) : null;
@@ -719,12 +715,9 @@ router.put("/players/:steamid/permissions", async (req, res) => {
     const { steamid } = req.params;
     const { roles, customRole = null, customTag = null } = req.body || {};
 
-    if (!isValidSteamID(steamid)) {
-      return res.status(400).json({ error: "Invalid SteamID format" });
-    }
-    const steamid64 = convertToSteamID64(steamid);
+    const steamid64 = resolveSteamID(steamid);
     if (!steamid64) {
-      return res.status(400).json({ error: "Failed to convert SteamID" });
+      return res.status(400).json({ error: "Invalid SteamID format" });
     }
 
     if (!Array.isArray(roles)) {
@@ -819,12 +812,9 @@ router.delete("/players/:steamid/permissions", async (req, res) => {
   try {
     const { steamid } = req.params;
 
-    if (!isValidSteamID(steamid)) {
-      return res.status(400).json({ error: "Invalid SteamID format" });
-    }
-    const steamid64 = convertToSteamID64(steamid);
+    const steamid64 = resolveSteamID(steamid);
     if (!steamid64) {
-      return res.status(400).json({ error: "Failed to convert SteamID" });
+      return res.status(400).json({ error: "Invalid SteamID format" });
     }
 
     await pool.query(
@@ -852,12 +842,9 @@ router.put("/players/:steamid/whitelist", async (req, res) => {
     const { steamid } = req.params;
     const { whitelisted } = req.body || {};
 
-    if (!isValidSteamID(steamid)) {
-      return res.status(400).json({ error: "Invalid SteamID format" });
-    }
-    const steamid64 = convertToSteamID64(steamid);
+    const steamid64 = resolveSteamID(steamid);
     if (!steamid64) {
-      return res.status(400).json({ error: "Failed to convert SteamID" });
+      return res.status(400).json({ error: "Invalid SteamID format" });
     }
 
     if (typeof whitelisted !== "boolean") {

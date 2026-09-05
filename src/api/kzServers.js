@@ -1,3 +1,7 @@
+/**
+ * kz_records.player_id is an INT referencing kz_players.id - join on p.id, never on p.steamid64.
+ */
+
 const express = require("express");
 const router = express.Router();
 const { getKzPool } = require("../db/kzRecords");
@@ -325,7 +329,7 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
         r.points,
         r.created_on
       FROM kz_records r
-      LEFT JOIN kz_players p ON r.player_id = p.steamid64
+      LEFT JOIN kz_players p ON r.player_id = p.id
       LEFT JOIN kz_maps m ON r.map_id = m.id
       WHERE r.server_id = ?
       ORDER BY r.created_on DESC
@@ -355,7 +359,9 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       recent_records: recentRecords,
     });
   } catch (error) {
-    logger.error(`Failed to fetch KZ server ${req.params.id}: ${error.message}`);
+    logger.error(
+      `Failed to fetch KZ server ${req.params.id}: ${error.message}`,
+    );
     res.status(500).json({ error: "Failed to fetch KZ server" });
   }
 });
@@ -460,7 +466,7 @@ router.get(
           r.tickrate,
           r.created_on
         FROM kz_records r
-        LEFT JOIN kz_players p ON r.player_id = p.steamid64
+        LEFT JOIN kz_players p ON r.player_id = p.id
         LEFT JOIN kz_maps m ON r.map_id = m.id
         WHERE r.server_id = ?
       `;
@@ -480,7 +486,11 @@ router.get(
       const [countResult] = await pool.query(countQuery, params);
       const total = countResult[0].total;
 
-      const sortField = sort === "time" ? "time" : "created_on";
+      const sortField = validateSortField(
+        sort,
+        ["time", "created_on"],
+        "created_on",
+      );
       const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
       query += ` ORDER BY r.${sortField} ${sortOrder}`;

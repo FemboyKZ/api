@@ -1,3 +1,10 @@
+/**
+ * CS:GO local timer (128/64 tick). CS2 counterpart is api/kzLocalCS2.js.
+ *
+ * This schema keys records by numeric TimeID/MapCourseID and stores SteamID32,
+ * where the CS2 schema uses its own ids and SteamID64.
+ */
+
 const express = require("express");
 const router = express.Router();
 const {

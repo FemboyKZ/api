@@ -14,11 +14,6 @@ jest.mock("../src/utils/logger", () => ({
   debug: jest.fn(),
 }));
 
-jest.mock("../src/utils/cacheMiddleware", () => ({
-  cacheMiddleware: () => (req, res, next) => next(),
-  kzKeyGenerator: jest.fn(),
-}));
-
 const {
   getKzLocalCSGO128Pool,
   getKzLocalCSGO64Pool,

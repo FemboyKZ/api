@@ -1,3 +1,7 @@
+/**
+ * Email/Discord account linking. adminAuth on the whole router.
+ */
+
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
@@ -131,10 +135,9 @@ router.post("/email/verify", async (req, res) => {
         steamid: v.steamid,
         existing: taken[0].steamid,
       });
-      return res.status(409).json({
-        error: "Email already linked to another account",
-        code: "EMAIL_IN_USE",
-      });
+      return res
+        .status(409)
+        .json({ error: "Email already linked to another account" });
     }
 
     // Capture any existing email to log as replaced
