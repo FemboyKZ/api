@@ -1,4 +1,9 @@
-// Validation utilities for API input
+/**
+ * Validation utilities for API input.
+ *
+ * SteamID parsing/conversion, IP and port checks, string sanitization for
+ * player and map names, and the shared pagination/sort helpers every router uses.
+ */
 
 /**
  * Steam base ID constant (used in all SteamID conversions)
@@ -298,5 +303,4 @@ module.exports = {
   validateSortField,
   validateSortOrder,
   defaultSortOrder,
-  ASCENDING_SORT_FIELDS,
 };

@@ -1,7 +1,3 @@
-const axios = require("axios");
-const { getKzPool } = require("../db/kzRecords");
-const logger = require("../utils/logger");
-
 /**
  * KZTimer World Records Sync Service
  *
@@ -16,6 +12,10 @@ const logger = require("../utils/logger");
  * KZTimer API Reference:
  * https://kztimerglobal.com/api/v2/records/top
  */
+
+const axios = require("axios");
+const { getKzPool } = require("../db/kzRecords");
+const logger = require("../utils/logger");
 
 const GOKZ_API_URL =
   process.env.GOKZ_API_URL || "https://kztimerglobal.com/api/v2";

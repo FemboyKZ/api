@@ -1,13 +1,13 @@
-const { getKzPool } = require("../db/kzRecords");
-const logger = require("../utils/logger");
-const { computeCompletionStats } = require("../utils/kzHelpers");
-
 /**
  * Player PBs Sync Service
  *
  * Manages the kz_player_map_pbs cache table for fast profile loading
  * and map completion status queries.
  */
+
+const { getKzPool } = require("../db/kzRecords");
+const logger = require("../utils/logger");
+const { computeCompletionStats } = require("../utils/kzHelpers");
 
 const PB_SYNC_BATCH_SIZE = 50; // Players per batch
 const PB_SYNC_STALE_HOURS = 24; // Consider PBs stale after 24 hours
