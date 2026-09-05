@@ -337,6 +337,8 @@ async function runUpdateCycle() {
   });
 }
 
+let updateTimer = null;
+
 function startUpdateLoop(intervalMs) {
   // Store the interval in seconds for playtime calculations
   UPDATE_INTERVAL_SECONDS = Math.floor(intervalMs / 1000);
@@ -345,7 +347,12 @@ function startUpdateLoop(intervalMs) {
   );
 
   updateLoop();
-  setInterval(updateLoop, intervalMs);
+  updateTimer = setInterval(updateLoop, intervalMs);
 }
 
-module.exports = { startUpdateLoop };
+function stopUpdateLoop() {
+  clearInterval(updateTimer);
+  updateTimer = null;
+}
+
+module.exports = { startUpdateLoop, stopUpdateLoop };

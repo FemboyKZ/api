@@ -10,6 +10,8 @@ module.exports = {
   setupFiles: ["<rootDir>/tests/setup.js"],
   testTimeout: 10000,
   verbose: true,
-  // Force exit to handle db pool created on module require before mock takes effect
+  // db/kzRecords, db/kzLocal and db/redis are not mocked in tests/setup.js,
+  // so requiring them opens real pools at module load that never close.
+  // TODO: fix
   forceExit: true,
 };

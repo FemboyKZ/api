@@ -249,7 +249,12 @@ async function refreshMapGlobalInfo(mapName, game = "csgo") {
  * Start background globalInfo update job
  * @param {number} intervalMs - Interval in milliseconds (default: 6 hours)
  */
-function startGlobalInfoUpdateJob(intervalMs = 6 * 60 * 60 * 1000) {
+const GLOBALINFO_INTERVAL =
+  parseInt(process.env.MAP_GLOBALINFO_INTERVAL, 10) || 6 * 60 * 60 * 1000;
+
+let globalInfoTimer = null;
+
+function startGlobalInfoUpdateJob(intervalMs = GLOBALINFO_INTERVAL) {
   logger.info(
     `Starting map globalInfo update job (interval: ${intervalMs / 1000}s = ${intervalMs / 1000 / 60 / 60}hrs)`,
   );
@@ -263,7 +268,12 @@ function startGlobalInfoUpdateJob(intervalMs = 6 * 60 * 60 * 1000) {
   updateMissingGlobalInfo();
 
   // Then run periodically
-  setInterval(updateMissingGlobalInfo, intervalMs);
+  globalInfoTimer = setInterval(updateMissingGlobalInfo, intervalMs);
+}
+
+function stopGlobalInfoUpdateJob() {
+  clearInterval(globalInfoTimer);
+  globalInfoTimer = null;
 }
 
 module.exports = {
@@ -272,5 +282,7 @@ module.exports = {
   updateMapGlobalInfo,
   refreshMapGlobalInfo,
   startGlobalInfoUpdateJob,
+  stopGlobalInfoUpdateJob,
+  GLOBALINFO_INTERVAL,
   getMapsNeedingGlobalInfo,
 };

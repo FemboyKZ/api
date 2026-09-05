@@ -17,21 +17,48 @@ const {
   initAllKzLocalDatabases,
   closeAllKzLocalDatabases,
 } = require("./db/kzLocal");
-const { startUpdateLoop } = require("./services/updater");
-const { startScraperJob } = require("./services/kzRecordsScraper");
-const { startBanCleanupJob } = require("./services/kzBanStatus");
-const { startWorldRecordsSyncJob } = require("./services/wrSync");
-const { startPlayerPBsSyncJob } = require("./services/playerPBsSync");
+const { startUpdateLoop, stopUpdateLoop } = require("./services/updater");
+const {
+  startScraperJob,
+  stopScraperJob,
+  SCRAPER_INTERVAL,
+  SCRAPER_IDLE_INTERVAL,
+} = require("./services/kzRecordsScraper");
+const {
+  startBanCleanupJob,
+  stopBanCleanupJob,
+  CLEANUP_INTERVAL,
+} = require("./services/kzBanStatus");
+const {
+  startWorldRecordsSyncJob,
+  stopWorldRecordsSyncJob,
+} = require("./services/wrSync");
+const {
+  startPlayerPBsSyncJob,
+  stopPlayerPBsSyncJob,
+} = require("./services/playerPBsSync");
 const { initWebSocket, closeWebSocket } = require("./services/websocket");
 const {
   loadServerLookup,
   startChatCleanupJob,
+  stopChatCleanupJob,
 } = require("./services/crossChat");
 const { initRedis, closeRedis } = require("./db/redis");
 const { loadMessageIds } = require("./services/discordWebhook");
-const { startWorldRecordsCacheJob } = require("./services/worldRecordsCache");
-const { startGlobalInfoUpdateJob } = require("./services/mapsQuery");
-const { startStatisticsJob } = require("./services/kzStatistics");
+const {
+  startWorldRecordsCacheJob,
+  stopWorldRecordsCacheJob,
+} = require("./services/worldRecordsCache");
+const {
+  startGlobalInfoUpdateJob,
+  stopGlobalInfoUpdateJob,
+  GLOBALINFO_INTERVAL,
+} = require("./services/mapsQuery");
+const {
+  startStatisticsJob,
+  stopStatisticsJobs,
+  STATS_INTERVAL,
+} = require("./services/kzStatistics");
 
 const port = process.env.PORT || 3000;
 const host = process.env.HOST || "0.0.0.0"; // Use 127.0.0.1 in production with reverse proxy
@@ -94,36 +121,25 @@ async function startServer() {
       startWorldRecordsCacheJob(5 * 60 * 1000);
 
       // Step 10: Refresh map globalInfo from the GOKZ/CS2KZ APIs.
-      // Each map is only re-fetched once its cached copy is a week old.
-      const globalInfoInterval =
-        parseInt(process.env.MAP_GLOBALINFO_INTERVAL, 10) || 6 * 60 * 60 * 1000;
-      startGlobalInfoUpdateJob(globalInfoInterval);
+      startGlobalInfoUpdateJob();
 
       // Step 11: Start KZ records scraper (runs every 3.75s for 80% rate limit utilization)
       if (process.env.KZ_SCRAPER_ENABLED !== "false") {
-        const scraperInterval =
-          parseInt(process.env.KZ_SCRAPER_INTERVAL, 10) || 3750; // 3.75 seconds for 80% rate limit (400 req/5min)
-        const scraperIdleInterval =
-          parseInt(process.env.KZ_SCRAPER_IDLE_INTERVAL, 10) || 30000; // 30 seconds when caught up
-        startScraperJob(scraperInterval, scraperIdleInterval);
+        startScraperJob();
         logger.info(
-          `KZ Records scraper enabled (normal: ${scraperInterval}ms, idle: ${scraperIdleInterval}ms)`,
+          `KZ Records scraper enabled (normal: ${SCRAPER_INTERVAL}ms, idle: ${SCRAPER_IDLE_INTERVAL}ms)`,
         );
 
         // Step 12: Start ban status cleanup job (runs every hour by default)
-        const banCleanupInterval =
-          parseInt(process.env.KZ_BAN_CLEANUP_INTERVAL, 10) || 3600000; // 1 hour
-        startBanCleanupJob(banCleanupInterval);
+        startBanCleanupJob();
         logger.info(
-          `KZ Ban cleanup job enabled (interval: ${banCleanupInterval / 1000}s)`,
+          `KZ Ban cleanup job enabled (interval: ${CLEANUP_INTERVAL / 1000}s)`,
         );
 
         // Step 13: Start KZ statistics refresh job (runs every 6 hours by default)
-        const statsInterval =
-          parseInt(process.env.KZ_STATS_INTERVAL, 10) || 6 * 60 * 60 * 1000; // 6 hours
-        startStatisticsJob(statsInterval);
+        startStatisticsJob();
         logger.info(
-          `KZ Statistics refresh job enabled (interval: ${statsInterval / 1000 / 60} minutes)`,
+          `KZ Statistics refresh job enabled (interval: ${STATS_INTERVAL / 1000 / 60} minutes)`,
         );
 
         // Step 14: Start World Records initial population (one-time, then updated by scraper)
@@ -150,6 +166,19 @@ async function startServer() {
 // Start the server
 const serverInstance = startServer();
 
+/** Clears every background job timer. Each start*Job has a matching stop. */
+function stopBackgroundJobs() {
+  stopUpdateLoop();
+  stopWorldRecordsCacheJob();
+  stopGlobalInfoUpdateJob();
+  stopChatCleanupJob();
+  stopScraperJob();
+  stopBanCleanupJob();
+  stopStatisticsJobs();
+  stopWorldRecordsSyncJob();
+  stopPlayerPBsSyncJob();
+}
+
 // Graceful shutdown handler
 async function gracefulShutdown(signal) {
   logger.info(`${signal} received, shutting down gracefully...`);
@@ -163,22 +192,26 @@ async function gracefulShutdown(signal) {
   }, 30000); // 30 seconds timeout
 
   try {
-    // Step 1: Disconnect WebSocket clients.
+    // Step 1: Stop background jobs before their pools close, so an in-flight run cannot hit a closed connection.
+    logger.info("Stopping background jobs...");
+    stopBackgroundJobs();
+
+    // Step 2: Disconnect WebSocket clients.
     // Must precede closing the HTTP server, whose close callback would otherwise wait on them forever.
     logger.info("Closing WebSocket server...");
     await closeWebSocket();
 
-    // Step 2: Close Redis connection
+    // Step 3: Close Redis connection
     logger.info("Closing Redis connection...");
     await closeRedis();
 
-    // Step 3: Close database connection pools
+    // Step 4: Close database connection pools
     logger.info("Closing database connections...");
     await closeDatabase();
     await closeKzDatabase();
     await closeAllKzLocalDatabases();
 
-    // Step 4: Close HTTP server
+    // Step 5: Close HTTP server
     logger.info("Closing HTTP server...");
     server.close(() => {
       logger.info("Server shutdown complete");

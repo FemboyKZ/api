@@ -396,7 +396,7 @@ async function initialPopulateWorldRecords() {
       logger.info(
         "More maps need initial WR sync, scheduling next batch in 5 minutes...",
       );
-      setTimeout(initialPopulateWorldRecords, 5 * 60 * 1000);
+      wrSyncTimer = setTimeout(initialPopulateWorldRecords, 5 * 60 * 1000);
     } else {
       logger.info("Initial WR population complete!");
     }
@@ -408,6 +408,8 @@ async function initialPopulateWorldRecords() {
 /**
  * Start initial WR population job (runs once on startup, then continues until all maps are synced)
  */
+let wrSyncTimer = null;
+
 function startWorldRecordsSyncJob() {
   logger.info("Starting world records initial population job");
   logger.info(`KZTimer API URL: ${GOKZ_API_URL}`);
@@ -419,9 +421,14 @@ function startWorldRecordsSyncJob() {
   );
 
   // Run after a short delay on startup (give DB time to initialize)
-  setTimeout(() => {
+  wrSyncTimer = setTimeout(() => {
     initialPopulateWorldRecords();
   }, 15000);
+}
+
+function stopWorldRecordsSyncJob() {
+  clearTimeout(wrSyncTimer);
+  wrSyncTimer = null;
 }
 
 module.exports = {
@@ -433,5 +440,6 @@ module.exports = {
   initialPopulateWorldRecords,
   refreshMapWorldRecord,
   startWorldRecordsSyncJob,
+  stopWorldRecordsSyncJob,
   WR_TYPES,
 };

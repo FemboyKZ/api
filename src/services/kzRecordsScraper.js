@@ -94,7 +94,12 @@ let isBanSweepRunning = false;
 let currentRecordId = 0;
 let lastBanCheck = 0;
 let lastBanFullSweep = 0;
+const SCRAPER_INTERVAL = parseInt(process.env.KZ_SCRAPER_INTERVAL, 10) || 3750;
+const SCRAPER_IDLE_INTERVAL =
+  parseInt(process.env.KZ_SCRAPER_IDLE_INTERVAL, 10) || 30000;
+
 let scraperTimeout = null;
+let scraperStopped = false;
 const stats = {
   startTime: null,
   recordsProcessed: 0,
@@ -1419,18 +1424,23 @@ async function runScraper(normalIntervalMs, idleIntervalMs) {
     nextInterval = normalIntervalMs;
   } finally {
     isRunning = false;
-    // Schedule next run with dynamic interval
-    scraperTimeout = setTimeout(
-      () => runScraper(normalIntervalMs, idleIntervalMs),
-      nextInterval,
-    );
+    // Schedule next run with dynamic interval, unless shutting down
+    if (!scraperStopped) {
+      scraperTimeout = setTimeout(
+        () => runScraper(normalIntervalMs, idleIntervalMs),
+        nextInterval,
+      );
+    }
   }
 }
 
 /**
  * Start the scraper job
  */
-async function startScraperJob(intervalMs = 3750, idleIntervalMs = 30000) {
+async function startScraperJob(
+  intervalMs = SCRAPER_INTERVAL,
+  idleIntervalMs = SCRAPER_IDLE_INTERVAL,
+) {
   // Normal interval: 3.75 seconds for 80% rate limit utilization
   // Idle interval: 30 seconds when no new records found (default)
   logger.info(
@@ -1477,9 +1487,17 @@ async function startScraperJob(intervalMs = 3750, idleIntervalMs = 30000) {
   }
 
   // Run immediately after small delay to let server initialize
-  setTimeout(() => {
+  scraperStopped = false;
+  scraperTimeout = setTimeout(() => {
     runScraper(intervalMs, idleIntervalMs);
   }, 2000);
+}
+
+/** Stops the self-rescheduling scraper loop. */
+function stopScraperJob() {
+  scraperStopped = true;
+  clearTimeout(scraperTimeout);
+  scraperTimeout = null;
 }
 
 /**
@@ -1535,6 +1553,9 @@ function getStats() {
 
 module.exports = {
   startScraperJob,
+  stopScraperJob,
+  SCRAPER_INTERVAL,
+  SCRAPER_IDLE_INTERVAL,
   processBansFullSweep,
   getStats,
 };

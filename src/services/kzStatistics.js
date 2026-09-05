@@ -21,6 +21,8 @@ const logger = require("../utils/logger");
 
 // Configuration
 const DEFAULT_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
+const STATS_INTERVAL =
+  parseInt(process.env.KZ_STATS_INTERVAL, 10) || DEFAULT_INTERVAL;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_BASE = 1000; // 1 second base delay
 const BATCH_SIZE = 5000; // Players per batch
@@ -254,7 +256,9 @@ async function getStatisticsSummary() {
  *
  * @param {number} intervalMs - Interval between refreshes (default: 6 hours)
  */
-function startStatisticsJob(intervalMs = DEFAULT_INTERVAL) {
+const statsTimers = [];
+
+function startStatisticsJob(intervalMs = STATS_INTERVAL) {
   logger.info(
     `Starting KZ statistics refresh job (interval: ${intervalMs / 1000 / 60} minutes)`,
   );
@@ -263,7 +267,7 @@ function startStatisticsJob(intervalMs = DEFAULT_INTERVAL) {
   refreshAllStatistics();
 
   // Schedule periodic refresh
-  setInterval(refreshAllStatistics, intervalMs);
+  statsTimers.push(setInterval(refreshAllStatistics, intervalMs));
 }
 
 /**
@@ -285,14 +289,23 @@ function startStatisticsJobsIndividual(options = {}) {
   logger.info(`  - Server stats: every ${serverInterval / 1000 / 60} minutes`);
 
   // Stagger initial runs to avoid all hitting DB at once
-  setTimeout(refreshPlayerStatistics, 0);
-  setTimeout(refreshMapStatistics, 30 * 1000); // 30s delay
-  setTimeout(refreshServerStatistics, 60 * 1000); // 60s delay
+  statsTimers.push(
+    setTimeout(refreshPlayerStatistics, 0),
+    setTimeout(refreshMapStatistics, 30 * 1000), // 30s delay
+    setTimeout(refreshServerStatistics, 60 * 1000), // 60s delay
+    setInterval(refreshPlayerStatistics, playerInterval),
+    setInterval(refreshMapStatistics, mapInterval),
+    setInterval(refreshServerStatistics, serverInterval),
+  );
+}
 
-  // Schedule periodic refreshes
-  setInterval(refreshPlayerStatistics, playerInterval);
-  setInterval(refreshMapStatistics, mapInterval);
-  setInterval(refreshServerStatistics, serverInterval);
+/** Clears the timers started by either function above. */
+function stopStatisticsJobs() {
+  for (const timer of statsTimers) {
+    clearInterval(timer);
+    clearTimeout(timer);
+  }
+  statsTimers.length = 0;
 }
 
 module.exports = {
@@ -304,4 +317,6 @@ module.exports = {
   getStatisticsSummary,
   startStatisticsJob,
   startStatisticsJobsIndividual,
+  stopStatisticsJobs,
+  STATS_INTERVAL,
 };

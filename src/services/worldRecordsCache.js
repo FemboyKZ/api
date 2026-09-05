@@ -41,12 +41,23 @@ async function refreshWorldRecordsCache() {
   }
 }
 
+let cacheTimer = null;
+
 function startWorldRecordsCacheJob(intervalMs = 5 * 60 * 1000) {
   logger.info(
     `Starting world records cache refresh job (interval: ${intervalMs / 1000}s)`,
   );
   refreshWorldRecordsCache();
-  setInterval(refreshWorldRecordsCache, intervalMs);
+  cacheTimer = setInterval(refreshWorldRecordsCache, intervalMs);
 }
 
-module.exports = { startWorldRecordsCacheJob, refreshWorldRecordsCache };
+function stopWorldRecordsCacheJob() {
+  clearInterval(cacheTimer);
+  cacheTimer = null;
+}
+
+module.exports = {
+  startWorldRecordsCacheJob,
+  stopWorldRecordsCacheJob,
+  refreshWorldRecordsCache,
+};

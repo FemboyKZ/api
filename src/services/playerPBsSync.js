@@ -557,7 +557,7 @@ async function initialPopulatePlayerPBs() {
       logger.info(
         "More players need initial PB population, scheduling next batch in 5 minutes...",
       );
-      setTimeout(initialPopulatePlayerPBs, 5 * 60 * 1000);
+      pbSyncTimer = setTimeout(initialPopulatePlayerPBs, 5 * 60 * 1000);
     }
   } catch (error) {
     logger.error(`Failed to run initial PB population: ${error.message}`);
@@ -569,15 +569,22 @@ async function initialPopulatePlayerPBs() {
  * This runs once on startup to populate PBs for players who have never been synced.
  * After initial population, PBs are updated incrementally by the KZ records scraper.
  */
+let pbSyncTimer = null;
+
 function startPlayerPBsSyncJob() {
   logger.info(
     "Starting player PBs initial population (one-time, then updated by scraper)",
   );
 
   // Run initial population after a delay on startup
-  setTimeout(() => {
+  pbSyncTimer = setTimeout(() => {
     initialPopulatePlayerPBs();
   }, 45000); // 45 seconds after startup (after WR sync starts)
+}
+
+function stopPlayerPBsSyncJob() {
+  clearTimeout(pbSyncTimer);
+  pbSyncTimer = null;
 }
 
 module.exports = {
@@ -588,5 +595,6 @@ module.exports = {
   getPlayerPBs,
   getPlayerMapCompletions,
   startPlayerPBsSyncJob,
+  stopPlayerPBsSyncJob,
   initialPopulatePlayerPBs,
 };

@@ -281,17 +281,25 @@ async function purgeOldMessages() {
  * Start the retention job: prune once now, then on a fixed interval.
  * @param {number} intervalMs - how often to prune (default: daily)
  */
+let chatCleanupTimer = null;
+
 function startChatCleanupJob(intervalMs = 24 * 60 * 60 * 1000) {
   purgeOldMessages();
-  setInterval(purgeOldMessages, intervalMs);
+  chatCleanupTimer = setInterval(purgeOldMessages, intervalMs);
   logger.info(
     `Cross-chat retention job started (${RETENTION_DAYS}d, every ${intervalMs / 1000 / 60 / 60}h)`,
   );
 }
 
+function stopChatCleanupJob() {
+  clearInterval(chatCleanupTimer);
+  chatCleanupTimer = null;
+}
+
 module.exports = {
   loadServerLookup,
   startChatCleanupJob,
+  stopChatCleanupJob,
   addMessage,
   wait,
   headId,

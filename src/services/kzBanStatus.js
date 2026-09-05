@@ -556,6 +556,8 @@ async function syncBannedPlayers() {
  *
  * @param {number} intervalMs - How often to run cleanup (default from env)
  */
+let banCleanupTimer = null;
+
 async function startBanCleanupJob(intervalMs = CLEANUP_INTERVAL) {
   if (!CLEANUP_ENABLED) {
     logger.info("[KZ Ban Status] Ban cleanup job is disabled");
@@ -594,12 +596,12 @@ async function startBanCleanupJob(intervalMs = CLEANUP_INTERVAL) {
   }
 
   // Run cleanup immediately, then on interval
-  setTimeout(() => {
+  banCleanupTimer = setTimeout(() => {
     cleanupExpiredBans().catch((error) => {
       logger.error(`[KZ Ban Status] Cleanup failed: ${error.message}`);
     });
 
-    setInterval(() => {
+    banCleanupTimer = setInterval(() => {
       cleanupExpiredBans().catch((error) => {
         logger.error(`[KZ Ban Status] Cleanup failed: ${error.message}`);
       });
@@ -659,8 +661,16 @@ async function manualBanStatusUpdate(steamIds = null) {
   }
 }
 
+function stopBanCleanupJob() {
+  clearTimeout(banCleanupTimer);
+  clearInterval(banCleanupTimer);
+  banCleanupTimer = null;
+}
+
 module.exports = {
   startBanCleanupJob,
+  stopBanCleanupJob,
+  CLEANUP_INTERVAL,
   updatePlayerBanStatus,
   cleanupExpiredBans,
   syncBannedPlayers,
