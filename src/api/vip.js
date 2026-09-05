@@ -28,6 +28,33 @@ const HEX_COLOR_RE = /^#?[0-9a-fA-F]{6}$/;
  * GET /vip/:steamid
  * Current VIP standing: lifetime EUR, tier, roles, gift tokens, custom-perk eligibility, and any configured custom role/tag.
  */
+/**
+ * @swagger
+ * /vip/{steamid}:
+ *   get:
+ *     summary: VIP standing for one player
+ *     description: Lifetime EUR, tier, roles, gift tokens, custom-perk eligibility and any configured custom role or tag.
+ *     tags: [VIP]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SteamID in any format
+ *     responses:
+ *       200:
+ *         description: VIP status
+ *       400:
+ *         description: Invalid SteamID format
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
+ */
 router.get("/:steamid", async (req, res) => {
   try {
     const steamid = resolveSteamID(req.params.steamid);
@@ -68,6 +95,43 @@ router.get("/:steamid", async (req, res) => {
  * Spend one of the holder's gift tokens to grant base VIP to another member.
  * Body: { fromSteamid, targetSteamid } or { fromSteamid, targetEmail }
  * Unregistered email -> stored as a pending gift, redeemed when they link.
+ */
+/**
+ * @swagger
+ * /vip/gift-token/redeem:
+ *   post:
+ *     summary: Redeem a gift token
+ *     description: Spends one of the sender's gift tokens on another player, named by SteamID or verified email.
+ *     tags: [VIP]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [fromSteamid]
+ *             properties:
+ *               fromSteamid:
+ *                 type: string
+ *                 description: Player spending the token
+ *               targetSteamid:
+ *                 type: string
+ *                 description: Recipient by SteamID
+ *               targetEmail:
+ *                 type: string
+ *                 description: Recipient by verified linked email
+ *     responses:
+ *       200:
+ *         description: Token redeemed
+ *       400:
+ *         description: Invalid fromSteamid, gifting to self, or no gift tokens available
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/gift-token/redeem", async (req, res) => {
   const { fromSteamid, targetSteamid, targetEmail } = req.body || {};
@@ -184,6 +248,47 @@ async function setCustomField(steamid, min, mutate) {
  * is handled later by the Discord side; `id` stays null until then.
  * Body: { color, name }
  */
+/**
+ * @swagger
+ * /vip/{steamid}/custom-role:
+ *   put:
+ *     summary: Set a custom role
+ *     description: Requires the player to have reached the custom-role EUR threshold in config/tiers.js.
+ *     tags: [VIP]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SteamID in any format
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [color, name]
+ *             properties:
+ *               color:
+ *                 type: string
+ *                 description: Hex colour, #RRGGBB
+ *               name:
+ *                 type: string
+ *                 maxLength: 32
+ *     responses:
+ *       200:
+ *         description: Custom role set
+ *       400:
+ *         description: Invalid SteamID, colour not #RRGGBB, or name missing/too long
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
+ */
 router.put("/:steamid/custom-role", async (req, res) => {
   try {
     const steamid = resolveSteamID(req.params.steamid);
@@ -224,6 +329,32 @@ router.put("/:steamid/custom-role", async (req, res) => {
 /**
  * DELETE /vip/:steamid/custom-role
  */
+/**
+ * @swagger
+ * /vip/{steamid}/custom-role:
+ *   delete:
+ *     summary: Clear a custom role
+ *     tags: [VIP]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SteamID in any format
+ *     responses:
+ *       200:
+ *         description: Custom role cleared
+ *       400:
+ *         description: Invalid SteamID format
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
+ */
 router.delete("/:steamid/custom-role", async (req, res) => {
   try {
     const steamid = resolveSteamID(req.params.steamid);
@@ -244,6 +375,49 @@ router.delete("/:steamid/custom-role", async (req, res) => {
  * PUT /vip/:steamid/custom-tag   (in-game custom rank/tag; €50+)
  * Stores chosen color (from the fixed palette) + name.
  * In-game application handled later. Body: { color, name }
+ */
+/**
+ * @swagger
+ * /vip/{steamid}/custom-tag:
+ *   put:
+ *     summary: Set a custom tag
+ *     description: >
+ *       Unlike custom-role, the tag colour must be one of the preset values in
+ *       config/permissions.js rather than any hex colour.
+ *     tags: [VIP]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SteamID in any format
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [color, name]
+ *             properties:
+ *               color:
+ *                 type: string
+ *                 description: One of the allowed preset tag colours
+ *               name:
+ *                 type: string
+ *                 maxLength: 32
+ *     responses:
+ *       200:
+ *         description: Custom tag set
+ *       400:
+ *         description: Invalid SteamID, colour not in the allowed list, or name missing/too long
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.put("/:steamid/custom-tag", async (req, res) => {
   try {
@@ -279,6 +453,32 @@ router.put("/:steamid/custom-tag", async (req, res) => {
 
 /**
  * DELETE /vip/:steamid/custom-tag
+ */
+/**
+ * @swagger
+ * /vip/{steamid}/custom-tag:
+ *   delete:
+ *     summary: Clear a custom tag
+ *     tags: [VIP]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SteamID in any format
+ *     responses:
+ *       200:
+ *         description: Custom tag cleared
+ *       400:
+ *         description: Invalid SteamID format
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.delete("/:steamid/custom-tag", async (req, res) => {
   try {

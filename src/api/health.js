@@ -9,6 +9,40 @@ const logger = require("../utils/logger");
 const { isRedisConnected } = require("../db/redis");
 const { getWebSocketStats } = require("../services/websocket");
 
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Liveness probe
+ *     description: Verifies database connectivity and reports Redis and WebSocket state
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Service healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: ok
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *                 database:
+ *                   type: string
+ *                 redis:
+ *                   type: string
+ *                   enum: [connected, disconnected]
+ *                 websocket:
+ *                   type: string
+ *                   enum: [active, inactive]
+ *                 websocketClients:
+ *                   type: integer
+ *       503:
+ *         description: Database unreachable
+ */
 router.get("/", async (req, res) => {
   try {
     await pool.query("SELECT 1");
@@ -35,6 +69,60 @@ router.get("/", async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /health/stats:
+ *   get:
+ *     summary: Runtime counters
+ *     description: Server, player and map totals plus WebSocket, cache and uptime state
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Current counters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 servers:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     online:
+ *                       type: integer
+ *                     offline:
+ *                       type: integer
+ *                 players:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     active_24h:
+ *                       type: integer
+ *                 maps:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                 websocket:
+ *                   type: object
+ *                   properties:
+ *                     connected:
+ *                       type: boolean
+ *                     clients:
+ *                       type: integer
+ *                 cache:
+ *                   type: object
+ *                   properties:
+ *                     enabled:
+ *                       type: boolean
+ *                 uptime:
+ *                   type: integer
+ *                   description: Process uptime in seconds
+ *       500:
+ *         description: Server error
+ */
 router.get("/stats", async (req, res) => {
   try {
     // Optimized: Combine all stats into a single query

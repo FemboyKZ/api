@@ -33,6 +33,42 @@ const DEFAULT_TOKEN_TTL_HOURS = 24;
  * Body: { steamid, email, expiresInHours? }
  * Returns: { token, expiresAt }
  */
+/**
+ * @swagger
+ * /links/email/request:
+ *   post:
+ *     summary: Start email verification for a player
+ *     description: Issues a verification token the player redeems via /links/email/verify.
+ *     tags: [Links]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [steamid, email]
+ *             properties:
+ *               steamid:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               expiresInHours:
+ *                 type: integer
+ *                 description: Token lifetime; a default applies when omitted
+ *     responses:
+ *       200:
+ *         description: Verification created
+ *       400:
+ *         description: Invalid SteamID or email format
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
+ */
 router.post("/email/request", async (req, res) => {
   try {
     const { steamid, email, expiresInHours } = req.body || {};
@@ -80,6 +116,41 @@ router.post("/email/request", async (req, res) => {
  * POST /links/email/verify
  * Consume a verification token and link the email to the SteamID.
  * Body: { token }
+ */
+/**
+ * @swagger
+ * /links/email/verify:
+ *   post:
+ *     summary: Redeem an email verification token
+ *     tags: [Links]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token]
+ *             properties:
+ *               token:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Email verified and linked
+ *       400:
+ *         description: Missing token
+ *       401:
+ *         description: Missing or invalid API key
+ *       404:
+ *         description: Invalid token
+ *       409:
+ *         description: Token already used, or email already linked to another account
+ *       410:
+ *         description: Token expired
+ *       500:
+ *         description: Server error
  */
 router.post("/email/verify", async (req, res) => {
   const { token } = req.body || {};
@@ -184,6 +255,37 @@ router.post("/email/verify", async (req, res) => {
  * DELETE /links/email
  * Unlink a player's email (kept in history). Body: { steamid }
  */
+/**
+ * @swagger
+ * /links/email:
+ *   delete:
+ *     summary: Unlink a player's email
+ *     tags: [Links]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [steamid]
+ *             properties:
+ *               steamid:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Email unlinked
+ *       400:
+ *         description: Invalid SteamID format
+ *       401:
+ *         description: Missing or invalid API key
+ *       404:
+ *         description: No email linked
+ *       500:
+ *         description: Server error
+ */
 router.delete("/email", async (req, res) => {
   try {
     const steamid64 = resolveSteamID((req.body || {}).steamid);
@@ -215,6 +317,40 @@ router.delete("/email", async (req, res) => {
  * PUT /links/discord
  * Link/replace a player's Discord ID (ownership assumed proven upstream).
  * Body: { steamid, discordId, discordUsername? }
+ */
+/**
+ * @swagger
+ * /links/discord:
+ *   put:
+ *     summary: Link a Discord account to a player
+ *     tags: [Links]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [steamid, discordId]
+ *             properties:
+ *               steamid:
+ *                 type: string
+ *               discordId:
+ *                 type: string
+ *                 description: Discord snowflake
+ *               discordUsername:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Discord account linked
+ *       400:
+ *         description: Invalid SteamID format or Discord ID
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.put("/discord", async (req, res) => {
   try {
@@ -265,6 +401,37 @@ router.put("/discord", async (req, res) => {
  * DELETE /links/discord
  * Unlink a player's Discord ID (kept in history). Body: { steamid }
  */
+/**
+ * @swagger
+ * /links/discord:
+ *   delete:
+ *     summary: Unlink a player's Discord account
+ *     tags: [Links]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [steamid]
+ *             properties:
+ *               steamid:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Discord account unlinked
+ *       400:
+ *         description: Invalid SteamID format
+ *       401:
+ *         description: Missing or invalid API key
+ *       404:
+ *         description: No discord linked
+ *       500:
+ *         description: Server error
+ */
 router.delete("/discord", async (req, res) => {
   try {
     const steamid64 = resolveSteamID((req.body || {}).steamid);
@@ -295,6 +462,38 @@ router.delete("/discord", async (req, res) => {
 /**
  * GET /links/lookup?type=email|discord&value=...
  * Fraud lookup: every SteamID that ever linked this contact (current + history).
+ */
+/**
+ * @swagger
+ * /links/lookup:
+ *   get:
+ *     summary: Resolve a contact back to a player
+ *     tags: [Links]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [email, discord]
+ *       - in: query
+ *         name: value
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The email address or Discord id to look up
+ *     responses:
+ *       200:
+ *         description: Matching player, if any
+ *       400:
+ *         description: type must be email or discord, or value missing
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.get("/lookup", async (req, res) => {
   try {
@@ -345,6 +544,32 @@ router.get("/lookup", async (req, res) => {
  * GET /links/:steamid
  * Current linked contacts + full history for one player (admin/private view).
  */
+/**
+ * @swagger
+ * /links/{steamid}:
+ *   get:
+ *     summary: Linked contacts for one player
+ *     tags: [Links]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SteamID in any format
+ *     responses:
+ *       200:
+ *         description: Linked email and Discord state
+ *       400:
+ *         description: Invalid SteamID format
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
+ */
 router.get("/:steamid", async (req, res) => {
   try {
     const steamid64 = resolveSteamID(req.params.steamid);
@@ -378,6 +603,31 @@ router.get("/:steamid", async (req, res) => {
  * POST /links/cleanup?days=365
  * Purge expired/consumed verification tokens and contact history older than
  * `days` (PII retention bound). Defaults to 365 days.
+ */
+/**
+ * @swagger
+ * /links/cleanup:
+ *   post:
+ *     summary: Drop expired verification tokens
+ *     tags: [Links]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: query
+ *         name: days
+ *         schema:
+ *           type: integer
+ *           default: 365
+ *           minimum: 30
+ *         description: Retention window; values below 30 are raised to 30
+ *     responses:
+ *       200:
+ *         description: Expired tokens removed
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/cleanup", async (req, res) => {
   try {

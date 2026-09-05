@@ -26,6 +26,21 @@ const options = {
         description: "Production server",
       },
     ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          description: "Admin API key as `Authorization: Bearer <key>`",
+        },
+        apiKeyHeader: {
+          type: "apiKey",
+          in: "header",
+          name: "X-API-Key",
+          description: "Admin API key as an `X-API-Key` header",
+        },
+      },
+    },
     tags: [
       {
         name: "Servers",
@@ -42,6 +57,30 @@ const options = {
       {
         name: "History",
         description: "Historical data and trends endpoints",
+      },
+      {
+        name: "Health",
+        description: "Liveness and runtime statistics",
+      },
+      {
+        name: "Chat",
+        description: "Cross-server chat relay",
+      },
+      {
+        name: "Admin",
+        description: "Operator-only maintenance endpoints",
+      },
+      {
+        name: "Links",
+        description: "Player email and Discord account linking",
+      },
+      {
+        name: "VIP",
+        description: "VIP status, gift tokens and custom cosmetics",
+      },
+      {
+        name: "Ko-fi",
+        description: "Ko-fi donation webhook and transactions",
       },
       {
         name: "KZ Global",

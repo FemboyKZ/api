@@ -25,6 +25,40 @@ const { creditSpend } = require("../services/entitlements");
  * Returns 200 on successful processing so Ko-fi does not retry,
  * returns 5xx only on transient errors (so Ko-fi retries the same message_id).
  */
+/**
+ * @swagger
+ * /kofi/webhook:
+ *   post:
+ *     summary: Ko-fi donation callback
+ *     description: >
+ *       Public endpoint called by Ko-fi. Not adminAuth'd; the payload is instead
+ *       verified against KOFI_VERIFICATION_TOKEN before any write. Ko-fi posts
+ *       form-encoded with a single `data` field holding a JSON string. A 500 is
+ *       returned on transient failure so Ko-fi retries the same message_id.
+ *     tags: [Ko-fi]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/x-www-form-urlencoded:
+ *           schema:
+ *             type: object
+ *             required: [data]
+ *             properties:
+ *               data:
+ *                 type: string
+ *                 description: JSON-encoded Ko-fi payload
+ *     responses:
+ *       200:
+ *         description: Payload accepted, or already seen (idempotent by message_id)
+ *       400:
+ *         description: Missing data field, or malformed JSON
+ *       401:
+ *         description: Invalid verification token
+ *       503:
+ *         description: Ko-fi webhook disabled
+ *       500:
+ *         description: Processing failed
+ */
 router.post(
   "/webhook",
   express.urlencoded({ extended: true, limit: "256kb" }),
@@ -57,6 +91,53 @@ router.post(
  * GET /kofi/transactions
  * Admin: list transactions with filters + pagination.
  * Query: status, claim_status, type, steamid, page, limit
+ */
+/**
+ * @swagger
+ * /kofi/transactions:
+ *   get:
+ *     summary: List recorded donations
+ *     tags: [Ko-fi]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Resolution status (matched or pending)
+ *       - in: query
+ *         name: claim_status
+ *         schema:
+ *           type: string
+ *         description: claimed or unclaimed
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *         description: Ko-fi transaction type
+ *       - in: query
+ *         name: steamid
+ *         schema:
+ *           type: string
+ *         description: Buyer or beneficiary SteamID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Paginated transactions
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.get("/transactions", adminAuth, async (req, res) => {
   try {
@@ -116,6 +197,37 @@ router.get("/transactions", adminAuth, async (req, res) => {
  * by resolved SteamID and/or Ko-fi email.
  * The site shows these so the logged-in player can claim for self or gift each one.
  */
+/**
+ * @swagger
+ * /kofi/claims:
+ *   get:
+ *     summary: Claimed and unclaimed donation state
+ *     tags: [Ko-fi]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: query
+ *         name: steamid
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Claim rows
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
+ */
 router.get("/claims", adminAuth, async (req, res) => {
   try {
     const { steamid, email } = req.query;
@@ -151,6 +263,23 @@ router.get("/claims", adminAuth, async (req, res) => {
 /**
  * GET /kofi/summary
  * Admin: EUR totals + counts by status/type/claim_status.
+ */
+/**
+ * @swagger
+ * /kofi/summary:
+ *   get:
+ *     summary: Donation totals
+ *     tags: [Ko-fi]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     responses:
+ *       200:
+ *         description: Aggregate donation totals
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.get("/summary", adminAuth, async (req, res) => {
   try {
@@ -189,6 +318,60 @@ router.get("/summary", adminAuth, async (req, res) => {
  *   { decision: "gift", steamid, targetSteamid }          -> credit a member
  *   { decision: "gift", steamid, targetEmail }            -> pending gift (unregistered)
  * `steamid` is the acting/claiming player (recorded as gifter for gifts).
+ */
+/**
+ * @swagger
+ * /kofi/transactions/{id}/claim:
+ *   post:
+ *     summary: Attach a donation to a player
+ *     description: >
+ *       decision "self" credits the buyer, "gift" credits another player named by
+ *       targetSteamid or targetEmail. Claiming credits the recipient's lifetime
+ *       EUR total, which drives their VIP tier.
+ *     tags: [Ko-fi]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Transaction id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [decision]
+ *             properties:
+ *               decision:
+ *                 type: string
+ *                 enum: [self, gift]
+ *               steamid:
+ *                 type: string
+ *                 description: Claiming buyer
+ *               targetSteamid:
+ *                 type: string
+ *                 description: Gift recipient, when decision is gift
+ *               targetEmail:
+ *                 type: string
+ *                 description: Gift recipient by verified email, when decision is gift
+ *     responses:
+ *       200:
+ *         description: Transaction claimed
+ *       400:
+ *         description: decision must be self or gift
+ *       401:
+ *         description: Missing or invalid API key
+ *       404:
+ *         description: Transaction not found
+ *       409:
+ *         description: Transaction already claimed or refunded
+ *       500:
+ *         description: Server error
  */
 router.post("/transactions/:id/claim", adminAuth, async (req, res) => {
   const { id } = req.params;

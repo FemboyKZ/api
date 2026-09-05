@@ -37,8 +37,21 @@ const {
 } = require("../services/jumpstatCleanup");
 
 /**
- * GET /admin/scraper-status
- * Get current KZ Records scraper statistics
+ * @swagger
+ * /admin/scraper-status:
+ *   get:
+ *     summary: KZ records scraper progress
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     responses:
+ *       200:
+ *         description: Scraper counters and current position
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.get("/scraper-status", async (req, res) => {
   try {
@@ -54,9 +67,28 @@ router.get("/scraper-status", async (req, res) => {
 });
 
 /**
- * POST /admin/aggregate-daily
- * Manually trigger daily statistics aggregation
- * Should be run via cron job daily at midnight
+ * @swagger
+ * /admin/aggregate-daily:
+ *   post:
+ *     summary: Roll history into daily aggregates
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Day to aggregate; defaults to the most recent
+ *     responses:
+ *       200:
+ *         description: Aggregation complete, with the date and server count
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/aggregate-daily", async (req, res) => {
   const startTime = Date.now();
@@ -156,8 +188,28 @@ router.post("/aggregate-daily", async (req, res) => {
 });
 
 /**
- * POST /admin/cleanup-history
- * Clean up old historical data based on retention policy
+ * @swagger
+ * /admin/cleanup-history:
+ *   post:
+ *     summary: Prune history past the retention window
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: query
+ *         name: days
+ *         schema:
+ *           type: integer
+ *           default: 30
+ *         description: Keep this many days of history
+ *     responses:
+ *       200:
+ *         description: Rows deleted per history table
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/cleanup-history", async (req, res) => {
   const startTime = Date.now();
@@ -207,8 +259,21 @@ router.post("/cleanup-history", async (req, res) => {
 });
 
 /**
- * GET /admin/ban-status
- * Get current KZ ban status service statistics
+ * @swagger
+ * /admin/ban-status:
+ *   get:
+ *     summary: Ban sweep state
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     responses:
+ *       200:
+ *         description: Ban sweep counters
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.get("/ban-status", async (req, res) => {
   try {
@@ -224,9 +289,32 @@ router.get("/ban-status", async (req, res) => {
 });
 
 /**
- * POST /admin/update-ban-status
- * Manually trigger ban status update for specific players or all banned players
- * Body: { steamIds?: string[] } - Optional array of steamid64s to check
+ * @swagger
+ * /admin/update-ban-status:
+ *   post:
+ *     summary: Refresh ban flags from GlobalAPI
+ *     description: Updates the given SteamIDs, or every tracked player when steamIds is omitted.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               steamIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Players checked and flags updated
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/update-ban-status", async (req, res) => {
   const startTime = Date.now();
@@ -254,8 +342,21 @@ router.post("/update-ban-status", async (req, res) => {
 });
 
 /**
- * POST /admin/cleanup-expired-bans
- * Manually trigger cleanup of expired bans (unban players)
+ * @swagger
+ * /admin/cleanup-expired-bans:
+ *   post:
+ *     summary: Clear bans whose term has elapsed
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     responses:
+ *       200:
+ *         description: Expired bans cleared
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/cleanup-expired-bans", async (req, res) => {
   const startTime = Date.now();
@@ -279,9 +380,22 @@ router.post("/cleanup-expired-bans", async (req, res) => {
 });
 
 /**
- * POST /admin/sweep-bans
- * Re-read every ban page and log what changed since the last sweep.
- * This is the only way to catch unbans: GlobalKZ has no query for changed bans.
+ * @swagger
+ * /admin/sweep-bans:
+ *   post:
+ *     summary: Full re-fetch and diff of all bans
+ *     description: GlobalAPI has no changed-since query, so unbans and edits are only visible by re-fetching and diffing.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     responses:
+ *       200:
+ *         description: Sweep complete, with detected changes
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/sweep-bans", async (req, res) => {
   const startTime = Date.now();
@@ -305,8 +419,21 @@ router.post("/sweep-bans", async (req, res) => {
 });
 
 /**
- * GET /admin/kz-statistics
- * Get current KZ statistics status and summary
+ * @swagger
+ * /admin/kz-statistics:
+ *   get:
+ *     summary: Cached KZ aggregate statistics
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     responses:
+ *       200:
+ *         description: Current statistics summary
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.get("/kz-statistics", async (req, res) => {
   try {
@@ -322,9 +449,29 @@ router.get("/kz-statistics", async (req, res) => {
 });
 
 /**
- * POST /admin/refresh-kz-statistics
- * Manually trigger KZ statistics refresh
- * Query params: type=all|players|maps|servers (default: all)
+ * @swagger
+ * /admin/refresh-kz-statistics:
+ *   post:
+ *     summary: Recompute aggregate statistics
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: [all, player, map, server]
+ *           default: all
+ *         description: Which statistics to refresh
+ *     responses:
+ *       200:
+ *         description: Statistics refreshed
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/refresh-kz-statistics", async (req, res) => {
   const startTime = Date.now();
@@ -368,9 +515,22 @@ router.post("/refresh-kz-statistics", async (req, res) => {
 });
 
 /**
- * POST /admin/populate-kz-statistics
- * Trigger initial population of KZ statistics tables
- * WARNING: This may take a long time for large databases
+ * @swagger
+ * /admin/populate-kz-statistics:
+ *   post:
+ *     summary: First-time statistics population
+ *     description: Reports success as a boolean rather than throwing, so a 200 can still carry success false.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     responses:
+ *       200:
+ *         description: Population finished; success reports whether it actually succeeded
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/populate-kz-statistics", async (req, res) => {
   const startTime = Date.now();
@@ -399,8 +559,21 @@ router.post("/populate-kz-statistics", async (req, res) => {
 // ==================== JUMPSTAT CLEANUP ENDPOINTS ====================
 
 /**
- * GET /admin/jumpstat-filters
- * Get list of available jumpstat cleanup filters
+ * @swagger
+ * /admin/jumpstat-filters:
+ *   get:
+ *     summary: Active jumpstat quarantine filters
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     responses:
+ *       200:
+ *         description: Available filters
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.get("/jumpstat-filters", async (req, res) => {
   try {
@@ -417,12 +590,39 @@ router.get("/jumpstat-filters", async (req, res) => {
 });
 
 /**
- * POST /admin/cleanup-jumpstats
- * Run jumpstat cleanup with configured filters
- * Query params:
- *   - dryRun: boolean (default: true) - If true, only report what would be cleaned
- *   - game: string (cs2|csgo|csgo128|csgo64|all, default: all)
- *   - filterId: string - Run only a specific filter by ID
+ * @swagger
+ * /admin/cleanup-jumpstats:
+ *   post:
+ *     summary: Quarantine jumpstats matching the filters
+ *     description: Defaults to a dry run; pass dryRun=false to actually quarantine.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: query
+ *         name: dryRun
+ *         schema:
+ *           type: string
+ *           default: "true"
+ *         description: Set to false to apply the changes
+ *       - in: query
+ *         name: game
+ *         schema:
+ *           type: string
+ *           default: all
+ *       - in: query
+ *         name: filterId
+ *         schema:
+ *           type: string
+ *         description: Restrict to a single filter
+ *     responses:
+ *       200:
+ *         description: Matches found, and how many were quarantined unless this was a dry run
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/cleanup-jumpstats", async (req, res) => {
   const startTime = Date.now();
@@ -463,14 +663,46 @@ router.post("/cleanup-jumpstats", async (req, res) => {
 });
 
 /**
- * GET /admin/quarantined-jumpstats
- * Get list of quarantined jumpstats
- * Query params:
- *   - game: string (cs2|csgo128|csgo64, default: cs2)
- *   - page: number (default: 1)
- *   - limit: number (default: 50, max: 100)
- *   - filterId: string - Filter by specific filter ID
- *   - steamid64: string - Filter by player
+ * @swagger
+ * /admin/quarantined-jumpstats:
+ *   get:
+ *     summary: Jumpstats currently held by the filters
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: query
+ *         name: game
+ *         schema:
+ *           type: string
+ *           default: cs2
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *           maximum: 100
+ *       - in: query
+ *         name: filterId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: steamid64
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Paginated quarantined rows
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.get("/quarantined-jumpstats", async (req, res) => {
   try {
@@ -507,12 +739,37 @@ router.get("/quarantined-jumpstats", async (req, res) => {
 });
 
 /**
- * POST /admin/restore-jumpstat/:id
- * Restore a quarantined jumpstat back to the main table
- * Path params:
- *   - id: string - Record ID to restore
- * Query params:
- *   - game: string (cs2|csgo128|csgo64, default: cs2)
+ * @swagger
+ * /admin/restore-jumpstat/{id}:
+ *   post:
+ *     summary: Release one quarantined jumpstat
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Quarantined record id
+ *       - in: query
+ *         name: game
+ *         schema:
+ *           type: string
+ *           default: cs2
+ *     responses:
+ *       200:
+ *         description: Jumpstat restored
+ *       400:
+ *         description: Record ID is required
+ *       404:
+ *         description: Quarantined record not found
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/restore-jumpstat/:id", async (req, res) => {
   const startTime = Date.now();
@@ -550,11 +807,32 @@ router.post("/restore-jumpstat/:id", async (req, res) => {
 });
 
 /**
- * POST /admin/restore-all-jumpstats
- * Restore all quarantined jumpstats back to the main table
- * Query params:
- *   - game: string (cs2|csgo128|csgo64, required)
- *   - filterId: string (optional - only restore records from this filter)
+ * @swagger
+ * /admin/restore-all-jumpstats:
+ *   post:
+ *     summary: Release every quarantined jumpstat
+ *     description: Reports success as a boolean from the cleanup service rather than throwing.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: query
+ *         name: game
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: filterId
+ *         schema:
+ *           type: string
+ *         description: Restrict to jumpstats held by one filter
+ *     responses:
+ *       200:
+ *         description: Restore finished, with the number of rows released
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/restore-all-jumpstats", async (req, res) => {
   const startTime = Date.now();
@@ -595,9 +873,41 @@ router.post("/restore-all-jumpstats", async (req, res) => {
 });
 
 /**
- * PUT /admin/players/:steamid/discord
- * Set or update a player's Discord ID
- * Body: { discord_id: "snowflake_string" }
+ * @swagger
+ * /admin/players/{steamid}/discord:
+ *   put:
+ *     summary: Link a Discord account to a player
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SteamID in any format
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [discord_id]
+ *             properties:
+ *               discord_id:
+ *                 type: string
+ *                 description: Discord snowflake
+ *     responses:
+ *       200:
+ *         description: Discord account linked
+ *       400:
+ *         description: Invalid SteamID format
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.put("/players/:steamid/discord", async (req, res) => {
   try {
@@ -635,8 +945,30 @@ router.put("/players/:steamid/discord", async (req, res) => {
 });
 
 /**
- * DELETE /admin/players/:steamid/discord
- * Remove a player's linked Discord ID
+ * @swagger
+ * /admin/players/{steamid}/discord:
+ *   delete:
+ *     summary: Unlink a player's Discord account
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SteamID in any format
+ *     responses:
+ *       200:
+ *         description: Discord account unlinked
+ *       400:
+ *         description: Invalid SteamID format
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.delete("/players/:steamid/discord", async (req, res) => {
   try {
@@ -663,10 +995,36 @@ router.delete("/players/:steamid/discord", async (req, res) => {
 });
 
 /**
- * POST /admin/players/register
- * Create or update a player entry with zero playtime.
- * Used when a player visits their profile before ever playing on a server.
- * Body: { steamid, name }
+ * @swagger
+ * /admin/players/register:
+ *   post:
+ *     summary: Create a player record
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [steamid]
+ *             properties:
+ *               steamid:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *                 maxLength: 255
+ *     responses:
+ *       200:
+ *         description: Player registered
+ *       400:
+ *         description: Invalid SteamID format
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/players/register", async (req, res) => {
   try {
@@ -700,15 +1058,49 @@ router.post("/players/register", async (req, res) => {
 });
 
 /**
- * PUT /admin/players/:steamid/permissions
- * Set or update a player's permissions
- * Body: {
- *   roles: string[],
- *   customRole: { id: string, color: string, name: string } | null,
- *   customTag:  { color: string, name: string } | null
- * }
- * Valid roles: owner, admin, mod, dev, vip, vip+, contributor, og, gmc
- * Valid tag colors: default darkred purple green olive lime red grey yellow bluegrey blue darkblue orchid lightred gold
+ * @swagger
+ * /admin/players/{steamid}/permissions:
+ *   put:
+ *     summary: Set a player's roles and custom cosmetics
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SteamID in any format
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [roles]
+ *             properties:
+ *               roles:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Must be valid role names
+ *               customRole:
+ *                 type: object
+ *                 nullable: true
+ *               customTag:
+ *                 type: object
+ *                 nullable: true
+ *     responses:
+ *       200:
+ *         description: Permissions updated
+ *       400:
+ *         description: Invalid SteamID, roles not an array, or an invalid role/colour value
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.put("/players/:steamid/permissions", async (req, res) => {
   try {
@@ -805,8 +1197,30 @@ router.put("/players/:steamid/permissions", async (req, res) => {
 });
 
 /**
- * DELETE /admin/players/:steamid/permissions
- * Remove a player's permissions (set to null)
+ * @swagger
+ * /admin/players/{steamid}/permissions:
+ *   delete:
+ *     summary: Revoke a player's permissions
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SteamID in any format
+ *     responses:
+ *       200:
+ *         description: Permissions revoked
+ *       400:
+ *         description: Invalid SteamID format
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.delete("/players/:steamid/permissions", async (req, res) => {
   try {
@@ -833,9 +1247,40 @@ router.delete("/players/:steamid/permissions", async (req, res) => {
 });
 
 /**
- * PUT /admin/players/:steamid/whitelist
- * Set or clear the whitelisted flag for a player
- * Body: { whitelisted: boolean }
+ * @swagger
+ * /admin/players/{steamid}/whitelist:
+ *   put:
+ *     summary: Set a player's whitelist state
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SteamID in any format
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [whitelisted]
+ *             properties:
+ *               whitelisted:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Whitelist state updated
+ *       400:
+ *         description: Invalid SteamID, or whitelisted is not a boolean
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.put("/players/:steamid/whitelist", async (req, res) => {
   try {
@@ -867,9 +1312,35 @@ router.put("/players/:steamid/whitelist", async (req, res) => {
 });
 
 /**
- * POST /admin/cache/invalidate
- * Invalidate Redis cache keys by pattern. Use "*" to flush everything.
- * Body: { pattern: "cache:kz:*" }
+ * @swagger
+ * /admin/cache/invalidate:
+ *   post:
+ *     summary: Drop Redis cache entries
+ *     description: A pattern of * flushes the whole cache.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [pattern]
+ *             properties:
+ *               pattern:
+ *                 type: string
+ *                 description: Key pattern, or * for everything
+ *     responses:
+ *       200:
+ *         description: Cache entries dropped
+ *       400:
+ *         description: pattern is required
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/cache/invalidate", async (req, res) => {
   const { pattern } = req.body;

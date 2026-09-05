@@ -1179,6 +1179,45 @@ router.get(
   },
 );
 
+/**
+ * @swagger
+ * /global/players/{steamid}/refresh-pbs:
+ *   post:
+ *     summary: Refresh a player's cached personal bests
+ *     description: Recomputes the kz_player_map_pbs cache rows for one player
+ *     tags: [KZ Global]
+ *     parameters:
+ *       - in: path
+ *         name: steamid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SteamID in any format
+ *     responses:
+ *       200:
+ *         description: PBs refreshed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 steamid64:
+ *                   type: string
+ *                 player_name:
+ *                   type: string
+ *                 pbs_count:
+ *                   type: integer
+ *       400:
+ *         description: Invalid SteamID format
+ *       404:
+ *         description: Player not found
+ *       503:
+ *         description: PBs cache table not available
+ *       500:
+ *         description: Server error
+ */
 router.post("/:steamid/refresh-pbs", async (req, res) => {
   try {
     const { steamid } = req.params;

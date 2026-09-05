@@ -41,10 +41,98 @@ const {
  *   players: [{ steamid, name, ip, time_on_server, in_game, gokz?: { mode, timer_running, paused, time, course, teleports }, cs2kz?: { ... }, playtime_modes?: { kz_vanilla, kz_simple, kz_timer } | { cs2kz_vnl, cs2kz_ckz } }]
  * }
  */
+/**
+ * @swagger
+ * /servers/status:
+ *   get:
+ *     summary: Not supported
+ *     description: This path only accepts POST; a GET always answers 405.
+ *     tags: [Servers]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     responses:
+ *       405:
+ *         description: Method not allowed, use POST
+ *       401:
+ *         description: Missing or invalid API key
+ */
 router.get("/", (req, res) => {
   res.status(405).json({ error: "Method not allowed. Use POST." });
 });
 
+/**
+ * @swagger
+ * /servers/status:
+ *   post:
+ *     summary: Ingest a status report from a server
+ *     description: >
+ *       Write path used by the game-server plugins to report themselves. The
+ *       server must already be registered; unknown addresses are rejected.
+ *       Optional side effects (history rows, player IPs) are best-effort and do
+ *       not fail the ingest.
+ *     tags: [Servers]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [server]
+ *             properties:
+ *               server:
+ *                 type: object
+ *                 required: [ip, port]
+ *                 properties:
+ *                   ip:
+ *                     type: string
+ *                   port:
+ *                     type: integer
+ *                   hostname:
+ *                     type: string
+ *                   map:
+ *                     type: string
+ *                   os:
+ *                     type: string
+ *                   version:
+ *                     type: string
+ *                   secure:
+ *                     type: boolean
+ *                   max_players:
+ *                     type: integer
+ *                   bot_count:
+ *                     type: integer
+ *                   tickrate:
+ *                     type: integer
+ *                   cs:
+ *                     type: string
+ *                     description: Game identifier reported by the plugin
+ *                   gokz_loaded:
+ *                     type: boolean
+ *                   sm_version:
+ *                     type: string
+ *                   mm_version:
+ *                     type: string
+ *               players:
+ *                 type: array
+ *                 description: Currently connected players
+ *                 items:
+ *                   type: object
+ *     responses:
+ *       200:
+ *         description: Status ingested
+ *       400:
+ *         description: Missing server data, or invalid ip/port
+ *       401:
+ *         description: Missing or invalid API key
+ *       404:
+ *         description: Server not registered
+ *       500:
+ *         description: Server error
+ */
 router.post("/", async (req, res) => {
   try {
     const payload = req.body;
@@ -318,6 +406,38 @@ router.post("/", async (req, res) => {
  * Clears the live flag so the updater immediately resumes polling via Steam Master Server on its next cycle.
  *
  * Expected payload: { ip: "1.2.3.4", port: 27015 }
+ */
+/**
+ * @swagger
+ * /servers/status/hibernate:
+ *   post:
+ *     summary: Mark a server as hibernating
+ *     description: Clears the server's live state when it goes idle.
+ *     tags: [Servers]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [ip, port]
+ *             properties:
+ *               ip:
+ *                 type: string
+ *               port:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Hibernate signal accepted
+ *       400:
+ *         description: Invalid ip/port
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.post("/hibernate", async (req, res) => {
   try {

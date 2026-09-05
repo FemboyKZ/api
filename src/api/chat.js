@@ -22,8 +22,59 @@ const { addMessage, wait } = require("../services/crossChat");
 const STREAM_HOLD_MS = 25000; // keep < the plugins' 30s request timeout
 
 /**
- * POST /chat/messages
- * Body: { ip, port, steamid?, name, message, team?, muted? }
+ * @swagger
+ * /chat/messages:
+ *   post:
+ *     summary: Ingest one chat line from a server
+ *     description: >
+ *       A message that sanitizes to nothing (for example one made only of colour
+ *       codes) is dropped quietly and still answers 200, with dropped set to true.
+ *     tags: [Chat]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [ip, port, message]
+ *             properties:
+ *               ip:
+ *                 type: string
+ *               port:
+ *                 type: integer
+ *               steamid:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               message:
+ *                 type: string
+ *               team:
+ *                 type: integer
+ *               muted:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Message accepted, or dropped after sanitizing
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 id:
+ *                   type: integer
+ *                 dropped:
+ *                   type: boolean
+ *       400:
+ *         description: Invalid server ip/port, or missing message
+ *       401:
+ *         description: Missing or invalid API key
+ *       404:
+ *         description: Server not registered for the chat relay
  */
 router.post("/messages", (req, res) => {
   const { ip, port, steamid, name, message, team, muted } = req.body || {};
@@ -58,12 +109,70 @@ router.post("/messages", (req, res) => {
 });
 
 /**
- * GET /chat/stream?after=<id>&ip=<ip>&port=<port>
- *
- * `after`     last cursor the caller has seen (-1 / omitted => handshake: get the current cursor with no backlog).
- * `ip`,`port` identify the caller so its own messages are excluded from the relay (it already printed them locally).
- *
- * Response: { cursor, messages: [{ id, alias, game, name, message, team, muted }] }
+ * @swagger
+ * /chat/stream:
+ *   get:
+ *     summary: Long-poll for new chat messages
+ *     description: >
+ *       Parks the request for up to 25 seconds and returns as soon as any other
+ *       server posts a message. This response shape is a fixed contract with the
+ *       game-server plugins.
+ *     tags: [Chat]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: query
+ *         name: after
+ *         schema:
+ *           type: integer
+ *           default: -1
+ *         description: >
+ *           Last cursor the caller has seen. Omitted or -1 is a handshake that
+ *           returns the current cursor with no backlog.
+ *       - in: query
+ *         name: ip
+ *         schema:
+ *           type: string
+ *         description: Caller's address, so its own messages are excluded from the relay
+ *       - in: query
+ *         name: port
+ *         schema:
+ *           type: integer
+ *         description: Caller's port, paired with ip
+ *     responses:
+ *       200:
+ *         description: Cursor and any messages since it
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 cursor:
+ *                   type: integer
+ *                 messages:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       alias:
+ *                         type: string
+ *                       game:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *                       message:
+ *                         type: string
+ *                       team:
+ *                         type: integer
+ *                       muted:
+ *                         type: boolean
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Stream error
  */
 router.get("/stream", (req, res) => {
   // Long-poll responses repeat (e.g. an empty {messages:[]} on timeout), so
@@ -98,8 +207,41 @@ router.get("/stream", (req, res) => {
 });
 
 /**
- * GET /chat/history?limit=<n>
- * Most recent messages from the DB, newest first.
+ * @swagger
+ * /chat/history:
+ *   get:
+ *     summary: Recent chat messages from the database
+ *     description: Newest first. Unlike /chat/stream this reads stored history rather than long-polling.
+ *     tags: [Chat]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyHeader: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *           minimum: 1
+ *           maximum: 200
+ *     responses:
+ *       200:
+ *         description: Stored messages, newest first
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       401:
+ *         description: Missing or invalid API key
+ *       500:
+ *         description: Server error
  */
 router.get("/history", async (req, res) => {
   try {
