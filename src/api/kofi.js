@@ -1,6 +1,6 @@
 /**
  * Auth is per-route, not at mount time: /kofi/webhook stays public for Ko-fi to reach
- * and is verified against its verification_token in services/kofi.js before any write. 
+ * and is verified against its verification_token in services/kofi.js before any write.
  * Everything else is adminAuth'd.
  */
 
