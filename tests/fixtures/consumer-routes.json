@@ -1,0 +1,158 @@
+[
+  {
+    "method": "POST",
+    "path": "/chat/messages"
+  },
+  {
+    "method": "GET",
+    "path": "/global/bans"
+  },
+  {
+    "method": "GET",
+    "path": "/global/bans/%d"
+  },
+  {
+    "method": "GET",
+    "path": "/global/bans/active"
+  },
+  {
+    "method": "GET",
+    "path": "/global/bans/player/%s"
+  },
+  {
+    "method": "GET",
+    "path": "/global/maps"
+  },
+  {
+    "method": "GET",
+    "path": "/global/maps/%s"
+  },
+  {
+    "method": "GET",
+    "path": "/global/maps/%s/courses"
+  },
+  {
+    "method": "GET",
+    "path": "/global/maps/%s/records"
+  },
+  {
+    "method": "GET",
+    "path": "/global/players"
+  },
+  {
+    "method": "GET",
+    "path": "/global/players/%s"
+  },
+  {
+    "method": "GET",
+    "path": "/global/players/%s/completions"
+  },
+  {
+    "method": "GET",
+    "path": "/global/players/%s/pbs"
+  },
+  {
+    "method": "GET",
+    "path": "/global/players/%s/records"
+  },
+  {
+    "method": "GET",
+    "path": "/global/records"
+  },
+  {
+    "method": "GET",
+    "path": "/global/records/%d"
+  },
+  {
+    "method": "GET",
+    "path": "/global/records/leaderboard/%s"
+  },
+  {
+    "method": "GET",
+    "path": "/global/records/recent"
+  },
+  {
+    "method": "GET",
+    "path": "/global/records/worldrecords"
+  },
+  {
+    "method": "GET",
+    "path": "/global/servers"
+  },
+  {
+    "method": "GET",
+    "path": "/global/servers/%d"
+  },
+  {
+    "method": "GET",
+    "path": "/health"
+  },
+  {
+    "method": "GET",
+    "path": "/local/cs2kz/maps"
+  },
+  {
+    "method": "GET",
+    "path": "/local/cs2kz/players"
+  },
+  {
+    "method": "GET",
+    "path": "/local/cs2kz/records"
+  },
+  {
+    "method": "GET",
+    "path": "/local/cs2kz/stats"
+  },
+  {
+    "method": "GET",
+    "path": "/local/gokz/maps"
+  },
+  {
+    "method": "GET",
+    "path": "/local/gokz/maps/%s"
+  },
+  {
+    "method": "GET",
+    "path": "/local/gokz/players"
+  },
+  {
+    "method": "GET",
+    "path": "/local/gokz/records"
+  },
+  {
+    "method": "GET",
+    "path": "/maps"
+  },
+  {
+    "method": "GET",
+    "path": "/maps/%s"
+  },
+  {
+    "method": "GET",
+    "path": "/players"
+  },
+  {
+    "method": "GET",
+    "path": "/players/%s"
+  },
+  {
+    "method": "GET",
+    "path": "/players/online"
+  },
+  {
+    "method": "GET",
+    "path": "/servers"
+  },
+  {
+    "method": "GET",
+    "path": "/servers/%s"
+  },
+  {
+    "method": "POST",
+    "path": "/servers/status"
+  },
+  {
+    "method": "POST",
+    "path": "/servers/status/hibernate"
+  }
+]

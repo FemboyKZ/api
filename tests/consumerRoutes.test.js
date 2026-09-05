@@ -1,51 +1,57 @@
 /**
  * Every endpoint the game-server plugins call must still exist.
  *
- * The paths are read straight out of the plugin sources,
- * so renaming a route here without updating mm-fkz-api and sm-fkz-api fails this test.
+ * fixtures/consumer-routes.json is the committed record of those calls,
+ * so this runs in CI where mm-fkz-api and sm-fkz-api are not checked out.
+ * When those repos are present beside this one, a second test re-reads them and fails if the record has drifted.
+ * Regenerate with:
+ *   node tests/fixtures/generate-consumer-routes.js
  *
- * Only 404 is treated as failure: 401/403/500 all prove the route matched.
+ * Only 404 counts as failure: 401/403/500 all prove the route matched.
  */
 const fs = require("fs");
 const path = require("path");
 const request = require("supertest");
 
 const app = require("../src/app");
+const { CONSUMER_SOURCES, scanConsumerCalls } = require("./fixtures/consumers");
 
-const CONSUMERS = [
-  "../../mm-fkz-api/src/api.cpp",
-  "../../mm-fkz-api/src/cross_chat.cpp",
-  "../../sm-fkz-api/scripting/fkz-api/natives.sp",
-  "../../sm-fkz-api/scripting/fkz-api/chat.sp",
-];
+const recorded = require("./fixtures/consumer-routes.json");
 
-/** API paths the plugins build, with printf placeholders filled in. */
-function consumerPaths() {
-  const found = new Set();
-  for (const rel of CONSUMERS) {
-    const file = path.join(__dirname, rel);
-    if (!fs.existsSync(file)) continue;
-    const src = fs.readFileSync(file, "utf8");
-    for (const [, literal] of src.matchAll(/"(\/[A-Za-z0-9/:%_.-]+)"/g)) {
-      if (!/^\/(global|local|servers|players|maps|health|chat)/.test(literal)) {
-        continue;
-      }
-      // %s and %d are filled by the plugin at call time.
-      found.add(literal.replace(/%d/g, "1").replace(/%s/g, "sample"));
-    }
-  }
-  return [...found].sort();
-}
-
-const paths = consumerPaths();
+/** Plugins substitute these at call time. */
+const concrete = (p) => p.replace(/%d/g, "1").replace(/%s/g, "sample");
 
 describe("routes the plugins depend on", () => {
-  it("finds the plugin sources", () => {
-    expect(paths.length).toBeGreaterThan(30);
+  it("has a non-empty recorded call list", () => {
+    expect(recorded.length).toBeGreaterThan(30);
   });
 
-  it.each(paths)("GET %s is routed", async (p) => {
-    const res = await request(app).get(p);
-    expect(res.status).not.toBe(404);
+  it.each(recorded.map((c) => [c.method, c.path]))(
+    "%s %s is routed",
+    async (method, p) => {
+      const res = await request(app)[method.toLowerCase()](concrete(p));
+      expect(res.status).not.toBe(404);
+    },
+  );
+});
+
+const sourcesPresent = CONSUMER_SOURCES.every((f) => fs.existsSync(f));
+
+// Only meaningful on a machine with the plugin repos checked out beside this one.
+const describeIfSources = sourcesPresent ? describe : describe.skip;
+
+describeIfSources("recorded calls match the plugin sources", () => {
+  it("is in step with mm-fkz-api and sm-fkz-api", () => {
+    expect(scanConsumerCalls()).toEqual(recorded);
   });
 });
+
+if (!sourcesPresent) {
+  const missing = CONSUMER_SOURCES.filter((f) => !fs.existsSync(f)).map((f) =>
+    path.basename(f),
+  );
+  console.log(
+    `[consumerRoutes] plugin sources not found (${missing.join(", ")}), ` +
+      "drift check skipped; the recorded calls were still verified.",
+  );
+}
