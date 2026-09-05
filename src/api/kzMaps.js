@@ -183,7 +183,9 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       pagination: paginationMeta(validPage, validLimit, total),
     });
   } catch (error) {
-    logger.error(`Failed to fetch KZ maps: ${error.message}`, { stack: error.stack });
+    logger.error(`Failed to fetch KZ maps: ${error.message}`, {
+      stack: error.stack,
+    });
 
     // Provide more specific error messages
     if (error.code === "ECONNREFUSED") {
@@ -194,7 +196,10 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       });
     }
 
-    if (error.code === "ETIMEDOUT" || error.code === "PROTOCOL_CONNECTION_LOST") {
+    if (
+      error.code === "ETIMEDOUT" ||
+      error.code === "PROTOCOL_CONNECTION_LOST"
+    ) {
       return res.status(504).json({
         error: "Database connection timeout",
         message:
