@@ -95,7 +95,6 @@ router.get(
     generateCacheKey("history:server", req.params, req.query),
   ),
   async (req, res) => {
-    const startTime = Date.now();
     try {
       const { ip, port } = req.params;
       const { hours = 24, interval = 60 } = req.query;
@@ -140,8 +139,6 @@ router.get(
           lastTimestamp = timestamp;
         }
       }
-
-      logger.logRequest(req, res, Date.now() - startTime);
 
       res.json({
         total: downsampled.length,
@@ -229,7 +226,6 @@ router.get(
     generateCacheKey("history:player", req.params, req.query),
   ),
   async (req, res) => {
-    const startTime = Date.now();
     try {
       // Sessions are stored as SteamID64
       const steamid = resolveSteamID(req.params.steamid);
@@ -264,8 +260,6 @@ router.get(
         "SELECT COUNT(*) as total FROM player_sessions WHERE steamid = ?",
         [steamid],
       );
-
-      logger.logRequest(req, res, Date.now() - startTime);
 
       res.json({
         total: total,
@@ -353,7 +347,6 @@ router.get(
   "/maps",
   cacheMiddleware(60, (req) => generateCacheKey("history:maps", {}, req.query)),
   async (req, res) => {
-    const startTime = Date.now();
     try {
       const { page = 1, limit = 20, server, map } = req.query;
       const {
@@ -389,8 +382,6 @@ router.get(
         `SELECT COUNT(*) as total FROM map_history ${where}`,
         params,
       );
-
-      logger.logRequest(req, res, Date.now() - startTime);
 
       res.json({
         total: total,
@@ -461,7 +452,6 @@ router.get(
     generateCacheKey("history:trends:daily", {}, req.query),
   ),
   async (req, res) => {
-    const startTime = Date.now();
     try {
       const { days = 7, server } = req.query;
       const daysInt = Math.min(Math.max(parseInt(days, 10) || 7, 1), 90);
@@ -493,8 +483,6 @@ router.get(
       query += " ORDER BY stat_date DESC, server_ip, server_port";
 
       const [rows] = await pool.query(query, params);
-
-      logger.logRequest(req, res, Date.now() - startTime);
 
       res.json({
         total: rows.length,
@@ -561,7 +549,6 @@ router.get(
     generateCacheKey("history:trends:hourly", {}, req.query),
   ),
   async (req, res) => {
-    const startTime = Date.now();
     try {
       const { hours = 24, server } = req.query;
       const hoursInt = Math.min(Math.max(parseInt(hours, 10) || 24, 1), 168);
@@ -590,8 +577,6 @@ router.get(
       query += " GROUP BY hour, server_ip, server_port ORDER BY hour DESC";
 
       const [rows] = await pool.query(query, params);
-
-      logger.logRequest(req, res, Date.now() - startTime);
 
       res.json({
         total: rows.length,

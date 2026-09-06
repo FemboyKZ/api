@@ -95,7 +95,6 @@ router.get("/scraper-status", async (req, res) => {
  *         description: Server error
  */
 router.post("/aggregate-daily", async (req, res) => {
-  const startTime = Date.now();
   try {
     const { date } = req.query;
     const targetDate = date || new Date().toISOString().split("T")[0];
@@ -177,7 +176,6 @@ router.post("/aggregate-daily", async (req, res) => {
       date: targetDate,
       servers: aggregated,
     });
-    logger.logRequest(req, res, Date.now() - startTime);
 
     res.json({
       success: true,
@@ -216,7 +214,6 @@ router.post("/aggregate-daily", async (req, res) => {
  *         description: Server error
  */
 router.post("/cleanup-history", async (req, res) => {
-  const startTime = Date.now();
   try {
     const { days = 30 } = req.query;
     const daysInt = parseInt(days, 10);
@@ -246,7 +243,6 @@ router.post("/cleanup-history", async (req, res) => {
       sessionRecords: sessionResult.affectedRows,
       mapRecords: mapResult.affectedRows,
     });
-    logger.logRequest(req, res, Date.now() - startTime);
 
     res.json({
       success: true,
@@ -321,7 +317,6 @@ router.get("/ban-status", async (req, res) => {
  *         description: Server error
  */
 router.post("/update-ban-status", async (req, res) => {
-  const startTime = Date.now();
   try {
     const { steamIds } = req.body || {};
 
@@ -332,7 +327,6 @@ router.post("/update-ban-status", async (req, res) => {
     const result = await manualBanStatusUpdate(steamIds);
 
     logger.info("Ban status update complete", result);
-    logger.logRequest(req, res, Date.now() - startTime);
 
     res.json({
       success: true,
@@ -363,14 +357,12 @@ router.post("/update-ban-status", async (req, res) => {
  *         description: Server error
  */
 router.post("/cleanup-expired-bans", async (req, res) => {
-  const startTime = Date.now();
   try {
     logger.info("Manual expired bans cleanup triggered");
 
     const result = await cleanupExpiredBans(true);
 
     logger.info("Expired bans cleanup complete", result);
-    logger.logRequest(req, res, Date.now() - startTime);
 
     res.json({
       success: true,
@@ -402,14 +394,12 @@ router.post("/cleanup-expired-bans", async (req, res) => {
  *         description: Server error
  */
 router.post("/sweep-bans", async (req, res) => {
-  const startTime = Date.now();
   try {
     logger.info("Manual full ban sweep triggered");
 
     const result = await processBansFullSweep(true);
 
     logger.info("Full ban sweep complete", result);
-    logger.logRequest(req, res, Date.now() - startTime);
 
     res.json({
       success: true,
@@ -503,7 +493,6 @@ router.post("/refresh-kz-statistics", async (req, res) => {
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     logger.info("KZ statistics refresh complete", { type, elapsed });
-    logger.logRequest(req, res, Date.now() - startTime);
 
     res.json({
       success: true,
@@ -545,7 +534,6 @@ router.post("/populate-kz-statistics", async (req, res) => {
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     logger.info("KZ statistics population complete", { elapsed });
-    logger.logRequest(req, res, Date.now() - startTime);
 
     res.json({
       success: result,
@@ -654,7 +642,6 @@ router.post("/cleanup-jumpstats", async (req, res) => {
       quarantined: result.summary?.total_quarantined || 0,
       elapsed,
     });
-    logger.logRequest(req, res, Date.now() - startTime);
 
     res.json({
       ...result,
@@ -776,7 +763,6 @@ router.get("/quarantined-jumpstats", async (req, res) => {
  *         description: Server error
  */
 router.post("/restore-jumpstat/:id", async (req, res) => {
-  const startTime = Date.now();
   try {
     const { id } = req.params;
     const { game = "cs2" } = req.query;
@@ -788,8 +774,6 @@ router.post("/restore-jumpstat/:id", async (req, res) => {
     logger.info("Restoring quarantined jumpstat", { id, game });
 
     const result = await restoreJumpstat(id, game);
-
-    logger.logRequest(req, res, Date.now() - startTime);
 
     if (result.success) {
       res.json({
@@ -860,7 +844,6 @@ router.post("/restore-all-jumpstats", async (req, res) => {
     const result = await restoreAllJumpstats(game, { filterId });
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    logger.logRequest(req, res, Date.now() - startTime);
 
     res.json({
       success: result.success,
