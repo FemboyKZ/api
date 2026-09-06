@@ -17,6 +17,7 @@ const {
   cacheMiddleware,
   generateCacheKey,
 } = require("../utils/cacheMiddleware");
+const { CACHE_TTL } = require("../config/cache");
 
 /**
  * @swagger
@@ -91,7 +92,7 @@ const {
  */
 router.get(
   "/servers/:ip/:port",
-  cacheMiddleware(60, (req) =>
+  cacheMiddleware(CACHE_TTL.STANDARD, (req) =>
     generateCacheKey("history:server", req.params, req.query),
   ),
   async (req, res) => {
@@ -222,7 +223,7 @@ router.get(
  */
 router.get(
   "/players/:steamid",
-  cacheMiddleware(60, (req) =>
+  cacheMiddleware(CACHE_TTL.STANDARD, (req) =>
     generateCacheKey("history:player", req.params, req.query),
   ),
   async (req, res) => {
@@ -345,7 +346,9 @@ router.get(
  */
 router.get(
   "/maps",
-  cacheMiddleware(60, (req) => generateCacheKey("history:maps", {}, req.query)),
+  cacheMiddleware(CACHE_TTL.STANDARD, (req) =>
+    generateCacheKey("history:maps", {}, req.query),
+  ),
   async (req, res) => {
     try {
       const { page = 1, limit = 20, server, map } = req.query;
@@ -448,7 +451,7 @@ router.get(
  */
 router.get(
   "/trends/daily",
-  cacheMiddleware(300, (req) =>
+  cacheMiddleware(CACHE_TTL.AGGREGATE, (req) =>
     generateCacheKey("history:trends:daily", {}, req.query),
   ),
   async (req, res) => {
@@ -545,7 +548,7 @@ router.get(
  */
 router.get(
   "/trends/hourly",
-  cacheMiddleware(60, (req) =>
+  cacheMiddleware(CACHE_TTL.STANDARD, (req) =>
     generateCacheKey("history:trends:hourly", {}, req.query),
   ),
   async (req, res) => {

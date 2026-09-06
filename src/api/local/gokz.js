@@ -36,6 +36,7 @@ const {
   cacheMiddleware,
   kzKeyGenerator,
 } = require("../../utils/cacheMiddleware");
+const { CACHE_TTL } = require("../../config/cache");
 
 /**
  * Helper to get pool based on tickrate parameter
@@ -98,28 +99,31 @@ const {
  *       500:
  *         description: Server error
  */
-router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
-  try {
-    const { page, limit, name, tickrate, ranked, sort, order } = req.query;
-    const {
-      page: validPage,
-      limit: validLimit,
-      offset,
-    } = validatePagination(page, limit, 100);
+router.get(
+  "/maps",
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const { page, limit, name, tickrate, ranked, sort, order } = req.query;
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit);
 
-    const pool = getKzLocalCSGOPool(tickrate);
+      const pool = getKzLocalCSGOPool(tickrate);
 
-    const validSortFields = ["name", "last_played", "created", "records"];
-    const sortFieldMap = {
-      name: "m.Name",
-      last_played: "m.LastPlayed",
-      created: "m.Created",
-      records: "records_count",
-    };
-    const sortField = validateSortField(sort, validSortFields, "name");
-    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
+      const validSortFields = ["name", "last_played", "created", "records"];
+      const sortFieldMap = {
+        name: "m.Name",
+        last_played: "m.LastPlayed",
+        created: "m.Created",
+        records: "records_count",
+      };
+      const sortField = validateSortField(sort, validSortFields, "name");
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
-    let query = `
+      let query = `
       SELECT 
         m.MapID as id,
         m.Name as name,
@@ -134,45 +138,46 @@ router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       WHERE 1=1
     `;
 
-    // Built once, appended to both this query and the count query below.
-    const filters = f.build([
-      f.like("m.Name", name),
-      f.boolEquals("m.InRankedPool", ranked),
-    ]);
+      // Built once, appended to both this query and the count query below.
+      const filters = f.build([
+        f.like("m.Name", name),
+        f.boolEquals("m.InRankedPool", ranked),
+      ]);
 
-    const params = [...filters.params];
-    query += filters.sql;
+      const params = [...filters.params];
+      query += filters.sql;
 
-    query += ` GROUP BY m.MapID, m.Name, m.LastPlayed, m.Created, m.InRankedPool`;
-    query += ` ORDER BY ${sortFieldMap[sortField]} ${sortOrder}`;
-    query += ` LIMIT ? OFFSET ?`;
-    params.push(validLimit, offset);
+      query += ` GROUP BY m.MapID, m.Name, m.LastPlayed, m.Created, m.InRankedPool`;
+      query += ` ORDER BY ${sortFieldMap[sortField]} ${sortOrder}`;
+      query += ` LIMIT ? OFFSET ?`;
+      params.push(validLimit, offset);
 
-    const [rows] = await pool.query(query, params);
+      const [rows] = await pool.query(query, params);
 
-    let countQuery = `SELECT COUNT(*) as total FROM Maps m WHERE 1=1`;
-    countQuery += filters.sql;
+      let countQuery = `SELECT COUNT(*) as total FROM Maps m WHERE 1=1`;
+      countQuery += filters.sql;
 
-    const [[{ total }]] = await pool.query(countQuery, filters.params);
+      const [[{ total }]] = await pool.query(countQuery, filters.params);
 
-    res.json({
-      data: rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        last_played: row.last_played,
-        created: row.created,
-        in_ranked_pool: row.in_ranked_pool === 1,
-        courses_count: row.courses_count,
-        records_count: row.records_count,
-        tickrate: tickrate === "64" ? 64 : 128,
-      })),
-      pagination: paginationMeta(validPage, validLimit, total),
-    });
-  } catch (error) {
-    logger.error(`Error fetching KZ local maps: ${error.message}`);
-    res.status(500).json({ error: "Failed to fetch maps" });
-  }
-});
+      res.json({
+        data: rows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          last_played: row.last_played,
+          created: row.created,
+          in_ranked_pool: row.in_ranked_pool === 1,
+          courses_count: row.courses_count,
+          records_count: row.records_count,
+          tickrate: tickrate === "64" ? 64 : 128,
+        })),
+        pagination: paginationMeta(validPage, validLimit, total),
+      });
+    } catch (error) {
+      logger.error(`Error fetching KZ local maps: ${error.message}`);
+      res.status(500).json({ error: "Failed to fetch maps" });
+    }
+  },
+);
 
 /**
  * @swagger
@@ -204,7 +209,7 @@ router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
  */
 router.get(
   "/maps/:mapname",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { mapname } = req.params;
@@ -370,7 +375,7 @@ router.get(
  */
 router.get(
   "/records",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const {
@@ -389,7 +394,7 @@ router.get(
         page: validPage,
         limit: validLimit,
         offset,
-      } = validatePagination(page, limit, 100);
+      } = validatePagination(page, limit);
 
       const pool = getKzLocalCSGOPool(tickrate);
 
@@ -512,7 +517,7 @@ router.get(
  */
 router.get(
   "/records/:id",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { id } = req.params;
@@ -648,7 +653,7 @@ router.get(
  */
 router.get(
   "/jumpstats",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const {
@@ -795,7 +800,7 @@ router.get(
  */
 router.get(
   "/jumpstats/:id",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { id } = req.params;
@@ -915,7 +920,7 @@ router.get(
  */
 router.get(
   "/players",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { page, limit, tickrate, name, country, sort, order } = req.query;
@@ -923,7 +928,7 @@ router.get(
         page: validPage,
         limit: validLimit,
         offset,
-      } = validatePagination(page, limit, 100);
+      } = validatePagination(page, limit);
 
       const pool = getKzLocalCSGOPool(tickrate);
 
@@ -1025,7 +1030,7 @@ router.get(
  */
 router.get(
   "/players/:player",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { player } = req.params;

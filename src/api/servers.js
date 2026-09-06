@@ -13,6 +13,7 @@ const {
   cacheMiddleware,
   serversKeyGenerator,
 } = require("../utils/cacheMiddleware");
+const { CACHE_TTL } = require("../config/cache");
 
 /**
  * Detail shape for GET /servers/:ip and /servers/:ip/:port, with player IPs stripped.
@@ -210,70 +211,74 @@ function serverDetail(server) {
  *                   example: "Failed to fetch servers"
  */
 // Cache for 30 seconds
-router.get("/", cacheMiddleware(30, serversKeyGenerator), async (req, res) => {
-  try {
-    const { game, status } = req.query;
-    let query = "SELECT * FROM servers WHERE 1=1";
-    const params = [];
+router.get(
+  "/",
+  cacheMiddleware(CACHE_TTL.FRESH, serversKeyGenerator),
+  async (req, res) => {
+    try {
+      const { game, status } = req.query;
+      let query = "SELECT * FROM servers WHERE 1=1";
+      const params = [];
 
-    if (game) {
-      query += " AND game = ?";
-      params.push(sanitizeString(game, 50));
+      if (game) {
+        query += " AND game = ?";
+        params.push(sanitizeString(game, 50));
+      }
+
+      if (status !== undefined) {
+        query += " AND status = ?";
+        params.push(parseInt(status, 10) || 0);
+      }
+      // Removed default status=1 filter to show all servers including offline ones
+
+      logger.info(
+        `Executing query: ${query} with params: ${JSON.stringify(params)}`,
+      );
+
+      const [rows] = await pool.query(query, params);
+
+      logger.info(`Query returned ${rows.length} rows`);
+
+      const servers = rows.map((server) => {
+        const playersList = withoutPlayerIPs(parsePlayersList(server));
+
+        return {
+          ip: server.ip,
+          port: server.port,
+          game: server.game,
+          hostname: server.hostname,
+          version: server.version,
+          os: server.os,
+          secure: server.secure,
+          status: server.status,
+          map: server.map,
+          players: server.player_count,
+          maxplayers: server.maxplayers,
+          bots: server.bot_count,
+          playersList: playersList,
+          region: server.region,
+          domain: server.domain,
+          apiId: server.api_id,
+          kztId: server.kzt_id,
+          tickrate: server.tickrate,
+        };
+      });
+
+      const playersTotal = rows.reduce((acc, s) => acc + s.player_count, 0);
+      const serversOnline = rows.filter((s) => s.status === 1).length;
+
+      res.json({
+        total: servers.length,
+        playersTotal: playersTotal,
+        serversOnline: serversOnline,
+        data: servers,
+      });
+    } catch (error) {
+      logger.error(`Failed to fetch servers: ${error.message}`);
+      res.status(500).json({ error: "Failed to fetch servers" });
     }
-
-    if (status !== undefined) {
-      query += " AND status = ?";
-      params.push(parseInt(status, 10) || 0);
-    }
-    // Removed default status=1 filter to show all servers including offline ones
-
-    logger.info(
-      `Executing query: ${query} with params: ${JSON.stringify(params)}`,
-    );
-
-    const [rows] = await pool.query(query, params);
-
-    logger.info(`Query returned ${rows.length} rows`);
-
-    const servers = rows.map((server) => {
-      const playersList = withoutPlayerIPs(parsePlayersList(server));
-
-      return {
-        ip: server.ip,
-        port: server.port,
-        game: server.game,
-        hostname: server.hostname,
-        version: server.version,
-        os: server.os,
-        secure: server.secure,
-        status: server.status,
-        map: server.map,
-        players: server.player_count,
-        maxplayers: server.maxplayers,
-        bots: server.bot_count,
-        playersList: playersList,
-        region: server.region,
-        domain: server.domain,
-        apiId: server.api_id,
-        kztId: server.kzt_id,
-        tickrate: server.tickrate,
-      };
-    });
-
-    const playersTotal = rows.reduce((acc, s) => acc + s.player_count, 0);
-    const serversOnline = rows.filter((s) => s.status === 1).length;
-
-    res.json({
-      total: servers.length,
-      playersTotal: playersTotal,
-      serversOnline: serversOnline,
-      data: servers,
-    });
-  } catch (error) {
-    logger.error(`Failed to fetch servers: ${error.message}`);
-    res.status(500).json({ error: "Failed to fetch servers" });
-  }
-});
+  },
+);
 
 /**
  * @swagger

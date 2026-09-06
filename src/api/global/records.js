@@ -21,6 +21,7 @@ const {
   cacheMiddleware,
   kzKeyGenerator,
 } = require("../../utils/cacheMiddleware");
+const { CACHE_TTL } = require("../../config/cache");
 const { getYearlyPartitionHint } = require("../../utils/kzHelpers");
 
 /**
@@ -118,135 +119,140 @@ const { getYearlyPartitionHint } = require("../../utils/kzHelpers");
  *       500:
  *         description: Server error
  */
-router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
-  try {
-    const {
-      page,
-      limit,
-      map,
-      map_id,
-      player,
-      mode,
-      stage,
-      server,
-      teleports,
-      sort,
-      order,
-      include_banned,
-      date_from,
-      date_to,
-    } = req.query;
-    const {
-      page: validPage,
-      limit: validLimit,
-      offset,
-    } = validatePagination(page, limit, 100);
+router.get(
+  "/",
+  cacheMiddleware(CACHE_TTL.FRESH, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const {
+        page,
+        limit,
+        map,
+        map_id,
+        player,
+        mode,
+        stage,
+        server,
+        teleports,
+        sort,
+        order,
+        include_banned,
+        date_from,
+        date_to,
+      } = req.query;
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit);
 
-    const validSortFields = ["time", "created_on", "points"];
-    const sortField = validateSortField(sort, validSortFields, "created_on");
-    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
+      const validSortFields = ["time", "created_on", "points"];
+      const sortField = validateSortField(sort, validSortFields, "created_on");
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
-    // Build WHERE conditions
-    const whereConditions = [];
-    const params = [];
+      // Build WHERE conditions
+      const whereConditions = [];
+      const params = [];
 
-    // Filter out banned players by default
-    if (include_banned !== "true" && include_banned !== true) {
-      whereConditions.push("(p.is_banned IS NULL OR p.is_banned = FALSE)");
-    }
+      // Filter out banned players by default
+      if (include_banned !== "true" && include_banned !== true) {
+        whereConditions.push("(p.is_banned IS NULL OR p.is_banned = FALSE)");
+      }
 
-    // Date filters for partition pruning
-    if (date_from) {
-      whereConditions.push("r.created_on >= ?");
-      params.push(date_from);
-    }
-    if (date_to) {
-      whereConditions.push("r.created_on <= ?");
-      params.push(date_to);
-    }
+      // Date filters for partition pruning
+      if (date_from) {
+        whereConditions.push("r.created_on >= ?");
+        params.push(date_from);
+      }
+      if (date_to) {
+        whereConditions.push("r.created_on <= ?");
+        params.push(date_to);
+      }
 
-    // Apply filters
-    if (map) {
-      whereConditions.push("m.map_name LIKE ?");
-      params.push(`%${sanitizeString(map, 255)}%`);
-    }
+      // Apply filters
+      if (map) {
+        whereConditions.push("m.map_name LIKE ?");
+        params.push(`%${sanitizeString(map, 255)}%`);
+      }
 
-    if (map_id) {
-      whereConditions.push("r.map_id = ?");
-      params.push(parseInt(map_id, 10));
-    }
+      if (map_id) {
+        whereConditions.push("r.map_id = ?");
+        params.push(parseInt(map_id, 10));
+      }
 
-    if (player) {
-      // Check if it's a SteamID or name
-      if (isValidSteamID(player)) {
-        const steamid64 = convertToSteamID64(player);
-        whereConditions.push("r.steamid64 = ?");
-        params.push(steamid64);
+      if (player) {
+        // Check if it's a SteamID or name
+        if (isValidSteamID(player)) {
+          const steamid64 = convertToSteamID64(player);
+          whereConditions.push("r.steamid64 = ?");
+          params.push(steamid64);
+        } else {
+          whereConditions.push("p.player_name LIKE ?");
+          params.push(`%${sanitizeString(player, 100)}%`);
+        }
+      }
+
+      if (mode) {
+        whereConditions.push("r.mode = ?");
+        params.push(sanitizeString(mode, 32));
+      }
+
+      if (stage !== undefined) {
+        whereConditions.push("r.stage = ?");
+        params.push(parseInt(stage, 10));
+      }
+
+      if (server) {
+        whereConditions.push("r.server_id = ?");
+        params.push(parseInt(server, 10));
+      }
+
+      if (teleports) {
+        if (teleports === "pro" || teleports === "false") {
+          whereConditions.push("r.teleports = 0");
+        } else if (teleports === "tp" || teleports === "true") {
+          whereConditions.push("r.teleports > 0");
+        }
+      }
+
+      const whereClause =
+        whereConditions.length > 0
+          ? ` AND ${whereConditions.join(" AND ")}`
+          : "";
+
+      // recentOnly: with no date filter, scan the last two partitions rather than the whole table.
+      const partitionHint = getYearlyPartitionHint({
+        dateFrom: date_from,
+        dateTo: date_to,
+        sortField,
+        sortOrder,
+        recentOnly: true,
+      });
+
+      const pool = getKzPool();
+
+      // Get count (use approximate for large unfiltered datasets)
+      let total = 0;
+      const hasFilters =
+        map ||
+        map_id ||
+        player ||
+        mode ||
+        stage !== undefined ||
+        server ||
+        teleports ||
+        date_from ||
+        date_to;
+
+      if (!hasFilters && parseInt(page, 10) > 10) {
+        // Use approximate count for deep pagination without filters
+        const [tableStatus] = await pool.query(
+          "SHOW TABLE STATUS LIKE 'kz_records_partitioned'",
+        );
+        total = tableStatus[0]?.Rows || 0;
       } else {
-        whereConditions.push("p.player_name LIKE ?");
-        params.push(`%${sanitizeString(player, 100)}%`);
-      }
-    }
-
-    if (mode) {
-      whereConditions.push("r.mode = ?");
-      params.push(sanitizeString(mode, 32));
-    }
-
-    if (stage !== undefined) {
-      whereConditions.push("r.stage = ?");
-      params.push(parseInt(stage, 10));
-    }
-
-    if (server) {
-      whereConditions.push("r.server_id = ?");
-      params.push(parseInt(server, 10));
-    }
-
-    if (teleports) {
-      if (teleports === "pro" || teleports === "false") {
-        whereConditions.push("r.teleports = 0");
-      } else if (teleports === "tp" || teleports === "true") {
-        whereConditions.push("r.teleports > 0");
-      }
-    }
-
-    const whereClause =
-      whereConditions.length > 0 ? ` AND ${whereConditions.join(" AND ")}` : "";
-
-    // recentOnly: with no date filter, scan the last two partitions rather than the whole table.
-    const partitionHint = getYearlyPartitionHint({
-      dateFrom: date_from,
-      dateTo: date_to,
-      sortField,
-      sortOrder,
-      recentOnly: true,
-    });
-
-    const pool = getKzPool();
-
-    // Get count (use approximate for large unfiltered datasets)
-    let total = 0;
-    const hasFilters =
-      map ||
-      map_id ||
-      player ||
-      mode ||
-      stage !== undefined ||
-      server ||
-      teleports ||
-      date_from ||
-      date_to;
-
-    if (!hasFilters && parseInt(page, 10) > 10) {
-      // Use approximate count for deep pagination without filters
-      const [tableStatus] = await pool.query(
-        "SHOW TABLE STATUS LIKE 'kz_records_partitioned'",
-      );
-      total = tableStatus[0]?.Rows || 0;
-    } else {
-      // Get exact count for filtered results or early pages
-      const countQuery = `
+        // Get exact count for filtered results or early pages
+        const countQuery = `
         SELECT COUNT(*) as total
         FROM kz_records_partitioned ${partitionHint} r
         ${(player && !isValidSteamID(player)) || include_banned !== "true" ? "INNER JOIN kz_players p ON r.player_id = p.id" : ""}
@@ -254,12 +260,12 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
         WHERE 1=1 ${whereClause}
       `;
 
-      const [countResult] = await pool.query(countQuery, params);
-      total = countResult[0].total;
-    }
+        const [countResult] = await pool.query(countQuery, params);
+        total = countResult[0].total;
+      }
 
-    // Build main query
-    const mainQuery = `
+      // Build main query
+      const mainQuery = `
       SELECT SQL_NO_CACHE
         r.id, 
         r.original_id, 
@@ -290,30 +296,31 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
       LIMIT ? OFFSET ?
     `;
 
-    // Add pagination params
-    const mainParams = [...params, validLimit, offset];
+      // Add pagination params
+      const mainParams = [...params, validLimit, offset];
 
-    // Execute with timeout (30s for complex queries)
-    const queryPromise = pool.query(mainQuery, mainParams);
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Query timeout")), 30000),
-    );
+      // Execute with timeout (30s for complex queries)
+      const queryPromise = pool.query(mainQuery, mainParams);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Query timeout")), 30000),
+      );
 
-    const [records] = await Promise.race([queryPromise, timeoutPromise]);
+      const [records] = await Promise.race([queryPromise, timeoutPromise]);
 
-    res.json({
-      data: records,
-      pagination: paginationMeta(validPage, validLimit, total),
-    });
-  } catch (error) {
-    logger.error(`Failed to fetch KZ records: ${error.message}`);
-    logger.error(
-      `Query params: ${JSON.stringify({ page, limit, sort, order, map, map_id, player, mode, stage, server, teleports, date_from, date_to, include_banned })}`,
-    );
-    logger.error(`Partition hint: ${partitionHint || "none"}`);
-    res.status(500).json({ error: "Failed to fetch KZ records" });
-  }
-});
+      res.json({
+        data: records,
+        pagination: paginationMeta(validPage, validLimit, total),
+      });
+    } catch (error) {
+      logger.error(`Failed to fetch KZ records: ${error.message}`);
+      logger.error(
+        `Query params: ${JSON.stringify({ page, limit, sort, order, map, map_id, player, mode, stage, server, teleports, date_from, date_to, include_banned })}`,
+      );
+      logger.error(`Partition hint: ${partitionHint || "none"}`);
+      res.status(500).json({ error: "Failed to fetch KZ records" });
+    }
+  },
+);
 
 /**
  * @swagger
@@ -371,7 +378,7 @@ router.get("/", cacheMiddleware(30, kzKeyGenerator), async (req, res) => {
  */
 router.get(
   "/leaderboard/:mapname",
-  cacheMiddleware(600, kzKeyGenerator), // 10 min - leaderboards change slowly
+  cacheMiddleware(CACHE_TTL.RANKING, kzKeyGenerator), // 10 min - leaderboards change slowly
   async (req, res) => {
     try {
       const { mapname } = req.params;
@@ -631,7 +638,7 @@ router.get("/recent", cacheMiddleware(15, kzKeyGenerator), async (req, res) => {
  */
 router.get(
   "/worldrecords",
-  cacheMiddleware(3600, kzKeyGenerator), // 1 hour - world records change infrequently
+  cacheMiddleware(CACHE_TTL.IMMUTABLE, kzKeyGenerator), // 1 hour - world records change infrequently
   async (req, res) => {
     try {
       const {

@@ -59,6 +59,7 @@ const {
   cacheMiddleware,
   kzKeyGenerator,
 } = require("../../utils/cacheMiddleware");
+const { CACHE_TTL } = require("../../config/cache");
 
 /**
  * @swagger
@@ -114,53 +115,58 @@ const {
  *       500:
  *         description: Server error
  */
-router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
-  try {
-    // Test pool availability first
-    const pool = getKzPool();
-    if (!pool) {
-      logger.error("KZ database pool not initialized");
-      return res.status(503).json({
-        error: "KZ database service unavailable",
-        message:
-          "The KZ records database is not connected. Please check database configuration.",
-      });
-    }
+router.get(
+  "/",
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      // Test pool availability first
+      const pool = getKzPool();
+      if (!pool) {
+        logger.error("KZ database pool not initialized");
+        return res.status(503).json({
+          error: "KZ database service unavailable",
+          message:
+            "The KZ records database is not connected. Please check database configuration.",
+        });
+      }
 
-    const {
-      page,
-      limit,
-      name,
-      difficulty,
-      validated,
-      sort = "name",
-      order = "asc",
-    } = req.query;
-    const {
-      page: validPage,
-      limit: validLimit,
-      offset,
-    } = validatePagination(page, limit, 100);
+      const {
+        page,
+        limit,
+        name,
+        difficulty,
+        validated,
+        sort = "name",
+        order = "asc",
+      } = req.query;
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit);
 
-    const validSortFields = Object.keys(MAP_SORT_COLUMNS);
-    const sortField = validateSortField(sort, validSortFields, "name");
-    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
+      const validSortFields = Object.keys(MAP_SORT_COLUMNS);
+      const sortField = validateSortField(sort, validSortFields, "name");
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
-    // Build WHERE conditions for maps
-    const { conditions: whereConditions, params } = buildMapFilters(req.query);
-    const whereClause = whereConditions.join(" AND ");
+      // Build WHERE conditions for maps
+      const { conditions: whereConditions, params } = buildMapFilters(
+        req.query,
+      );
+      const whereClause = whereConditions.join(" AND ");
 
-    // Get total count first (fast query on maps table only)
-    const [countResult] = await pool.query(
-      `SELECT COUNT(*) as total FROM kz_maps m WHERE ${whereClause}`,
-      params,
-    );
-    const total = countResult[0].total;
+      // Get total count first (fast query on maps table only)
+      const [countResult] = await pool.query(
+        `SELECT COUNT(*) as total FROM kz_maps m WHERE ${whereClause}`,
+        params,
+      );
+      const total = countResult[0].total;
 
-    const sortColumn = MAP_SORT_COLUMNS[sortField];
+      const sortColumn = MAP_SORT_COLUMNS[sortField];
 
-    // Use pre-calculated statistics table for better performance
-    const query = `
+      // Use pre-calculated statistics table for better performance
+      const query = `
       SELECT 
         m.id,
         m.map_id,
@@ -182,41 +188,42 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       LIMIT ? OFFSET ?
     `;
 
-    const queryParams = [...params, validLimit, offset];
-    const [maps] = await pool.query(query, queryParams);
+      const queryParams = [...params, validLimit, offset];
+      const [maps] = await pool.query(query, queryParams);
 
-    res.json({
-      data: maps,
-      pagination: paginationMeta(validPage, validLimit, total),
-    });
-  } catch (error) {
-    logger.error(`Failed to fetch KZ maps: ${error.message}`, {
-      stack: error.stack,
-    });
-
-    // Provide more specific error messages
-    if (error.code === "ECONNREFUSED") {
-      return res.status(503).json({
-        error: "Database connection refused",
-        message:
-          "Cannot connect to KZ records database. Please ensure the database server is running on the configured port.",
+      res.json({
+        data: maps,
+        pagination: paginationMeta(validPage, validLimit, total),
       });
-    }
-
-    if (
-      error.code === "ETIMEDOUT" ||
-      error.code === "PROTOCOL_CONNECTION_LOST"
-    ) {
-      return res.status(504).json({
-        error: "Database connection timeout",
-        message:
-          "The database query took too long to respond. Please try again.",
+    } catch (error) {
+      logger.error(`Failed to fetch KZ maps: ${error.message}`, {
+        stack: error.stack,
       });
-    }
 
-    res.status(500).json({ error: "Failed to fetch KZ maps" });
-  }
-});
+      // Provide more specific error messages
+      if (error.code === "ECONNREFUSED") {
+        return res.status(503).json({
+          error: "Database connection refused",
+          message:
+            "Cannot connect to KZ records database. Please ensure the database server is running on the configured port.",
+        });
+      }
+
+      if (
+        error.code === "ETIMEDOUT" ||
+        error.code === "PROTOCOL_CONNECTION_LOST"
+      ) {
+        return res.status(504).json({
+          error: "Database connection timeout",
+          message:
+            "The database query took too long to respond. Please try again.",
+        });
+      }
+
+      res.status(500).json({ error: "Failed to fetch KZ maps" });
+    }
+  },
+);
 
 /**
  * @swagger
@@ -246,7 +253,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
  */
 router.get(
   "/top/difficulty",
-  cacheMiddleware(3600, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.IMMUTABLE, kzKeyGenerator),
   async (req, res) => {
     try {
       const { tier, validated } = req.query;
@@ -381,7 +388,7 @@ router.get(
  */
 router.get(
   "/enriched",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const pool = getKzPool();
@@ -409,7 +416,7 @@ router.get(
         page: validPage,
         limit: validLimit,
         offset,
-      } = validatePagination(page, limit, 100);
+      } = validatePagination(page, limit);
 
       const validSortFields = Object.keys(MAP_SORT_COLUMNS);
       const sortField = validateSortField(sort, validSortFields, "name");
@@ -697,7 +704,7 @@ router.get(
  */
 router.get(
   "/mode-filters",
-  cacheMiddleware(300, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.AGGREGATE, kzKeyGenerator),
   async (req, res) => {
     try {
       const pool = getKzPool();
@@ -799,7 +806,7 @@ router.get(
  */
 router.get(
   "/mode-filters/:mode",
-  cacheMiddleware(300, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.AGGREGATE, kzKeyGenerator),
   async (req, res) => {
     try {
       const pool = getKzPool();
@@ -893,7 +900,7 @@ router.get(
  */
 router.get(
   "/:mapname",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { mapname } = req.params;
@@ -1158,7 +1165,7 @@ router.get(
  */
 router.get(
   "/:mapname/records",
-  cacheMiddleware(30, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.FRESH, kzKeyGenerator),
   async (req, res) => {
     try {
       const { mapname } = req.params;
@@ -1175,7 +1182,7 @@ router.get(
         page: validPage,
         limit: validLimit,
         offset,
-      } = validatePagination(page, limit, 100);
+      } = validatePagination(page, limit);
 
       const pool = getKzPool();
 
@@ -1359,7 +1366,7 @@ router.post("/:mapname/refresh-wr", async (req, res) => {
  */
 router.get(
   "/:mapname/courses",
-  cacheMiddleware(300, kzKeyGenerator), // Cache for 5 minutes
+  cacheMiddleware(CACHE_TTL.AGGREGATE, kzKeyGenerator), // Cache for 5 minutes
   async (req, res) => {
     try {
       const { mapname } = req.params;

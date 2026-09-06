@@ -19,6 +19,7 @@ const {
   cacheMiddleware,
   kzKeyGenerator,
 } = require("../../utils/cacheMiddleware");
+const { CACHE_TTL } = require("../../config/cache");
 
 /**
  * @swagger
@@ -72,28 +73,31 @@ const {
  *       500:
  *         description: Server error
  */
-router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
-  try {
-    const {
-      page,
-      limit,
-      name,
-      owner,
-      approval_status,
-      sort = "name",
-      order = "asc",
-    } = req.query;
-    const {
-      page: validPage,
-      limit: validLimit,
-      offset,
-    } = validatePagination(page, limit, 100);
+router.get(
+  "/",
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const {
+        page,
+        limit,
+        name,
+        owner,
+        approval_status,
+        sort = "name",
+        order = "asc",
+      } = req.query;
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit);
 
-    const validSortFields = ["name", "created_on", "records"];
-    const sortField = validateSortField(sort, validSortFields, "name");
-    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
+      const validSortFields = ["name", "created_on", "records"];
+      const sortField = validateSortField(sort, validSortFields, "name");
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
-    let query = `
+      let query = `
       SELECT 
         s.id,
         s.server_id,
@@ -112,61 +116,62 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       LEFT JOIN kz_server_statistics ss ON s.id = ss.server_id
       WHERE 1=1
     `;
-    const params = [];
+      const params = [];
 
-    if (name) {
-      query += " AND s.server_name LIKE ?";
-      params.push(`%${sanitizeString(name, 255)}%`);
+      if (name) {
+        query += " AND s.server_name LIKE ?";
+        params.push(`%${sanitizeString(name, 255)}%`);
+      }
+
+      if (owner) {
+        query += " AND s.owner_steamid64 = ?";
+        params.push(sanitizeString(owner, 20));
+      }
+
+      if (approval_status !== undefined) {
+        query += " AND s.approval_status = ?";
+        params.push(parseInt(approval_status, 10));
+      }
+
+      const countQuery = `SELECT COUNT(DISTINCT s.id) as total FROM kz_servers s WHERE 1=1${
+        name ? " AND s.server_name LIKE ?" : ""
+      }${owner ? " AND s.owner_steamid64 = ?" : ""}${
+        approval_status !== undefined ? " AND s.approval_status = ?" : ""
+      }`;
+      const countParams = [];
+      if (name) countParams.push(`%${sanitizeString(name, 255)}%`);
+      if (owner) countParams.push(sanitizeString(owner, 20));
+      if (approval_status !== undefined)
+        countParams.push(parseInt(approval_status, 10));
+
+      const pool = getKzPool();
+      const [countResult] = await pool.query(countQuery, countParams);
+      const total = countResult[0].total;
+
+      // Map sort field
+      const sortColumn =
+        sortField === "name"
+          ? "s.server_name"
+          : sortField === "created_on"
+            ? "s.created_on"
+            : "COALESCE(ss.total_records, 0)";
+
+      query += ` ORDER BY ${sortColumn} ${sortOrder}`;
+      query += ` LIMIT ? OFFSET ?`;
+      params.push(validLimit, offset);
+
+      const [servers] = await pool.query(query, params);
+
+      res.json({
+        data: servers,
+        pagination: paginationMeta(validPage, validLimit, total),
+      });
+    } catch (error) {
+      logger.error(`Failed to fetch KZ servers: ${error.message}`);
+      res.status(500).json({ error: "Failed to fetch KZ servers" });
     }
-
-    if (owner) {
-      query += " AND s.owner_steamid64 = ?";
-      params.push(sanitizeString(owner, 20));
-    }
-
-    if (approval_status !== undefined) {
-      query += " AND s.approval_status = ?";
-      params.push(parseInt(approval_status, 10));
-    }
-
-    const countQuery = `SELECT COUNT(DISTINCT s.id) as total FROM kz_servers s WHERE 1=1${
-      name ? " AND s.server_name LIKE ?" : ""
-    }${owner ? " AND s.owner_steamid64 = ?" : ""}${
-      approval_status !== undefined ? " AND s.approval_status = ?" : ""
-    }`;
-    const countParams = [];
-    if (name) countParams.push(`%${sanitizeString(name, 255)}%`);
-    if (owner) countParams.push(sanitizeString(owner, 20));
-    if (approval_status !== undefined)
-      countParams.push(parseInt(approval_status, 10));
-
-    const pool = getKzPool();
-    const [countResult] = await pool.query(countQuery, countParams);
-    const total = countResult[0].total;
-
-    // Map sort field
-    const sortColumn =
-      sortField === "name"
-        ? "s.server_name"
-        : sortField === "created_on"
-          ? "s.created_on"
-          : "COALESCE(ss.total_records, 0)";
-
-    query += ` ORDER BY ${sortColumn} ${sortOrder}`;
-    query += ` LIMIT ? OFFSET ?`;
-    params.push(validLimit, offset);
-
-    const [servers] = await pool.query(query, params);
-
-    res.json({
-      data: servers,
-      pagination: paginationMeta(validPage, validLimit, total),
-    });
-  } catch (error) {
-    logger.error(`Failed to fetch KZ servers: ${error.message}`);
-    res.status(500).json({ error: "Failed to fetch KZ servers" });
-  }
-});
+  },
+);
 
 /**
  * @swagger
@@ -190,7 +195,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
  */
 router.get(
   "/top/records",
-  cacheMiddleware(300, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.AGGREGATE, kzKeyGenerator),
   async (req, res) => {
     try {
       const { limit = 100 } = req.query;
@@ -254,20 +259,23 @@ router.get(
  *       500:
  *         description: Server error
  */
-router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const serverId = parseInt(id, 10);
+router.get(
+  "/:id",
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const serverId = parseInt(id, 10);
 
-    if (isNaN(serverId)) {
-      return res.status(400).json({ error: "Invalid server ID" });
-    }
+      if (isNaN(serverId)) {
+        return res.status(400).json({ error: "Invalid server ID" });
+      }
 
-    const pool = getKzPool();
+      const pool = getKzPool();
 
-    // Get server info with pre-calculated statistics
-    const [servers] = await pool.query(
-      `SELECT 
+      // Get server info with pre-calculated statistics
+      const [servers] = await pool.query(
+        `SELECT 
         s.*,
         COALESCE(ss.total_records, 0) as total_records,
         COALESCE(ss.unique_players, 0) as unique_players,
@@ -281,29 +289,29 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       FROM kz_servers s
       LEFT JOIN kz_server_statistics ss ON s.id = ss.server_id
       WHERE s.server_id = ?`,
-      [serverId],
-    );
+        [serverId],
+      );
 
-    if (servers.length === 0) {
-      return res.status(404).json({ error: "Server not found" });
-    }
+      if (servers.length === 0) {
+        return res.status(404).json({ error: "Server not found" });
+      }
 
-    const server = servers[0];
+      const server = servers[0];
 
-    // Stats are already in the server object from the statistics table
-    const stats = [
-      {
-        total_records: server.total_records,
-        unique_players: server.unique_players,
-        unique_maps: server.unique_maps,
-        first_record: server.first_record,
-        last_record: server.last_record,
-      },
-    ];
+      // Stats are already in the server object from the statistics table
+      const stats = [
+        {
+          total_records: server.total_records,
+          unique_players: server.unique_players,
+          unique_maps: server.unique_maps,
+          first_record: server.first_record,
+          last_record: server.last_record,
+        },
+      ];
 
-    // Get mode breakdown
-    const [modeStats] = await pool.query(
-      `
+      // Get mode breakdown
+      const [modeStats] = await pool.query(
+        `
       SELECT 
         mode,
         COUNT(*) as records,
@@ -313,12 +321,12 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       WHERE server_id = ?
       GROUP BY mode
     `,
-      [server.id],
-    );
+        [server.id],
+      );
 
-    // Get recent records
-    const [recentRecords] = await pool.query(
-      `
+      // Get recent records
+      const [recentRecords] = await pool.query(
+        `
       SELECT 
         r.id,
         r.original_id,
@@ -338,36 +346,37 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       ORDER BY r.created_on DESC
       LIMIT 20
     `,
-      [server.id],
-    );
+        [server.id],
+      );
 
-    res.json({
-      server: {
-        id: server.id,
-        server_id: server.server_id,
-        server_name: server.server_name,
-        ip: server.ip,
-        port: server.port,
-        owner_steamid64: server.owner_steamid64,
-        created_on: server.created_on,
-        updated_on: server.updated_on,
-        approval_status: server.approval_status,
-        approved_by_steamid64: server.approved_by_steamid64,
-        created_at: server.created_at,
-      },
-      statistics: {
-        ...stats[0],
-        mode_breakdown: modeStats,
-      },
-      recent_records: recentRecords,
-    });
-  } catch (error) {
-    logger.error(
-      `Failed to fetch KZ server ${req.params.id}: ${error.message}`,
-    );
-    res.status(500).json({ error: "Failed to fetch KZ server" });
-  }
-});
+      res.json({
+        server: {
+          id: server.id,
+          server_id: server.server_id,
+          server_name: server.server_name,
+          ip: server.ip,
+          port: server.port,
+          owner_steamid64: server.owner_steamid64,
+          created_on: server.created_on,
+          updated_on: server.updated_on,
+          approval_status: server.approval_status,
+          approved_by_steamid64: server.approved_by_steamid64,
+          created_at: server.created_at,
+        },
+        statistics: {
+          ...stats[0],
+          mode_breakdown: modeStats,
+        },
+        recent_records: recentRecords,
+      });
+    } catch (error) {
+      logger.error(
+        `Failed to fetch KZ server ${req.params.id}: ${error.message}`,
+      );
+      res.status(500).json({ error: "Failed to fetch KZ server" });
+    }
+  },
+);
 
 /**
  * @swagger
@@ -417,7 +426,7 @@ router.get("/:id", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
  */
 router.get(
   "/:id/records",
-  cacheMiddleware(30, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.FRESH, kzKeyGenerator),
   async (req, res) => {
     try {
       const { id } = req.params;
@@ -452,7 +461,7 @@ router.get(
         page: validPage,
         limit: validLimit,
         offset,
-      } = validatePagination(page, limit, 100);
+      } = validatePagination(page, limit);
 
       let query = `
         SELECT 

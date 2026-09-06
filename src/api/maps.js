@@ -21,6 +21,7 @@ const {
   cacheMiddleware,
   mapsKeyGenerator,
 } = require("../utils/cacheMiddleware");
+const { CACHE_TTL } = require("../config/cache");
 
 /**
  * @swagger
@@ -122,25 +123,28 @@ const {
  *         description: Server error
  */
 // Cache for 30 seconds
-router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
-  try {
-    const { page, limit, sort, order, server, name, game } = req.query;
-    const {
-      page: validPage,
-      limit: validLimit,
-      offset,
-    } = validatePagination(page, limit, 100);
+router.get(
+  "/",
+  cacheMiddleware(CACHE_TTL.FRESH, mapsKeyGenerator),
+  async (req, res) => {
+    try {
+      const { page, limit, sort, order, server, name, game } = req.query;
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit);
 
-    const validSortFields = ["total_playtime", "name"];
-    const sortField = validateSortField(
-      sort,
-      validSortFields,
-      "total_playtime",
-    );
-    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
+      const validSortFields = ["total_playtime", "name"];
+      const sortField = validateSortField(
+        sort,
+        validSortFields,
+        "total_playtime",
+      );
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
-    // Optimized: Use window function to get total count in single query
-    let query = `
+      // Optimized: Use window function to get total count in single query
+      let query = `
       SELECT 
         name, 
         game, 
@@ -148,47 +152,48 @@ router.get("/", cacheMiddleware(30, mapsKeyGenerator), async (req, res) => {
         COUNT(*) OVER() as total_count
       FROM maps 
       WHERE 1=1`;
-    const params = [];
+      const params = [];
 
-    if (game) {
-      query += " AND game = ?";
-      params.push(sanitizeString(game, 50));
-    }
-
-    if (server) {
-      const [ip, port] = server.split(":");
-      if (ip && port && isValidIP(ip) && isValidPort(port)) {
-        query += " AND server_ip = ? AND server_port = ?";
-        params.push(ip, parseInt(port, 10));
+      if (game) {
+        query += " AND game = ?";
+        params.push(sanitizeString(game, 50));
       }
+
+      if (server) {
+        const [ip, port] = server.split(":");
+        if (ip && port && isValidIP(ip) && isValidPort(port)) {
+          query += " AND server_ip = ? AND server_port = ?";
+          params.push(ip, parseInt(port, 10));
+        }
+      }
+
+      if (name) {
+        query += " AND name LIKE ?";
+        params.push(`%${sanitizeString(name, 100)}%`);
+      }
+
+      query += ` GROUP BY name, game ORDER BY ${sortField} ${sortOrder} LIMIT ? OFFSET ?`;
+      params.push(validLimit, offset);
+
+      const [maps] = await pool.query(query, params);
+
+      // Extract total from first row (same for all rows due to window function)
+      const total = maps.length > 0 ? maps[0].total_count : 0;
+
+      // Remove total_count from each map object
+      maps.forEach((map) => delete map.total_count);
+
+      res.json({
+        total: maps.length,
+        data: maps,
+        pagination: paginationMeta(validPage, validLimit, total),
+      });
+    } catch (error) {
+      logger.error(`Failed to fetch maps: ${error.message}`);
+      res.status(500).json({ error: "Failed to fetch maps" });
     }
-
-    if (name) {
-      query += " AND name LIKE ?";
-      params.push(`%${sanitizeString(name, 100)}%`);
-    }
-
-    query += ` GROUP BY name, game ORDER BY ${sortField} ${sortOrder} LIMIT ? OFFSET ?`;
-    params.push(validLimit, offset);
-
-    const [maps] = await pool.query(query, params);
-
-    // Extract total from first row (same for all rows due to window function)
-    const total = maps.length > 0 ? maps[0].total_count : 0;
-
-    // Remove total_count from each map object
-    maps.forEach((map) => delete map.total_count);
-
-    res.json({
-      total: maps.length,
-      data: maps,
-      pagination: paginationMeta(validPage, validLimit, total),
-    });
-  } catch (error) {
-    logger.error(`Failed to fetch maps: ${error.message}`);
-    res.status(500).json({ error: "Failed to fetch maps" });
-  }
-});
+  },
+);
 
 /**
  * @swagger

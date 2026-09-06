@@ -26,6 +26,7 @@ const {
   cacheMiddleware,
   kzKeyGenerator,
 } = require("../../utils/cacheMiddleware");
+const { CACHE_TTL } = require("../../config/cache");
 const {
   getPlayerPBs,
   getPlayerMapCompletions,
@@ -154,33 +155,37 @@ async function fetchRecentRecords(pool, steamid64, limit = 10) {
  *       500:
  *         description: Server error
  */
-router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
-  try {
-    const { page, limit, name, sort, order, banned, active_since } = req.query;
-    const {
-      page: validPage,
-      limit: validLimit,
-      offset,
-    } = validatePagination(page, limit, 100);
+router.get(
+  "/",
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const { page, limit, name, sort, order, banned, active_since } =
+        req.query;
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit);
 
-    const validSortFields = ["records", "points", "name"];
-    const sortField = validateSortField(sort, validSortFields, "records");
-    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
+      const validSortFields = ["records", "points", "name"];
+      const sortField = validateSortField(sort, validSortFields, "records");
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
-    const pool = getKzPool();
+      const pool = getKzPool();
 
-    // Determine if we can use the player statistics table for better performance
-    const useStatsTable = !active_since && sortField !== "last_active";
+      // Determine if we can use the player statistics table for better performance
+      const useStatsTable = !active_since && sortField !== "last_active";
 
-    let query;
-    const params = [];
+      let query;
+      const params = [];
 
-    if (
-      useStatsTable &&
-      (await tableExists(getKzPool(), "kz_player_statistics"))
-    ) {
-      // Use pre-aggregated statistics table if it exists
-      query = `
+      if (
+        useStatsTable &&
+        (await tableExists(getKzPool(), "kz_player_statistics"))
+      ) {
+        // Use pre-aggregated statistics table if it exists
+        query = `
         SELECT 
           p.id,
           p.steamid64,
@@ -198,32 +203,32 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
         LEFT JOIN kz_player_statistics ps ON p.id = ps.player_id
         WHERE 1=1
       `;
-    } else {
-      // Build query with aggregated stats from partitioned table
-      // Determine partitions to scan based on active_since
-      let partitionHint = "";
-      if (active_since) {
-        const sinceYear = new Date(active_since).getFullYear();
-        const currentYear = new Date().getFullYear();
-        const partitions = [];
+      } else {
+        // Build query with aggregated stats from partitioned table
+        // Determine partitions to scan based on active_since
+        let partitionHint = "";
+        if (active_since) {
+          const sinceYear = new Date(active_since).getFullYear();
+          const currentYear = new Date().getFullYear();
+          const partitions = [];
 
-        if (sinceYear < 2018) {
-          partitions.push("p_old");
+          if (sinceYear < 2018) {
+            partitions.push("p_old");
+          }
+
+          for (
+            let year = Math.max(sinceYear, 2018);
+            year <= currentYear;
+            year++
+          ) {
+            partitions.push(`p${year}`);
+          }
+          partitions.push("pfuture");
+
+          partitionHint = `PARTITION (${partitions.join(",")})`;
         }
 
-        for (
-          let year = Math.max(sinceYear, 2018);
-          year <= currentYear;
-          year++
-        ) {
-          partitions.push(`p${year}`);
-        }
-        partitions.push("pfuture");
-
-        partitionHint = `PARTITION (${partitions.join(",")})`;
-      }
-
-      query = `
+        query = `
         SELECT 
           p.id,
           p.steamid64,
@@ -243,43 +248,43 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
         WHERE 1=1
       `;
 
-      if (active_since) {
-        params.push(active_since);
+        if (active_since) {
+          params.push(active_since);
+        }
       }
-    }
 
-    if (name) {
-      query += " AND p.player_name LIKE ?";
-      params.push(`%${sanitizeString(name, 100)}%`);
-    }
-
-    if (banned !== undefined) {
-      const isBanned = banned === "true" || banned === true;
-      query += " AND p.is_banned = ?";
-      params.push(isBanned);
-    }
-
-    if (
-      !useStatsTable ||
-      !(await tableExists(getKzPool(), "kz_player_statistics"))
-    ) {
-      query +=
-        " GROUP BY p.id, p.steamid64, p.steam_id, p.player_name, p.is_banned, p.created_at, p.updated_at";
-
-      if (active_since) {
-        // Only include players with records after active_since
-        query += " HAVING records > 0";
+      if (name) {
+        query += " AND p.player_name LIKE ?";
+        params.push(`%${sanitizeString(name, 100)}%`);
       }
-    }
 
-    let countQuery;
-    const countParams = [];
+      if (banned !== undefined) {
+        const isBanned = banned === "true" || banned === true;
+        query += " AND p.is_banned = ?";
+        params.push(isBanned);
+      }
 
-    if (
-      useStatsTable &&
-      (await tableExists(getKzPool(), "kz_player_statistics"))
-    ) {
-      countQuery = `
+      if (
+        !useStatsTable ||
+        !(await tableExists(getKzPool(), "kz_player_statistics"))
+      ) {
+        query +=
+          " GROUP BY p.id, p.steamid64, p.steam_id, p.player_name, p.is_banned, p.created_at, p.updated_at";
+
+        if (active_since) {
+          // Only include players with records after active_since
+          query += " HAVING records > 0";
+        }
+      }
+
+      let countQuery;
+      const countParams = [];
+
+      if (
+        useStatsTable &&
+        (await tableExists(getKzPool(), "kz_player_statistics"))
+      ) {
+        countQuery = `
         SELECT COUNT(DISTINCT p.id) as total 
         FROM kz_players p
         ${sortField !== "name" ? "LEFT JOIN kz_player_statistics ps ON p.id = ps.player_id" : ""}
@@ -287,49 +292,50 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
         ${name ? "AND p.player_name LIKE ?" : ""}
         ${banned !== undefined ? "AND p.is_banned = ?" : ""}
       `;
-    } else {
-      countQuery = `SELECT COUNT(DISTINCT p.id) as total FROM kz_players p WHERE 1=1`;
-      if (name) {
-        countQuery += " AND p.player_name LIKE ?";
+      } else {
+        countQuery = `SELECT COUNT(DISTINCT p.id) as total FROM kz_players p WHERE 1=1`;
+        if (name) {
+          countQuery += " AND p.player_name LIKE ?";
+        }
+        if (banned !== undefined) {
+          countQuery += " AND p.is_banned = ?";
+        }
       }
-      if (banned !== undefined) {
-        countQuery += " AND p.is_banned = ?";
-      }
+
+      if (name) countParams.push(`%${sanitizeString(name, 100)}%`);
+      if (banned !== undefined)
+        countParams.push(banned === "true" || banned === true);
+
+      const [countResult] = await pool.query(countQuery, countParams);
+      const total = countResult[0].total;
+
+      // Map sort field to actual column
+      const sortColumn =
+        sortField === "name"
+          ? "p.player_name"
+          : sortField === "points"
+            ? "points"
+            : "records";
+
+      query += ` ORDER BY ${sortColumn} ${sortOrder}`;
+      query += ` LIMIT ? OFFSET ?`;
+      params.push(validLimit, offset);
+
+      const [players] = await pool.query(query, params);
+
+      res.json({
+        data: players,
+        pagination: paginationMeta(validPage, validLimit, total),
+      });
+    } catch (error) {
+      logger.error(`Failed to fetch players: ${error.message}`);
+      logger.error(
+        `Query params: ${JSON.stringify({ page, limit, name, sort, order, banned, active_since })}`,
+      );
+      res.status(500).json({ error: "Failed to fetch players" });
     }
-
-    if (name) countParams.push(`%${sanitizeString(name, 100)}%`);
-    if (banned !== undefined)
-      countParams.push(banned === "true" || banned === true);
-
-    const [countResult] = await pool.query(countQuery, countParams);
-    const total = countResult[0].total;
-
-    // Map sort field to actual column
-    const sortColumn =
-      sortField === "name"
-        ? "p.player_name"
-        : sortField === "points"
-          ? "points"
-          : "records";
-
-    query += ` ORDER BY ${sortColumn} ${sortOrder}`;
-    query += ` LIMIT ? OFFSET ?`;
-    params.push(validLimit, offset);
-
-    const [players] = await pool.query(query, params);
-
-    res.json({
-      data: players,
-      pagination: paginationMeta(validPage, validLimit, total),
-    });
-  } catch (error) {
-    logger.error(`Failed to fetch players: ${error.message}`);
-    logger.error(
-      `Query params: ${JSON.stringify({ page, limit, name, sort, order, banned, active_since })}`,
-    );
-    res.status(500).json({ error: "Failed to fetch players" });
-  }
-});
+  },
+);
 
 /**
  * @swagger
@@ -357,7 +363,7 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
  */
 router.get(
   "/:steamid",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { steamid } = req.params;
@@ -585,7 +591,7 @@ router.get(
  */
 router.get(
   "/:steamid/records",
-  cacheMiddleware(30, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.FRESH, kzKeyGenerator),
   async (req, res) => {
     try {
       const { steamid } = req.params;
@@ -608,7 +614,7 @@ router.get(
         page: validPage,
         limit: validLimit,
         offset,
-      } = validatePagination(page, limit, 100);
+      } = validatePagination(page, limit);
 
       const validSortFields = ["time", "created_on", "points"];
       const sortField = validateSortField(sort, validSortFields, "created_on");
@@ -727,7 +733,7 @@ router.get(
  */
 router.get(
   "/:steamid/pbs",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { steamid } = req.params;
@@ -924,7 +930,7 @@ router.get(
  */
 router.get(
   "/:steamid/completions",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { steamid } = req.params;

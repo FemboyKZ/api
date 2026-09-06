@@ -29,6 +29,7 @@ const {
   cacheMiddleware,
   kzKeyGenerator,
 } = require("../../utils/cacheMiddleware");
+const { CACHE_TTL } = require("../../config/cache");
 
 /**
  * Get database pool
@@ -100,7 +101,7 @@ const JUMPSTAT_SELECT = `
  */
 router.get(
   "/players",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { page, limit, name, sort, order } = req.query;
@@ -108,7 +109,7 @@ router.get(
         page: validPage,
         limit: validLimit,
         offset,
-      } = validatePagination(page, limit, 100);
+      } = validatePagination(page, limit);
 
       const pool = getKzLocalCS2Pool();
 
@@ -196,7 +197,7 @@ router.get(
  */
 router.get(
   "/players/:steamid",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { steamid } = req.params;
@@ -352,28 +353,31 @@ router.get(
  *       500:
  *         description: Server error
  */
-router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
-  try {
-    const { page, limit, name, sort, order } = req.query;
-    const {
-      page: validPage,
-      limit: validLimit,
-      offset,
-    } = validatePagination(page, limit, 100);
+router.get(
+  "/maps",
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const { page, limit, name, sort, order } = req.query;
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit);
 
-    const pool = getKzLocalCS2Pool();
+      const pool = getKzLocalCS2Pool();
 
-    const validSortFields = ["name", "last_played", "created", "records"];
-    const sortFieldMap = {
-      name: "m.Name",
-      last_played: "m.LastPlayed",
-      created: "m.Created",
-      records: "records_count",
-    };
-    const sortField = validateSortField(sort, validSortFields, "name");
-    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
+      const validSortFields = ["name", "last_played", "created", "records"];
+      const sortFieldMap = {
+        name: "m.Name",
+        last_played: "m.LastPlayed",
+        created: "m.Created",
+        records: "records_count",
+      };
+      const sortField = validateSortField(sort, validSortFields, "name");
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
-    let query = `
+      let query = `
       SELECT 
         m.ID as id,
         m.Name as name,
@@ -387,40 +391,41 @@ router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       WHERE 1=1
     `;
 
-    // Built once, appended to both this query and the count query below.
-    const filters = f.build([f.like("m.Name", name)]);
+      // Built once, appended to both this query and the count query below.
+      const filters = f.build([f.like("m.Name", name)]);
 
-    const params = [...filters.params];
-    query += filters.sql;
+      const params = [...filters.params];
+      query += filters.sql;
 
-    query += ` GROUP BY m.ID, m.Name, m.LastPlayed, m.Created`;
-    query += ` ORDER BY ${sortFieldMap[sortField]} ${sortOrder}`;
-    query += ` LIMIT ? OFFSET ?`;
-    params.push(validLimit, offset);
+      query += ` GROUP BY m.ID, m.Name, m.LastPlayed, m.Created`;
+      query += ` ORDER BY ${sortFieldMap[sortField]} ${sortOrder}`;
+      query += ` LIMIT ? OFFSET ?`;
+      params.push(validLimit, offset);
 
-    const [rows] = await pool.query(query, params);
+      const [rows] = await pool.query(query, params);
 
-    let countQuery = `SELECT COUNT(*) as total FROM Maps m WHERE 1=1`;
-    countQuery += filters.sql;
+      let countQuery = `SELECT COUNT(*) as total FROM Maps m WHERE 1=1`;
+      countQuery += filters.sql;
 
-    const [[{ total }]] = await pool.query(countQuery, filters.params);
+      const [[{ total }]] = await pool.query(countQuery, filters.params);
 
-    res.json({
-      data: rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        last_played: row.last_played,
-        created: row.created,
-        courses_count: row.courses_count,
-        records_count: row.records_count,
-      })),
-      pagination: paginationMeta(validPage, validLimit, total),
-    });
-  } catch (error) {
-    logger.error(`Error fetching CS2 KZ local maps: ${error.message}`);
-    res.status(500).json({ error: "Failed to fetch maps" });
-  }
-});
+      res.json({
+        data: rows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          last_played: row.last_played,
+          created: row.created,
+          courses_count: row.courses_count,
+          records_count: row.records_count,
+        })),
+        pagination: paginationMeta(validPage, validLimit, total),
+      });
+    } catch (error) {
+      logger.error(`Error fetching CS2 KZ local maps: ${error.message}`);
+      res.status(500).json({ error: "Failed to fetch maps" });
+    }
+  },
+);
 
 /**
  * @swagger
@@ -446,7 +451,7 @@ router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
  */
 router.get(
   "/maps/:mapname",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { mapname } = req.params;
@@ -632,7 +637,7 @@ router.get(
  */
 router.get(
   "/records",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { page, limit, map, player, mode, course, teleports, sort, order } =
@@ -641,7 +646,7 @@ router.get(
         page: validPage,
         limit: validLimit,
         offset,
-      } = validatePagination(page, limit, 100);
+      } = validatePagination(page, limit);
 
       const pool = getKzLocalCS2Pool();
 
@@ -762,7 +767,7 @@ router.get(
  */
 router.get(
   "/records/:id",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { id } = req.params;
@@ -885,7 +890,7 @@ router.get(
  */
 router.get(
   "/records/top/:mapname",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { mapname } = req.params;
@@ -1047,7 +1052,7 @@ router.get(
  */
 router.get(
   "/jumpstats",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { page, limit, player, jump_type, mode, block, sort, order } =
@@ -1056,7 +1061,7 @@ router.get(
         page: validPage,
         limit: validLimit,
         offset,
-      } = validatePagination(page, limit, 100);
+      } = validatePagination(page, limit);
 
       const pool = getKzLocalCS2Pool();
 
@@ -1172,7 +1177,7 @@ ${JUMPSTAT_SELECT}
  */
 router.get(
   "/jumpstats/top",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { jump_type, mode, block, limit } = req.query;
@@ -1259,27 +1264,31 @@ ${JUMPSTAT_SELECT}
  *       500:
  *         description: Server error
  */
-router.get("/modes", cacheMiddleware(300, kzKeyGenerator), async (req, res) => {
-  try {
-    const pool = getKzLocalCS2Pool();
+router.get(
+  "/modes",
+  cacheMiddleware(CACHE_TTL.AGGREGATE, kzKeyGenerator),
+  async (req, res) => {
+    try {
+      const pool = getKzLocalCS2Pool();
 
-    const [modes] = await pool.query(
-      `SELECT 
+      const [modes] = await pool.query(
+        `SELECT 
         ID as id,
         Name as name,
         ShortName as short_name
       FROM Modes
       ORDER BY ID`,
-    );
+      );
 
-    res.json({
-      data: modes,
-    });
-  } catch (error) {
-    logger.error(`Error fetching CS2 KZ modes: ${error.message}`);
-    res.status(500).json({ error: "Failed to fetch modes" });
-  }
-});
+      res.json({
+        data: modes,
+      });
+    } catch (error) {
+      logger.error(`Error fetching CS2 KZ modes: ${error.message}`);
+      res.status(500).json({ error: "Failed to fetch modes" });
+    }
+  },
+);
 
 // ==================== STYLES ENDPOINTS ====================
 
@@ -1298,7 +1307,7 @@ router.get("/modes", cacheMiddleware(300, kzKeyGenerator), async (req, res) => {
  */
 router.get(
   "/styles",
-  cacheMiddleware(300, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.AGGREGATE, kzKeyGenerator),
   async (req, res) => {
     try {
       const pool = getKzLocalCS2Pool();
@@ -1356,7 +1365,7 @@ router.get(
  */
 router.get(
   "/courses",
-  cacheMiddleware(60, kzKeyGenerator),
+  cacheMiddleware(CACHE_TTL.STANDARD, kzKeyGenerator),
   async (req, res) => {
     try {
       const { page, limit, map } = req.query;
@@ -1364,7 +1373,7 @@ router.get(
         page: validPage,
         limit: validLimit,
         offset,
-      } = validatePagination(page, limit, 100);
+      } = validatePagination(page, limit);
 
       const pool = getKzLocalCS2Pool();
 

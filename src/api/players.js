@@ -21,6 +21,7 @@ const {
   playersKeyGenerator,
   onlinePlayersKeyGenerator,
 } = require("../utils/cacheMiddleware");
+const { CACHE_TTL } = require("../config/cache");
 const { parsePlayersList } = require("../utils/playersList");
 const { getPlayerSummary } = require("../services/servers/steamPlayer");
 
@@ -188,25 +189,28 @@ const { getPlayerSummary } = require("../services/servers/steamPlayer");
  *         description: Server error
  */
 // Cache for 30 seconds
-router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
-  try {
-    const { page, limit, sort, order, name, game } = req.query;
-    const {
-      page: validPage,
-      limit: validLimit,
-      offset,
-    } = validatePagination(page, limit, 100);
+router.get(
+  "/",
+  cacheMiddleware(CACHE_TTL.FRESH, playersKeyGenerator),
+  async (req, res) => {
+    try {
+      const { page, limit, sort, order, name, game } = req.query;
+      const {
+        page: validPage,
+        limit: validLimit,
+        offset,
+      } = validatePagination(page, limit);
 
-    const validSortFields = ["total_playtime", "steamid", "last_seen"];
-    const sortField = validateSortField(
-      sort,
-      validSortFields,
-      "total_playtime",
-    );
-    const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
+      const validSortFields = ["total_playtime", "steamid", "last_seen"];
+      const sortField = validateSortField(
+        sort,
+        validSortFields,
+        "total_playtime",
+      );
+      const sortOrder = validateSortOrder(order, defaultSortOrder(sortField));
 
-    // Optimized: Use SQL aggregation with JSON functions for better performance
-    let query = `
+      // Optimized: Use SQL aggregation with JSON functions for better performance
+      let query = `
       SELECT 
         p.steamid,
         MAX(p.latest_name) as name,
@@ -229,104 +233,105 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
       LEFT JOIN player_meta pm ON p.steamid = pm.steamid
       WHERE 1=1
     `;
-    const params = [];
+      const params = [];
 
-    if (game) {
-      query += " AND p.game = ?";
-      params.push(sanitizeString(game, 50));
-    }
-
-    if (name) {
-      query += " AND p.latest_name LIKE ?";
-      params.push(`%${sanitizeString(name, 100)}%`);
-    }
-
-    query += " GROUP BY p.steamid";
-
-    // Add SQL-based sorting instead of JavaScript sorting
-    if (sortField === "total_playtime") {
-      query += ` ORDER BY _total_playtime ${sortOrder}`;
-    } else if (sortField === "last_seen") {
-      query += ` ORDER BY _last_seen ${sortOrder}`;
-    } else {
-      query += ` ORDER BY p.steamid ${sortOrder}`;
-    }
-
-    // Add pagination in SQL
-    query += " LIMIT ? OFFSET ?";
-    params.push(validLimit, offset);
-
-    const [rawPlayers] = await pool.query(query, params);
-
-    // Parse JSON fields from SQL (MariaDB/MySQL returns JSON as strings or buffers)
-    const players = rawPlayers.map((row) => {
-      const {
-        _total_playtime,
-        _last_seen,
-        _permissions,
-        whitelisted,
-        _csgo_modes,
-        _cs2_modes,
-        ...player
-      } = row;
-
-      // Helper to parse JSON from various formats
-      const parseJson = (value) => {
-        if (!value) return {};
-        if (typeof value === "string") return JSON.parse(value);
-        if (Buffer.isBuffer(value)) return JSON.parse(value.toString("utf8"));
-        if (typeof value === "object") return value;
-        return {};
-      };
-
-      // Per-mode playtime is null when the player has no row for that game.
-      const parseModes = (value) => {
-        if (!value) return null;
-        if (typeof value === "string") return JSON.parse(value);
-        if (Buffer.isBuffer(value)) return JSON.parse(value.toString("utf8"));
-        if (typeof value === "object") return value;
-        return null;
-      };
-
-      player.csgo = parseJson(row.csgo);
-      player.counterstrike2 = parseJson(row.counterstrike2);
-      // Annotate only a game the player has actually played (leave {} otherwise).
-      if (Object.keys(player.csgo).length > 0) {
-        player.csgo.playtime_modes = parseModes(_csgo_modes);
+      if (game) {
+        query += " AND p.game = ?";
+        params.push(sanitizeString(game, 50));
       }
-      if (Object.keys(player.counterstrike2).length > 0) {
-        player.counterstrike2.playtime_modes = parseModes(_cs2_modes);
+
+      if (name) {
+        query += " AND p.latest_name LIKE ?";
+        params.push(`%${sanitizeString(name, 100)}%`);
       }
-      player.discord_id = player.discord_id || null;
-      player.permissions = _permissions ? parseJson(_permissions) : null;
-      player.whitelisted = Boolean(whitelisted);
 
-      return player;
-    });
+      query += " GROUP BY p.steamid";
 
-    // Get total count (separate query for accuracy)
-    let countQuery =
-      "SELECT COUNT(DISTINCT steamid) as total FROM players WHERE 1=1";
-    const countParams = [];
-    if (game) {
-      countQuery += " AND game = ?";
-      countParams.push(sanitizeString(game, 50));
+      // Add SQL-based sorting instead of JavaScript sorting
+      if (sortField === "total_playtime") {
+        query += ` ORDER BY _total_playtime ${sortOrder}`;
+      } else if (sortField === "last_seen") {
+        query += ` ORDER BY _last_seen ${sortOrder}`;
+      } else {
+        query += ` ORDER BY p.steamid ${sortOrder}`;
+      }
+
+      // Add pagination in SQL
+      query += " LIMIT ? OFFSET ?";
+      params.push(validLimit, offset);
+
+      const [rawPlayers] = await pool.query(query, params);
+
+      // Parse JSON fields from SQL (MariaDB/MySQL returns JSON as strings or buffers)
+      const players = rawPlayers.map((row) => {
+        const {
+          _total_playtime,
+          _last_seen,
+          _permissions,
+          whitelisted,
+          _csgo_modes,
+          _cs2_modes,
+          ...player
+        } = row;
+
+        // Helper to parse JSON from various formats
+        const parseJson = (value) => {
+          if (!value) return {};
+          if (typeof value === "string") return JSON.parse(value);
+          if (Buffer.isBuffer(value)) return JSON.parse(value.toString("utf8"));
+          if (typeof value === "object") return value;
+          return {};
+        };
+
+        // Per-mode playtime is null when the player has no row for that game.
+        const parseModes = (value) => {
+          if (!value) return null;
+          if (typeof value === "string") return JSON.parse(value);
+          if (Buffer.isBuffer(value)) return JSON.parse(value.toString("utf8"));
+          if (typeof value === "object") return value;
+          return null;
+        };
+
+        player.csgo = parseJson(row.csgo);
+        player.counterstrike2 = parseJson(row.counterstrike2);
+        // Annotate only a game the player has actually played (leave {} otherwise).
+        if (Object.keys(player.csgo).length > 0) {
+          player.csgo.playtime_modes = parseModes(_csgo_modes);
+        }
+        if (Object.keys(player.counterstrike2).length > 0) {
+          player.counterstrike2.playtime_modes = parseModes(_cs2_modes);
+        }
+        player.discord_id = player.discord_id || null;
+        player.permissions = _permissions ? parseJson(_permissions) : null;
+        player.whitelisted = Boolean(whitelisted);
+
+        return player;
+      });
+
+      // Get total count (separate query for accuracy)
+      let countQuery =
+        "SELECT COUNT(DISTINCT steamid) as total FROM players WHERE 1=1";
+      const countParams = [];
+      if (game) {
+        countQuery += " AND game = ?";
+        countParams.push(sanitizeString(game, 50));
+      }
+      if (name) {
+        countQuery += " AND latest_name LIKE ?";
+        countParams.push(`%${sanitizeString(name, 100)}%`);
+      }
+      const [[{ total }]] = await pool.query(countQuery, countParams);
+
+      res.json({
+        data: players,
+        pagination: paginationMeta(validPage, validLimit, total),
+      });
+    } catch (error) {
+      logger.error(`Failed to fetch players: ${error.message}`);
+      res.status(500).json({ error: "Failed to fetch players" });
     }
-    if (name) {
-      countQuery += " AND latest_name LIKE ?";
-      countParams.push(`%${sanitizeString(name, 100)}%`);
-    }
-    const [[{ total }]] = await pool.query(countQuery, countParams);
-
-    res.json({
-      data: players,
-      pagination: paginationMeta(validPage, validLimit, total),
-    });
-  } catch (error) {
-    logger.error(`Failed to fetch players: ${error.message}`);
-    res.status(500).json({ error: "Failed to fetch players" });
-  }
-});
+  },
+);
 
 /**
  * @swagger
@@ -427,7 +432,7 @@ router.get("/", cacheMiddleware(30, playersKeyGenerator), async (req, res) => {
 // Cache for 10 seconds (shorter since it's real-time data)
 router.get(
   "/online",
-  cacheMiddleware(10, onlinePlayersKeyGenerator),
+  cacheMiddleware(CACHE_TTL.LIVE, onlinePlayersKeyGenerator),
   async (req, res) => {
     try {
       const { game, server } = req.query;
