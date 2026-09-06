@@ -682,7 +682,7 @@ async function restoreJumpstat(id, game = "cs2") {
     if (insertResult.affectedRows === 0) {
       await connection.rollback();
       connection.release();
-      return { success: false, message: "Record not found in quarantine" };
+      return { refused: "not_found" };
     }
 
     await connection.query(deleteQuery, [id]);
@@ -692,7 +692,7 @@ async function restoreJumpstat(id, game = "cs2") {
 
     logger.info(`Restored jumpstat ${id} from quarantine (${game})`);
 
-    return { success: true, message: "Record restored successfully" };
+    return { restored: true };
   } catch (error) {
     await connection.rollback();
     connection.release();
@@ -784,11 +784,7 @@ async function restoreAllJumpstats(game, options = {}) {
     if (totalToRestore === 0) {
       await connection.rollback();
       connection.release();
-      return {
-        success: true,
-        restored: 0,
-        message: "No records to restore",
-      };
+      return { restored: 0 };
     }
 
     // Insert all back to original table
@@ -806,11 +802,7 @@ async function restoreAllJumpstats(game, options = {}) {
       }`,
     );
 
-    return {
-      success: true,
-      restored: insertResult.affectedRows,
-      message: `Restored ${insertResult.affectedRows} records`,
-    };
+    return { restored: insertResult.affectedRows };
   } catch (error) {
     await connection.rollback();
     connection.release();

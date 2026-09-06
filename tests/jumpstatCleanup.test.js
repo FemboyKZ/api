@@ -557,8 +557,9 @@ describe("Jumpstat Cleanup Admin Endpoints", () => {
         .expect("Content-Type", /json/)
         .expect(404);
 
-      expect(response.body).toHaveProperty("success", false);
-      expect(response.body).toHaveProperty("error");
+      expect(response.body).toEqual({
+        error: "Record not found in quarantine",
+      });
     });
   });
 });

@@ -146,7 +146,6 @@ router.get("/transactions", adminAuth, async (req, res) => {
     const { page, limit, offset } = validatePagination(
       req.query.page,
       req.query.limit,
-      100,
     );
 
     const where = [];

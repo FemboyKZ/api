@@ -775,19 +775,16 @@ router.post("/restore-jumpstat/:id", async (req, res) => {
 
     const result = await restoreJumpstat(id, game);
 
-    if (result.success) {
-      res.json({
-        success: true,
-        message: result.message,
-        id,
-        game,
-      });
-    } else {
-      res.status(404).json({
-        success: false,
-        error: result.message,
-      });
+    if (result.refused) {
+      return res.status(404).json({ error: "Record not found in quarantine" });
     }
+
+    res.json({
+      success: true,
+      message: "Record restored successfully",
+      id,
+      game,
+    });
   } catch (error) {
     logger.error("Failed to restore jumpstat", { error: error.message });
     res.status(500).json({ error: "Failed to restore jumpstat" });
@@ -846,9 +843,11 @@ router.post("/restore-all-jumpstats", async (req, res) => {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
     res.json({
-      success: result.success,
+      success: true,
       restored: result.restored,
-      message: result.message,
+      message: result.restored
+        ? `Restored ${result.restored} records`
+        : "No records to restore",
       game,
       filterId: filterId || null,
       elapsed: `${elapsed}s`,
