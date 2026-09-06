@@ -2,8 +2,7 @@
  * Entitlements Service
  *
  * Derives a player's VIP standing from their lifetime EUR spend and keeps player_meta in sync:
- * tier role (vip/vip+/vip++), gift-token balance, and the redemption of gifts
- * that were waiting on an email/SteamID to register.
+ * tier role (vip/vip+/vip++), gift-token balance, and the redemption of gifts that were waiting on an email/SteamID to register.
  *
  * Spend is cumulative and never expires.
  * Tier roles are recomputed idempotently so re-running is safe.
@@ -14,6 +13,7 @@
  */
 
 const logger = require("../../utils/logger");
+const pool = require("../../db");
 const {
   TIER_ROLES,
   tierForTotal,
@@ -155,11 +155,108 @@ async function redeemPendingGifts(conn, steamid, email) {
   return { redeemed: gifts.length, creditedEur };
 }
 
+/**
+ * Set a custom permission field behind a lifetime-spend gate.
+ *
+ * Unlike the helpers above this owns its transaction.
+ *
+ * @param {string} steamid
+ * @param {number} requiredEur - lifetime spend the player must have reached
+ * @param {(perms: object) => void} mutate - edits the parsed permissions in place
+ * @returns {Promise<{perms: object} | {insufficientSpend: {required: number, total: number}}>}
+ *   Throws on any database failure, having rolled back.
+ */
+async function setCustomPermission(steamid, requiredEur, mutate) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.query(
+      "SELECT total_spent_eur, permissions FROM player_meta WHERE steamid = ? FOR UPDATE",
+      [steamid],
+    );
+    const total = rows.length ? parseFloat(rows[0].total_spent_eur) || 0 : 0;
+    if (total < requiredEur) {
+      await conn.rollback();
+      return { insufficientSpend: { required: requiredEur, total } };
+    }
+
+    const perms = parsePermissions(rows.length ? rows[0].permissions : null);
+    mutate(perms);
+    await conn.query(
+      `INSERT INTO player_meta (steamid, permissions) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE permissions = VALUES(permissions), updated_at = CURRENT_TIMESTAMP`,
+      [steamid, JSON.stringify(perms)],
+    );
+    await conn.commit();
+    return { perms };
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
+
+/**
+ * Spend one of a player's gift tokens, either granting VIP to a known player or recording a pending gift against an email address.
+ *
+ * Owns its transaction for the same reason as setCustomPermission:
+ * the balance must stay locked from the check through the decrement.
+ *
+ * @param {string} from - sender's steamid64
+ * @param {{giftTo: string|null, emailTarget: string|null}} target
+ * @returns {Promise<{pendingGiftId: number|null, remainingTokens: number} | {noTokens: true}>}
+ *   Throws on any database failure, having rolled back.
+ */
+async function redeemGiftToken(from, { giftTo, emailTarget }) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [rows] = await conn.query(
+      "SELECT gift_tokens FROM player_meta WHERE steamid = ? FOR UPDATE",
+      [from],
+    );
+    const balance = rows.length ? rows[0].gift_tokens : 0;
+    if (balance < 1) {
+      await conn.rollback();
+      return { noTokens: true };
+    }
+
+    await conn.query(
+      "UPDATE player_meta SET gift_tokens = gift_tokens - 1, updated_at = CURRENT_TIMESTAMP WHERE steamid = ?",
+      [from],
+    );
+
+    let pendingGiftId = null;
+    if (giftTo) {
+      await grantBaseVip(conn, giftTo);
+    } else {
+      const [pg] = await conn.query(
+        `INSERT INTO pending_gifts
+           (kind, target_type, target_value, source_steamid)
+         VALUES ('vip', 'email', ?, ?)`,
+        [emailTarget, from],
+      );
+      pendingGiftId = pg.insertId;
+    }
+
+    await conn.commit();
+    return { pendingGiftId, remainingTokens: balance - 1 };
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
+
 module.exports = {
   parsePermissions,
+  setCustomPermission,
+  redeemGiftToken,
   ensureRow,
   recomputeEntitlements,
   creditSpend,
-  grantBaseVip,
   redeemPendingGifts,
 };

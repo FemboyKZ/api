@@ -14,8 +14,8 @@ const {
   hashToken,
   generateToken,
   logContact,
+  verifyEmailToken,
 } = require("../services/vip/contacts");
-const { redeemPendingGifts } = require("../services/vip/entitlements");
 
 // All contact-linking routes require admin auth
 // (site2 calls them server-side after proving SteamID ownership via Steam OpenID).
@@ -157,96 +157,35 @@ router.post("/email/verify", async (req, res) => {
     return res.status(400).json({ error: "Missing token" });
   }
 
-  const conn = await pool.getConnection();
   try {
-    await conn.beginTransaction();
+    const result = await verifyEmailToken(token);
 
-    const [rows] = await conn.query(
-      `SELECT id, steamid, email, expires_at, consumed_at
-       FROM player_email_verifications WHERE token_hash = ? FOR UPDATE`,
-      [hashToken(token)],
-    );
-    if (!rows.length) {
-      await conn.rollback();
-      return res.status(404).json({ error: "Invalid token" });
-    }
-    const v = rows[0];
-    if (v.consumed_at) {
-      await conn.rollback();
-      return res.status(409).json({ error: "Token already used" });
-    }
-    if (new Date(v.expires_at).getTime() < Date.now()) {
-      await conn.rollback();
-      return res.status(410).json({ error: "Token expired" });
+    if (result.refused) {
+      const refusals = {
+        invalid_token: [404, "Invalid token"],
+        already_used: [409, "Token already used"],
+        expired: [410, "Token expired"],
+        email_taken: [409, "Email already linked to another account"],
+      };
+      const [status, error] = refusals[result.refused];
+      if (result.refused === "email_taken") {
+        logger.warn("Contacts: email link blocked (already in use)", {
+          existing: result.existing,
+        });
+      }
+      return res.status(status).json({ error });
     }
 
-    // Enforce one email -> one SteamID.
-    // If this email is already linked to a different account, reject.
-    // Record the attempt + consume the token so it can't be retried.
-    const [taken] = await conn.query(
-      "SELECT steamid FROM player_meta WHERE email = ? AND steamid <> ? LIMIT 1",
-      [v.email, v.steamid],
-    );
-    if (taken.length) {
-      await logContact(
-        v.steamid,
-        "email",
-        v.email,
-        "blocked",
-        `already linked to ${taken[0].steamid}`,
-        conn,
-      );
-      await conn.query(
-        "UPDATE player_email_verifications SET consumed_at = CURRENT_TIMESTAMP WHERE id = ?",
-        [v.id],
-      );
-      await conn.commit();
-      logger.warn("Contacts: email link blocked (already in use)", {
-        steamid: v.steamid,
-        existing: taken[0].steamid,
-      });
-      return res
-        .status(409)
-        .json({ error: "Email already linked to another account" });
-    }
-
-    // Capture any existing email to log as replaced
-    const [metaRows] = await conn.query(
-      "SELECT email FROM player_meta WHERE steamid = ? FOR UPDATE",
-      [v.steamid],
-    );
-    const oldEmail = metaRows.length ? metaRows[0].email : null;
-    if (oldEmail && oldEmail !== v.email) {
-      await logContact(v.steamid, "email", oldEmail, "replaced", null, conn);
-    }
-
-    await conn.query(
-      `INSERT INTO player_meta (steamid, email, email_verified_at)
-       VALUES (?, ?, CURRENT_TIMESTAMP)
-       ON DUPLICATE KEY UPDATE email = VALUES(email),
-                               email_verified_at = CURRENT_TIMESTAMP,
-                               updated_at = CURRENT_TIMESTAMP`,
-      [v.steamid, v.email],
-    );
-    await logContact(v.steamid, "email", v.email, "linked", null, conn);
-
-    await conn.query(
-      "UPDATE player_email_verifications SET consumed_at = CURRENT_TIMESTAMP WHERE id = ?",
-      [v.id],
-    );
-
-    // Redeem any gifts that were waiting on this email (or this SteamID).
-    const redeemed = await redeemPendingGifts(conn, v.steamid, v.email);
-
-    await conn.commit();
-    logger.info(`Contacts: email linked for ${v.steamid}`);
-    res.json({ success: true, steamid: v.steamid, email: v.email, redeemed });
+    logger.info(`Contacts: email linked for ${result.steamid}`);
+    res.json({
+      success: true,
+      steamid: result.steamid,
+      email: result.email,
+      redeemed: result.redeemed,
+    });
   } catch (error) {
-    await conn.rollback();
     logger.error("Contacts: email verify failed", { error: error.message });
     res.status(500).json({ error: "Failed to verify email" });
-  } finally {
-    conn.release();
   }
 });
 

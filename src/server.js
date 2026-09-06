@@ -55,7 +55,6 @@ const {
 const {
   startMapGlobalInfoSyncJob,
   stopMapGlobalInfoSyncJob,
-  GLOBALINFO_INTERVAL,
 } = require("./services/kz/mapGlobalInfoSync");
 const {
   startStatisticsJob,

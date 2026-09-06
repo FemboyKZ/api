@@ -9,8 +9,7 @@
  * claiming credits the chosen recipient's lifetime EUR total, which drives their VIP tier.
  * See src/api/kofi.js (claim flow) and src/services/vip/entitlements.js.
  *
- * Ko-fi posts data as application/x-www-form-urlencoded with a single `data`
- * field containing a JSON string.
+ * Ko-fi posts data as application/x-www-form-urlencoded with a single `data` field containing a JSON string.
  *
  * Config (env):
  *   KOFI_WEBHOOK_ENABLED    - "true" to accept webhooks (default: true if token set)
@@ -24,8 +23,13 @@ const logger = require("../../utils/logger");
 const {
   isValidSteamID,
   convertToSteamID64,
+  resolveSteamID,
 } = require("../../utils/validators");
-const { findSteamIDByEmail } = require("./contacts");
+const {
+  findSteamIDByEmail,
+  isValidEmail,
+  normalizeEmail,
+} = require("./contacts");
 const { convertToEUR } = require("./currency");
 const { creditSpend } = require("./entitlements");
 
@@ -39,8 +43,7 @@ const DISCORD_WEBHOOK = process.env.KOFI_DISCORD_WEBHOOK || "";
 
 /**
  * Extract a SteamID64 from free-form text (the Ko-fi checkout message).
- * Supports SteamID64, SteamID2 (STEAM_X:Y:Z), SteamID3 ([U:1:N]) and
- * steamcommunity.com/profiles/<id64> URLs.
+ * Supports SteamID64, SteamID2 (STEAM_X:Y:Z), SteamID3 ([U:1:N]) and steamcommunity.com/profiles/<id64> URLs.
  * @param {string} text
  * @returns {string|null} SteamID64 or null
  */
@@ -156,8 +159,8 @@ async function processKofiWebhook(raw) {
 
   const amountEur = await convertToEUR(p.amount, p.currency);
 
-  // Resolve the buyer's SteamID: first from the order message, then fall back
-  // to matching the Ko-fi email against a player's verified linked email.
+  // Resolve the buyer's SteamID:
+  // first from the order message, then fall back to matching the Ko-fi email against a player's verified linked email.
   let steamid = extractSteamID(p.message);
   let matchMethod = steamid ? "message" : null;
   if (!steamid && p.email) {
@@ -175,8 +178,8 @@ async function processKofiWebhook(raw) {
   // Resolution status only (claim_status handles the grant lifecycle).
   const status = steamid ? "matched" : "pending";
 
-  // Subscription payments auto-claim to the resolved buyer: the buyer already
-  // established intent by subscribing, so each renewal credits them directly.
+  // Subscription payments auto-claim to the resolved buyer:
+  // the buyer already established intent by subscribing, so each renewal credits them directly.
   // Requires a resolved SteamID, otherwise stays unclaimed.
   const isSubscription = p.type === "Subscription" || p.is_subscription_payment;
   const autoClaim = isSubscription && !!steamid;
@@ -266,8 +269,98 @@ async function processKofiWebhook(raw) {
   };
 }
 
+/**
+ * Claim a recorded donation, either crediting a player or recording a pending gift against an email address.
+ *
+ * Owns its transaction:
+ * the row must stay locked from the unclaimed check through the status update, so two claims cannot both succeed.
+ *
+ * @param {string|number} id - kofi_transactions id
+ * @param {{decision: "self"|"gift", actor: string|null, targetSteamid: string|null, targetEmail: string|null}} intent
+ * @returns {Promise<{claimStatus: string, beneficiary: string|null, pendingGiftId: number|null}
+ *   | {refused: "not_found"|"already_claimed"|"actor_required"|"target_required", claimStatus?: string}>}
+ *   Throws on any database failure, having rolled back.
+ */
+async function claimTransaction(
+  id,
+  { decision, actor, targetSteamid, targetEmail },
+) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [rows] = await conn.query(
+      "SELECT id, amount_eur, claim_status, steamid FROM kofi_transactions WHERE id = ? FOR UPDATE",
+      [id],
+    );
+    if (!rows.length) {
+      await conn.rollback();
+      return { refused: "not_found" };
+    }
+    const tx = rows[0];
+    if (tx.claim_status !== "unclaimed") {
+      await conn.rollback();
+      return { refused: "already_claimed", claimStatus: tx.claim_status };
+    }
+
+    let claimStatus;
+    let beneficiary = null;
+    let pendingGiftId = null;
+
+    if (decision === "self") {
+      if (!actor) {
+        await conn.rollback();
+        return { refused: "actor_required" };
+      }
+      beneficiary = actor;
+      await creditSpend(conn, beneficiary, tx.amount_eur);
+      claimStatus = "claimed";
+    } else {
+      const giftTo = resolveSteamID(targetSteamid);
+      if (giftTo) {
+        beneficiary = giftTo;
+        await creditSpend(conn, beneficiary, tx.amount_eur);
+      } else if (isValidEmail(targetEmail)) {
+        const [pg] = await conn.query(
+          `INSERT INTO pending_gifts
+             (kind, target_type, target_value, amount_eur, source_steamid, source_transaction_id)
+           VALUES ('credit', 'email', ?, ?, ?, ?)`,
+          [
+            normalizeEmail(targetEmail),
+            tx.amount_eur,
+            actor || tx.steamid,
+            tx.id,
+          ],
+        );
+        pendingGiftId = pg.insertId;
+      } else {
+        await conn.rollback();
+        return { refused: "target_required" };
+      }
+      claimStatus = "gifted";
+    }
+
+    await conn.query(
+      `UPDATE kofi_transactions
+       SET claim_status = ?, beneficiary_steamid = ?,
+           steamid = COALESCE(steamid, ?), claimed_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [claimStatus, beneficiary, actor, id],
+    );
+
+    await conn.commit();
+    return { claimStatus, beneficiary, pendingGiftId };
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
+
 module.exports = {
   processKofiWebhook,
+  claimTransaction,
   extractSteamID,
   WEBHOOK_ENABLED,
 };

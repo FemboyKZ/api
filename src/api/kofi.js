@@ -10,9 +10,11 @@ const pool = require("../db");
 const logger = require("../utils/logger");
 const { adminAuth } = require("../utils/auth");
 const { resolveSteamID, validatePagination } = require("../utils/validators");
-const { processKofiWebhook } = require("../services/vip/kofi");
+const {
+  processKofiWebhook,
+  claimTransaction,
+} = require("../services/vip/kofi");
 const { isValidEmail, normalizeEmail } = require("../services/vip/contacts");
-const { creditSpend } = require("../services/vip/entitlements");
 
 /**
  * POST /kofi/webhook
@@ -382,75 +384,26 @@ router.post("/transactions/:id/claim", adminAuth, async (req, res) => {
   }
   const actor = resolveSteamID(steamid);
 
-  const conn = await pool.getConnection();
   try {
-    await conn.beginTransaction();
+    const result = await claimTransaction(id, {
+      decision,
+      actor,
+      targetSteamid,
+      targetEmail,
+    });
 
-    const [rows] = await conn.query(
-      "SELECT id, amount_eur, claim_status, steamid FROM kofi_transactions WHERE id = ? FOR UPDATE",
-      [id],
-    );
-    if (!rows.length) {
-      await conn.rollback();
-      return res.status(404).json({ error: "Transaction not found" });
-    }
-    const tx = rows[0];
-    if (tx.claim_status !== "unclaimed") {
-      await conn.rollback();
-      return res.status(409).json({ error: `Already ${tx.claim_status}` });
-    }
-
-    let claimStatus;
-    let beneficiary = null;
-    let pendingGiftId = null;
-
-    if (decision === "self") {
-      if (!actor) {
-        await conn.rollback();
-        return res
-          .status(400)
-          .json({ error: "Valid steamid required for self-claim" });
-      }
-      beneficiary = actor;
-      await creditSpend(conn, beneficiary, tx.amount_eur);
-      claimStatus = "claimed";
-    } else {
-      // gift
-      const giftTo = resolveSteamID(targetSteamid);
-      if (giftTo) {
-        beneficiary = giftTo;
-        await creditSpend(conn, beneficiary, tx.amount_eur);
-      } else if (isValidEmail(targetEmail)) {
-        const [pg] = await conn.query(
-          `INSERT INTO pending_gifts
-             (kind, target_type, target_value, amount_eur, source_steamid, source_transaction_id)
-           VALUES ('credit', 'email', ?, ?, ?, ?)`,
-          [
-            normalizeEmail(targetEmail),
-            tx.amount_eur,
-            actor || tx.steamid,
-            tx.id,
-          ],
-        );
-        pendingGiftId = pg.insertId;
-      } else {
-        await conn.rollback();
-        return res
-          .status(400)
-          .json({ error: "gift requires targetSteamid or targetEmail" });
-      }
-      claimStatus = "gifted";
+    if (result.refused) {
+      const refusals = {
+        not_found: [404, "Transaction not found"],
+        already_claimed: [409, `Already ${result.claimStatus}`],
+        actor_required: [400, "Valid steamid required for self-claim"],
+        target_required: [400, "gift requires targetSteamid or targetEmail"],
+      };
+      const [status, error] = refusals[result.refused];
+      return res.status(status).json({ error });
     }
 
-    await conn.query(
-      `UPDATE kofi_transactions
-       SET claim_status = ?, beneficiary_steamid = ?,
-           steamid = COALESCE(steamid, ?), claimed_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      [claimStatus, beneficiary, actor, id],
-    );
-
-    await conn.commit();
+    const { claimStatus, beneficiary, pendingGiftId } = result;
     logger.info(`Ko-fi: transaction ${id} ${claimStatus}`, {
       beneficiary,
       pendingGiftId,
@@ -463,13 +416,10 @@ router.post("/transactions/:id/claim", adminAuth, async (req, res) => {
       pendingGiftId,
     });
   } catch (error) {
-    await conn.rollback();
     logger.error("Ko-fi: failed to claim transaction", {
       error: error.message,
     });
     res.status(500).json({ error: "Failed to claim transaction" });
-  } finally {
-    conn.release();
   }
 });
 

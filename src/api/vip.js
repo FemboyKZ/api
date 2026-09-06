@@ -18,7 +18,8 @@ const {
 } = require("../config/tiers");
 const {
   parsePermissions,
-  grantBaseVip,
+  setCustomPermission,
+  redeemGiftToken,
 } = require("../services/vip/entitlements");
 const { isValidEmail, normalizeEmail } = require("../services/vip/contacts");
 
@@ -152,39 +153,13 @@ router.post("/gift-token/redeem", async (req, res) => {
     return res.status(400).json({ error: "Cannot gift to self" });
   }
 
-  const conn = await pool.getConnection();
   try {
-    await conn.beginTransaction();
-
-    const [rows] = await conn.query(
-      "SELECT gift_tokens FROM player_meta WHERE steamid = ? FOR UPDATE",
-      [from],
-    );
-    const balance = rows.length ? rows[0].gift_tokens : 0;
-    if (balance < 1) {
-      await conn.rollback();
+    const result = await redeemGiftToken(from, { giftTo, emailTarget });
+    if (result.noTokens) {
       return res.status(400).json({ error: "No gift tokens available" });
     }
 
-    await conn.query(
-      "UPDATE player_meta SET gift_tokens = gift_tokens - 1, updated_at = CURRENT_TIMESTAMP WHERE steamid = ?",
-      [from],
-    );
-
-    let pendingGiftId = null;
-    if (giftTo) {
-      await grantBaseVip(conn, giftTo);
-    } else {
-      const [pg] = await conn.query(
-        `INSERT INTO pending_gifts
-           (kind, target_type, target_value, source_steamid)
-         VALUES ('vip', 'email', ?, ?)`,
-        [emailTarget, from],
-      );
-      pendingGiftId = pg.insertId;
-    }
-
-    await conn.commit();
+    const { pendingGiftId, remainingTokens } = result;
     logger.info(`VIP: gift token redeemed by ${from}`, {
       giftTo,
       emailTarget,
@@ -195,53 +170,13 @@ router.post("/gift-token/redeem", async (req, res) => {
       from,
       grantedTo: giftTo || null,
       pendingGiftId,
-      remainingTokens: balance - 1,
+      remainingTokens,
     });
   } catch (error) {
-    await conn.rollback();
     logger.error("VIP: gift token redeem failed", { error: error.message });
     res.status(500).json({ error: "Failed to redeem gift token" });
-  } finally {
-    conn.release();
   }
 });
-
-/**
- * Shared helper: read meta + check eligibility, then mutate one permissions field.
- * `min` is the EUR threshold required.
- */
-async function setCustomField(steamid, min, mutate) {
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    const [rows] = await conn.query(
-      "SELECT total_spent_eur, permissions FROM player_meta WHERE steamid = ? FOR UPDATE",
-      [steamid],
-    );
-    const total = rows.length ? parseFloat(rows[0].total_spent_eur) || 0 : 0;
-    if (total < min) {
-      await conn.rollback();
-      return {
-        error: 403,
-        message: `Requires €${min}+ lifetime (have €${total})`,
-      };
-    }
-    const perms = parsePermissions(rows.length ? rows[0].permissions : null);
-    mutate(perms);
-    await conn.query(
-      `INSERT INTO player_meta (steamid, permissions) VALUES (?, ?)
-       ON DUPLICATE KEY UPDATE permissions = VALUES(permissions), updated_at = CURRENT_TIMESTAMP`,
-      [steamid, JSON.stringify(perms)],
-    );
-    await conn.commit();
-    return { perms };
-  } catch (error) {
-    await conn.rollback();
-    throw error;
-  } finally {
-    conn.release();
-  }
-}
 
 /**
  * PUT /vip/:steamid/custom-role   (Discord custom role; €40+)
@@ -304,7 +239,7 @@ router.put("/:steamid/custom-role", async (req, res) => {
     if (typeof name !== "string" || !name.trim() || name.length > 32) {
       return res.status(400).json({ error: "name required (1-32 chars)" });
     }
-    const result = await setCustomField(
+    const result = await setCustomPermission(
       steamid,
       CUSTOM_ROLE_MIN_EUR,
       (perms) => {
@@ -316,8 +251,11 @@ router.put("/:steamid/custom-role", async (req, res) => {
         };
       },
     );
-    if (result.error) {
-      return res.status(result.error).json({ error: result.message });
+    if (result.insufficientSpend) {
+      const { required, total } = result.insufficientSpend;
+      return res
+        .status(403)
+        .json({ error: `Requires €${required}+ lifetime (have €${total})` });
     }
     logger.info(`VIP: custom role set for ${steamid}`);
     res.json({ success: true, steamid, customRole: result.perms.customRole });
@@ -362,7 +300,7 @@ router.delete("/:steamid/custom-role", async (req, res) => {
     if (!steamid)
       return res.status(400).json({ error: "Invalid SteamID format" });
     // No eligibility gate to remove (min 0).
-    const result = await setCustomField(steamid, 0, (perms) => {
+    const result = await setCustomPermission(steamid, 0, (perms) => {
       perms.customRole = null;
     });
     res.json({ success: true, steamid, customRole: result.perms.customRole });
@@ -434,15 +372,18 @@ router.put("/:steamid/custom-tag", async (req, res) => {
     if (typeof name !== "string" || !name.trim() || name.length > 32) {
       return res.status(400).json({ error: "name required (1-32 chars)" });
     }
-    const result = await setCustomField(
+    const result = await setCustomPermission(
       steamid,
       CUSTOM_TAG_MIN_EUR,
       (perms) => {
         perms.customTag = { color: String(color), name: name.trim() };
       },
     );
-    if (result.error) {
-      return res.status(result.error).json({ error: result.message });
+    if (result.insufficientSpend) {
+      const { required, total } = result.insufficientSpend;
+      return res
+        .status(403)
+        .json({ error: `Requires €${required}+ lifetime (have €${total})` });
     }
     logger.info(`VIP: custom tag set for ${steamid}`);
     res.json({ success: true, steamid, customTag: result.perms.customTag });
@@ -486,7 +427,7 @@ router.delete("/:steamid/custom-tag", async (req, res) => {
     const steamid = resolveSteamID(req.params.steamid);
     if (!steamid)
       return res.status(400).json({ error: "Invalid SteamID format" });
-    const result = await setCustomField(steamid, 0, (perms) => {
+    const result = await setCustomPermission(steamid, 0, (perms) => {
       perms.customTag = null;
     });
     res.json({ success: true, steamid, customTag: result.perms.customTag });
