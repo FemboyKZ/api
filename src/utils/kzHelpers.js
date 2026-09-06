@@ -5,16 +5,6 @@
  * used across the api/global and api/local routers.
  */
 
-// Import shared utilities from validators to avoid duplication
-const {
-  STEAM_BASE_ID,
-  steamid32To64,
-  steamid64To32,
-  validateSortField,
-  validateSortOrder,
-  defaultSortOrder,
-} = require("./validators");
-
 // ==================== CONSTANTS ====================
 
 /**
@@ -288,10 +278,6 @@ module.exports = {
   AIR_TYPES,
   BHOP_STAT_TYPES,
   SCROLL_EFF_TYPES,
-  STEAM_BASE_ID,
-  // SteamID conversion
-  steamid32To64,
-  steamid64To32,
   // Formatting
   formatRuntimeMs,
   formatRuntimeSeconds,
@@ -299,9 +285,6 @@ module.exports = {
   formatStat,
   formatAirtime,
   // Query helpers
-  validateSortField,
-  validateSortOrder,
-  defaultSortOrder,
   toCountQuery,
   computeCompletionStats,
   getYearlyPartitionHint,

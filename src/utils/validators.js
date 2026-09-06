@@ -31,6 +31,18 @@ function parsePort(port) {
   return isValidPort(portNum) ? portNum : null;
 }
 
+/**
+ * Discord snowflake: 17 digits is the earliest real account, 20 the most a uint64 can express.
+ */
+function isValidDiscordId(id) {
+  return /^[0-9]{17,20}$/.test(String(id ?? ""));
+}
+
+/** Hex colour, with or without the leading #. */
+function isValidHexColor(color) {
+  return /^#?[0-9a-fA-F]{6}$/.test(String(color ?? ""));
+}
+
 function isValidSteamID(steamid) {
   // SteamID64 format (17-18 digits starting with 76561)
   const steamid64Regex = /^76561[0-9]{12,13}$/;
@@ -292,6 +304,9 @@ module.exports = {
   isValidIP,
   isValidPort,
   parsePort,
+  // Discord validation
+  isValidDiscordId,
+  isValidHexColor,
   // SteamID functions
   isValidSteamID,
   convertToSteamID64,

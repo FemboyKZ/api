@@ -8,7 +8,7 @@ const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
 const { adminAuth } = require("../utils/auth");
-const { resolveSteamID } = require("../utils/validators");
+const { resolveSteamID, isValidHexColor } = require("../utils/validators");
 const { VALID_TAG_COLORS } = require("../config/permissions");
 const {
   tierForTotal,
@@ -24,8 +24,6 @@ const { isValidEmail, normalizeEmail } = require("../services/vip/contacts");
 
 // site2-mediated; all VIP/self-serve routes require admin auth.
 router.use(adminAuth);
-
-const HEX_COLOR_RE = /^#?[0-9a-fA-F]{6}$/;
 
 /**
  * GET /vip/:steamid
@@ -298,7 +296,7 @@ router.put("/:steamid/custom-role", async (req, res) => {
     if (!steamid)
       return res.status(400).json({ error: "Invalid SteamID format" });
     const { color, name } = req.body || {};
-    if (!HEX_COLOR_RE.test(String(color || ""))) {
+    if (!isValidHexColor(color)) {
       return res
         .status(400)
         .json({ error: "color must be a hex color (#RRGGBB)" });

@@ -1,4 +1,5 @@
 const {
+  STEAM_BASE_ID,
   isValidIP,
   isValidPort,
   isValidSteamID,
@@ -7,9 +8,52 @@ const {
   validatePagination,
   sanitizePlayerName,
   sanitizeMapName,
+  isValidDiscordId,
+  isValidHexColor,
 } = require("../src/utils/validators");
 
 describe("Validators", () => {
+  describe("isValidDiscordId", () => {
+    it("accepts 17 to 20 digit snowflakes", () => {
+      expect(isValidDiscordId("12345678901234567")).toBe(true); // 17
+      expect(isValidDiscordId("123456789012345678")).toBe(true); // 18
+      expect(isValidDiscordId("1234567890123456789")).toBe(true); // 19
+      expect(isValidDiscordId("12345678901234567890")).toBe(true); // 20
+    });
+
+    it("rejects lengths no real snowflake has", () => {
+      expect(isValidDiscordId("1234567890123456")).toBe(false); // 16
+      expect(isValidDiscordId("123456789012345678901")).toBe(false); // 21
+    });
+
+    it("rejects non-digits and empty input", () => {
+      expect(isValidDiscordId("12345678901234567a")).toBe(false);
+      expect(isValidDiscordId("")).toBe(false);
+      expect(isValidDiscordId(null)).toBe(false);
+      expect(isValidDiscordId(undefined)).toBe(false);
+    });
+  });
+
+  describe("isValidHexColor", () => {
+    it("accepts six hex digits with or without a leading hash", () => {
+      expect(isValidHexColor("#ff0000")).toBe(true);
+      expect(isValidHexColor("FF00AA")).toBe(true);
+    });
+
+    it("rejects wrong lengths, bad characters and empty input", () => {
+      expect(isValidHexColor("#fff")).toBe(false);
+      expect(isValidHexColor("#gg0000")).toBe(false);
+      expect(isValidHexColor("")).toBe(false);
+      expect(isValidHexColor(null)).toBe(false);
+    });
+  });
+
+  describe("STEAM_BASE_ID", () => {
+    it("is the SteamID64 offset", () => {
+      expect(STEAM_BASE_ID).toBe(BigInt("76561197960265728"));
+    });
+  });
+
   describe("isValidIP", () => {
     it("should validate IPv4 addresses", () => {
       expect(isValidIP("192.168.1.1")).toBe(true);

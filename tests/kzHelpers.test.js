@@ -6,10 +6,6 @@ const {
   AIR_TYPES,
   BHOP_STAT_TYPES,
   SCROLL_EFF_TYPES,
-  STEAM_BASE_ID,
-  // SteamID conversion
-  steamid32To64,
-  steamid64To32,
   // Formatting
   formatRuntimeMs,
   formatRuntimeSeconds,
@@ -17,8 +13,6 @@ const {
   formatStat,
   formatAirtime,
   // Query helpers
-  validateSortField,
-  validateSortOrder,
   getYearlyPartitionHint,
   getPlayerPartitionHint,
 } = require("../src/utils/kzHelpers");
@@ -75,56 +69,6 @@ describe("KZ Helpers", () => {
       expect(SCROLL_EFF_TYPES[2]).toBe("slow_scrolls");
       expect(SCROLL_EFF_TYPES[3]).toBe("timing_total");
       expect(SCROLL_EFF_TYPES[4]).toBe("timing_samples");
-    });
-
-    it("should have correct STEAM_BASE_ID", () => {
-      expect(STEAM_BASE_ID).toBe(BigInt("76561197960265728"));
-    });
-  });
-
-  describe("SteamID Conversion", () => {
-    describe("steamid32To64", () => {
-      it("should convert SteamID32 to SteamID64", () => {
-        // Account ID 1 = 76561197960265729
-        expect(steamid32To64(1)).toBe("76561197960265729");
-
-        // Account ID 24691 = 76561197960290419
-        expect(steamid32To64(24691)).toBe("76561197960290419");
-
-        // Account ID 484982302 = 76561198445248030
-        expect(steamid32To64(484982302)).toBe("76561198445248030");
-      });
-
-      it("should handle string input", () => {
-        expect(steamid32To64("1")).toBe("76561197960265729");
-        expect(steamid32To64("484982302")).toBe("76561198445248030");
-      });
-
-      it("should handle zero", () => {
-        expect(steamid32To64(0)).toBe("76561197960265728");
-      });
-    });
-
-    describe("steamid64To32", () => {
-      it("should convert SteamID64 to SteamID32", () => {
-        expect(steamid64To32("76561197960265729")).toBe(1);
-        expect(steamid64To32("76561197960290419")).toBe(24691);
-        expect(steamid64To32("76561198445248030")).toBe(484982302);
-      });
-
-      it("should handle base SteamID64", () => {
-        expect(steamid64To32("76561197960265728")).toBe(0);
-      });
-    });
-
-    it("should be reversible conversions", () => {
-      const testIds = [1, 12345, 24691, 484982302, 1000000000];
-
-      testIds.forEach((steamid32) => {
-        const steamid64 = steamid32To64(steamid32);
-        const backToSteamid32 = steamid64To32(steamid64);
-        expect(backToSteamid32).toBe(steamid32);
-      });
     });
   });
 
@@ -191,44 +135,6 @@ describe("KZ Helpers", () => {
   });
 
   describe("Query Helpers", () => {
-    describe("validateSortField", () => {
-      const validFields = ["name", "date", "score", "time"];
-
-      it("should return valid sort field", () => {
-        expect(validateSortField("name", validFields, "date")).toBe("name");
-        expect(validateSortField("score", validFields, "date")).toBe("score");
-      });
-
-      it("should return default for invalid sort field", () => {
-        expect(validateSortField("invalid", validFields, "date")).toBe("date");
-        expect(validateSortField("", validFields, "date")).toBe("date");
-        expect(validateSortField(null, validFields, "date")).toBe("date");
-        expect(validateSortField(undefined, validFields, "date")).toBe("date");
-      });
-    });
-
-    describe("validateSortOrder", () => {
-      it("should return ASC for asc input", () => {
-        expect(validateSortOrder("asc")).toBe("ASC");
-      });
-
-      it("should return DESC for desc input", () => {
-        expect(validateSortOrder("desc")).toBe("DESC");
-      });
-
-      it("should return default for invalid input", () => {
-        expect(validateSortOrder("invalid")).toBe("DESC");
-        expect(validateSortOrder("")).toBe("DESC");
-        expect(validateSortOrder(null)).toBe("DESC");
-        expect(validateSortOrder(undefined)).toBe("DESC");
-      });
-
-      it("should use custom default order", () => {
-        expect(validateSortOrder("invalid", "ASC")).toBe("ASC");
-        expect(validateSortOrder(null, "ASC")).toBe("ASC");
-      });
-    });
-
     describe("getYearlyPartitionHint", () => {
       it("should return empty string without options and not optimizable", () => {
         expect(getYearlyPartitionHint()).toBe("");

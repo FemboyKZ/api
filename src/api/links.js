@@ -7,7 +7,7 @@ const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
 const { adminAuth } = require("../utils/auth");
-const { resolveSteamID } = require("../utils/validators");
+const { resolveSteamID, isValidDiscordId } = require("../utils/validators");
 const {
   isValidEmail,
   normalizeEmail,
@@ -22,7 +22,6 @@ const { redeemPendingGifts } = require("../services/vip/entitlements");
 // Contact data is private.
 router.use(adminAuth);
 
-const DISCORD_ID_RE = /^[0-9]{15,20}$/;
 const DEFAULT_TOKEN_TTL_HOURS = 24;
 
 /**
@@ -359,7 +358,7 @@ router.put("/discord", async (req, res) => {
     if (!steamid64) {
       return res.status(400).json({ error: "Invalid SteamID format" });
     }
-    if (!DISCORD_ID_RE.test(String(discordId || ""))) {
+    if (!isValidDiscordId(discordId)) {
       return res.status(400).json({ error: "Invalid Discord ID" });
     }
     const username =

@@ -7,7 +7,11 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
-const { resolveSteamID } = require("../utils/validators");
+const {
+  resolveSteamID,
+  isValidDiscordId,
+  isValidHexColor,
+} = require("../utils/validators");
 
 const { VALID_ROLES, VALID_TAG_COLORS } = require("../config/permissions");
 const {
@@ -919,7 +923,7 @@ router.put("/players/:steamid/discord", async (req, res) => {
       return res.status(400).json({ error: "Invalid SteamID format" });
     }
 
-    if (!discord_id || !/^\d{17,19}$/.test(String(discord_id))) {
+    if (!isValidDiscordId(discord_id)) {
       return res
         .status(400)
         .json({ error: "Invalid Discord ID (must be 17-19 digit snowflake)" });
@@ -1136,10 +1140,10 @@ router.put("/players/:steamid/permissions", async (req, res) => {
           .status(400)
           .json({ error: "customRole.id is required and must be a string" });
       }
-      if (!color || typeof color !== "string") {
+      if (!isValidHexColor(color)) {
         return res
           .status(400)
-          .json({ error: "customRole.color is required and must be a string" });
+          .json({ error: "customRole.color must be a hex color (#RRGGBB)" });
       }
       if (!name || typeof name !== "string") {
         return res
