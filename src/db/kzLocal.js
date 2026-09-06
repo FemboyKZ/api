@@ -111,12 +111,18 @@ async function closeAllKzLocalDatabases() {
   await closeKzLocalCSGO64Database();
 }
 
+/** Pool for a CS:GO tickrate, defaulting to 128 for anything but "64". */
+function getKzLocalCSGOPool(tickrate) {
+  return tickrate === "64" ? getKzLocalCSGO64Pool() : getKzLocalCSGO128Pool();
+}
+
 module.exports = {
   // Pool getters
   getAllKzLocalPools,
   getKzLocalCS2Pool,
   getKzLocalCSGO128Pool,
   getKzLocalCSGO64Pool,
+  getKzLocalCSGOPool,
   // Initialization
   initAllKzLocalDatabases,
   initKzLocalCS2Database,

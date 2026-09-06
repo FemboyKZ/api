@@ -1,6 +1,7 @@
 const request = require("supertest");
 const app = require("../src/app");
 const kzRecords = require("../src/db/kzRecords");
+const { resetSchemaCache } = require("../src/db/schema");
 
 // Create a single shared mock pool
 const mockPool = {
@@ -15,14 +16,12 @@ jest.mock("../src/db/redis", () => ({
   setCachedData: jest.fn(),
 }));
 
-const { resetTableExistsCache } = require("../src/api/global/players");
-
 describe("KZ Players Endpoints", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     kzRecords.getKzPool.mockReturnValue(mockPool);
-    // tableExists memoises, so start each test from a cold cache.
-    resetTableExistsCache();
+    // schema probes memoise, so start each test from a cold cache.
+    resetSchemaCache();
   });
 
   describe("GET /global/players", () => {

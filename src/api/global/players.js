@@ -1,13 +1,11 @@
 /**
  * Reads kz_players plus the PB cache maintained by services/kz/pbsCache.js.
- *
- * tableExists/resetTableExistsCache are exported below the router only so
- * tests/tableExistsCache.test.js can reach the cache.
  */
 
 const express = require("express");
 const router = express.Router();
 const { getKzPool } = require("../../db/kzRecords");
+const { tableExists } = require("../../db/schema");
 const {
   validatePagination,
   paginationMeta,
@@ -177,7 +175,10 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
     let query;
     const params = [];
 
-    if (useStatsTable && (await tableExists("kz_player_statistics"))) {
+    if (
+      useStatsTable &&
+      (await tableExists(getKzPool(), "kz_player_statistics"))
+    ) {
       // Use pre-aggregated statistics table if it exists
       query = `
         SELECT 
@@ -258,7 +259,10 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       params.push(isBanned);
     }
 
-    if (!useStatsTable || !(await tableExists("kz_player_statistics"))) {
+    if (
+      !useStatsTable ||
+      !(await tableExists(getKzPool(), "kz_player_statistics"))
+    ) {
       query +=
         " GROUP BY p.id, p.steamid64, p.steam_id, p.player_name, p.is_banned, p.created_at, p.updated_at";
 
@@ -271,7 +275,10 @@ router.get("/", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
     let countQuery;
     const countParams = [];
 
-    if (useStatsTable && (await tableExists("kz_player_statistics"))) {
+    if (
+      useStatsTable &&
+      (await tableExists(getKzPool(), "kz_player_statistics"))
+    ) {
       countQuery = `
         SELECT COUNT(DISTINCT p.id) as total 
         FROM kz_players p
@@ -379,7 +386,7 @@ router.get(
       const player = players[0];
 
       // Check if we have cached statistics - but verify against live count first
-      if (await tableExists("kz_player_statistics")) {
+      if (await tableExists(getKzPool(), "kz_player_statistics")) {
         const [cachedStats] = await pool.query(
           `
           SELECT 
@@ -467,7 +474,7 @@ router.get(
 
       // Get world records count from cache table if available
       let worldRecords = 0;
-      if (await tableExists("kz_worldrecords_cache")) {
+      if (await tableExists(getKzPool(), "kz_worldrecords_cache")) {
         const [wrStats] = await pool.query(
           `
           SELECT COUNT(*) as world_records
@@ -739,7 +746,10 @@ router.get(
       }
 
       // Check if PBs table exists and has data
-      const pbsTableExists = await tableExists("kz_player_map_pbs");
+      const pbsTableExists = await tableExists(
+        getKzPool(),
+        "kz_player_map_pbs",
+      );
 
       if (pbsTableExists) {
         // Use cached PBs
@@ -940,7 +950,10 @@ router.get(
       }
 
       // Check if PBs table exists
-      const pbsTableExists = await tableExists("kz_player_map_pbs");
+      const pbsTableExists = await tableExists(
+        getKzPool(),
+        "kz_player_map_pbs",
+      );
 
       if (pbsTableExists) {
         const result = await getPlayerMapCompletions(steamid64, {
@@ -1115,7 +1128,7 @@ router.get(
       let rank = null;
       let totalPlayers = null;
       let points = 0;
-      if (await tableExists("kz_player_statistics")) {
+      if (await tableExists(getKzPool(), "kz_player_statistics")) {
         const [[me]] = await pool.query(
           "SELECT total_points FROM kz_player_statistics WHERE player_id = ?",
           [playerId],
@@ -1247,7 +1260,7 @@ router.post("/:steamid/refresh-pbs", async (req, res) => {
     const playerName = players[0].player_name;
 
     // Check if PBs table exists
-    const pbsTableExists = await tableExists("kz_player_map_pbs");
+    const pbsTableExists = await tableExists(getKzPool(), "kz_player_map_pbs");
     if (!pbsTableExists) {
       return res.status(503).json({
         error: "PBs cache table not available",
@@ -1272,37 +1285,4 @@ router.post("/:steamid/refresh-pbs", async (req, res) => {
   }
 });
 
-// Helper function to check if a table exists
-// information_schema lookups are slow and this is called on every request, so remember the answer.
-// Missing tables are re-probed periodically so a migration lands without a restart.
-const tableExistsCache = new Map();
-const MISSING_TABLE_RECHECK_MS = 60_000;
-
-async function tableExists(tableName) {
-  const cached = tableExistsCache.get(tableName);
-  if (
-    cached &&
-    (cached.exists || Date.now() - cached.checkedAt < MISSING_TABLE_RECHECK_MS)
-  ) {
-    return cached.exists;
-  }
-
-  try {
-    const pool = getKzPool();
-    const [result] = await pool.query(
-      "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?",
-      [tableName],
-    );
-    const exists = result[0].count > 0;
-    tableExistsCache.set(tableName, { exists, checkedAt: Date.now() });
-    return exists;
-  } catch (error) {
-    // Not cached: the next request should retry.
-    return false;
-  }
-}
-
 module.exports = router;
-// Exported for tests.
-module.exports.tableExists = tableExists;
-module.exports.resetTableExistsCache = () => tableExistsCache.clear();

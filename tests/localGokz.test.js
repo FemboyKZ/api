@@ -3,8 +3,8 @@ const express = require("express");
 
 // Mock the dependencies before requiring the router
 jest.mock("../src/db/kzLocal", () => ({
-  getKzLocalCSGO128Pool: jest.fn(),
-  getKzLocalCSGO64Pool: jest.fn(),
+  getKzLocalCSGOPool: jest.fn(),
+  getKzLocalCS2Pool: jest.fn(),
 }));
 
 jest.mock("../src/utils/logger", () => ({
@@ -14,10 +14,7 @@ jest.mock("../src/utils/logger", () => ({
   debug: jest.fn(),
 }));
 
-const {
-  getKzLocalCSGO128Pool,
-  getKzLocalCSGO64Pool,
-} = require("../src/db/kzLocal");
+const { getKzLocalCSGOPool, getKzLocalCS2Pool } = require("../src/db/kzLocal");
 const kzLocalRouter = require("../src/api/local/gokz");
 
 const app = express();
@@ -32,8 +29,7 @@ describe("KZ Local Endpoints (CS:GO)", () => {
     mockPool = {
       query: jest.fn(),
     };
-    getKzLocalCSGO128Pool.mockReturnValue(mockPool);
-    getKzLocalCSGO64Pool.mockReturnValue(mockPool);
+    getKzLocalCSGOPool.mockReturnValue(mockPool);
   });
 
   // ==================== MAPS ENDPOINTS ====================
@@ -78,7 +74,7 @@ describe("KZ Local Endpoints (CS:GO)", () => {
       expect(firstCallParams).toContain("%example%");
     });
 
-    it("should use 64 tickrate pool when specified", async () => {
+    it("passes the requested tickrate through to the pool selector", async () => {
       mockPool.query
         .mockResolvedValueOnce([[]])
         .mockResolvedValueOnce([[{ total: 0 }]]);
@@ -86,7 +82,8 @@ describe("KZ Local Endpoints (CS:GO)", () => {
       const res = await request(app).get("/local/gokz/maps?tickrate=64");
 
       expect(res.status).toBe(200);
-      expect(getKzLocalCSGO64Pool).toHaveBeenCalled();
+      // Which pool that maps to is db/kzLocal's business - see kzLocalPools.test.js
+      expect(getKzLocalCSGOPool).toHaveBeenCalledWith("64");
     });
 
     it("should filter by ranked status", async () => {

@@ -7,8 +7,7 @@ const request = require("supertest");
 const express = require("express");
 
 jest.mock("../src/db/kzLocal", () => ({
-  getKzLocalCSGO128Pool: jest.fn(),
-  getKzLocalCSGO64Pool: jest.fn(),
+  getKzLocalCSGOPool: jest.fn(),
   getKzLocalCS2Pool: jest.fn(),
 }));
 
@@ -19,11 +18,7 @@ jest.mock("../src/utils/logger", () => ({
   debug: jest.fn(),
 }));
 
-const {
-  getKzLocalCSGO128Pool,
-  getKzLocalCSGO64Pool,
-  getKzLocalCS2Pool,
-} = require("../src/db/kzLocal");
+const { getKzLocalCSGOPool, getKzLocalCS2Pool } = require("../src/db/kzLocal");
 
 const gokzRouter = require("../src/api/local/gokz");
 const cs2kzRouter = require("../src/api/local/cs2kz");
@@ -43,8 +38,7 @@ describe("local timer filter branches", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPool = { query: jest.fn() };
-    getKzLocalCSGO128Pool.mockReturnValue(mockPool);
-    getKzLocalCSGO64Pool.mockReturnValue(mockPool);
+    getKzLocalCSGOPool.mockReturnValue(mockPool);
     getKzLocalCS2Pool.mockReturnValue(mockPool);
   });
 

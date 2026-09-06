@@ -17,6 +17,7 @@ const axios = require("axios");
 const { getKzPool } = require("../../db/kzRecords");
 const logger = require("../../utils/logger");
 const { sleep } = require("../../utils/retry");
+const { columnExists } = require("../../db/schema");
 
 const GOKZ_API_URL =
   process.env.GOKZ_API_URL || "https://kztimerglobal.com/api/v2";
@@ -340,15 +341,13 @@ async function initialPopulateWorldRecords() {
   }
 
   try {
-    // Check if new WR columns exist
-    const [columnCheck] = await pool.query(
-      `SELECT COUNT(*) as count FROM information_schema.columns 
-       WHERE table_schema = DATABASE() 
-       AND table_name = 'kz_map_statistics' 
-       AND column_name = 'wr_kz_timer_pro_time'`,
+    const hasWrColumns = await columnExists(
+      pool,
+      "kz_map_statistics",
+      "wr_kz_timer_pro_time",
     );
 
-    if (columnCheck[0].count === 0) {
+    if (!hasWrColumns) {
       logger.warn(
         "New WR columns not found in kz_map_statistics, run expand_wr_to_all_modes.sql migration first",
       );

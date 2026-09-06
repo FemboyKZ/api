@@ -34,10 +34,6 @@ const {
  * Get database pool
  * @returns {object} Database pool
  */
-function getPool() {
-  return getKzLocalCS2Pool();
-}
-
 // ==================== PLAYERS ENDPOINTS ====================
 
 // Projection shared by the jumpstat listing endpoints; each appends its own WHERE clause.
@@ -114,7 +110,7 @@ router.get(
         offset,
       } = validatePagination(page, limit, 100);
 
-      const pool = getPool();
+      const pool = getKzLocalCS2Pool();
 
       // Default matches /local/gokz/players; `created` is CS2-only.
       const validSortFields = ["records", "name", "last_played", "created"];
@@ -204,7 +200,7 @@ router.get(
   async (req, res) => {
     try {
       const { steamid } = req.params;
-      const pool = getPool();
+      const pool = getKzLocalCS2Pool();
 
       // Convert to SteamID64 if needed
       let steamid64 = steamid;
@@ -365,7 +361,7 @@ router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       offset,
     } = validatePagination(page, limit, 100);
 
-    const pool = getPool();
+    const pool = getKzLocalCS2Pool();
 
     const validSortFields = ["name", "last_played", "created", "records"];
     const sortFieldMap = {
@@ -454,7 +450,7 @@ router.get(
   async (req, res) => {
     try {
       const { mapname } = req.params;
-      const pool = getPool();
+      const pool = getKzLocalCS2Pool();
 
       // Get map info
       const [maps] = await pool.query(
@@ -647,7 +643,7 @@ router.get(
         offset,
       } = validatePagination(page, limit, 100);
 
-      const pool = getPool();
+      const pool = getKzLocalCS2Pool();
 
       const validSortFields = ["time", "created"];
       const sortFieldMap = {
@@ -770,7 +766,7 @@ router.get(
   async (req, res) => {
     try {
       const { id } = req.params;
-      const pool = getPool();
+      const pool = getKzLocalCS2Pool();
 
       const [records] = await pool.query(
         `SELECT 
@@ -896,7 +892,7 @@ router.get(
       const { mode, course, teleports, limit } = req.query;
       const validLimit = Math.min(parseInt(limit, 10) || 20, 100);
 
-      const pool = getPool();
+      const pool = getKzLocalCS2Pool();
 
       // Check if map exists
       const [maps] = await pool.query(`SELECT ID FROM Maps WHERE Name = ?`, [
@@ -1062,7 +1058,7 @@ router.get(
         offset,
       } = validatePagination(page, limit, 100);
 
-      const pool = getPool();
+      const pool = getKzLocalCS2Pool();
 
       const validSortFields = ["distance", "created"];
       const sortFieldMap = {
@@ -1183,7 +1179,7 @@ router.get(
       const validLimit = Math.min(parseInt(limit, 10) || 20, 100);
       const jumpType = parseInt(jump_type, 10) || 0;
 
-      const pool = getPool();
+      const pool = getKzLocalCS2Pool();
 
       let query = `
 ${JUMPSTAT_SELECT}
@@ -1265,7 +1261,7 @@ ${JUMPSTAT_SELECT}
  */
 router.get("/modes", cacheMiddleware(300, kzKeyGenerator), async (req, res) => {
   try {
-    const pool = getPool();
+    const pool = getKzLocalCS2Pool();
 
     const [modes] = await pool.query(
       `SELECT 
@@ -1305,7 +1301,7 @@ router.get(
   cacheMiddleware(300, kzKeyGenerator),
   async (req, res) => {
     try {
-      const pool = getPool();
+      const pool = getKzLocalCS2Pool();
 
       const [styles] = await pool.query(
         `SELECT 
@@ -1370,7 +1366,7 @@ router.get(
         offset,
       } = validatePagination(page, limit, 100);
 
-      const pool = getPool();
+      const pool = getKzLocalCS2Pool();
 
       let query = `
       SELECT 
@@ -1446,7 +1442,7 @@ router.get(
  */
 router.get("/stats", cacheMiddleware(120, kzKeyGenerator), async (req, res) => {
   try {
-    const pool = getPool();
+    const pool = getKzLocalCS2Pool();
 
     const [[stats]] = await pool.query(`
       SELECT 

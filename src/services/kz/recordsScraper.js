@@ -52,6 +52,7 @@ const { getKzPool } = require("../../db/kzRecords");
 const { updatePlayerBanStatus } = require("./banStatus");
 const { upsertBansWithChangeTracking } = require("./banChanges");
 const { sleep } = require("../../utils/retry");
+const { tableExists, columnExists } = require("../../db/schema");
 
 // Configuration
 const GOKZ_API_URL =
@@ -565,30 +566,6 @@ async function processRecord(connection, record) {
 }
 
 // Probed once per record insert otherwise.
-// Negative results are re-probed periodically so a migration lands without a restart.
-const schemaCache = new Map();
-const SCHEMA_RECHECK_MS = 60_000;
-
-/**
- * Run an information_schema COUNT(*) probe, remembering the answer.
- * @param {string} key - cache key naming what is being probed
- * @param {string} sql - probe returning a single `count` column
- */
-async function schemaHas(connection, key, sql) {
-  const cached = schemaCache.get(key);
-  if (
-    cached &&
-    (cached.exists || Date.now() - cached.checkedAt < SCHEMA_RECHECK_MS)
-  ) {
-    return cached.exists;
-  }
-
-  const [rows] = await connection.query(sql);
-  const exists = rows[0].count > 0;
-  schemaCache.set(key, { exists, checkedAt: Date.now() });
-  return exists;
-}
-
 /**
  * Update player PB and map WR caches when a new record is inserted
  * Only updates if the new time is better than existing cached time
@@ -610,12 +587,7 @@ async function updatePBAndWROnNewRecord(connection, recordData) {
 
   try {
     // Check if kz_player_map_pbs table exists
-    const hasPbsTable = await schemaHas(
-      connection,
-      "kz_player_map_pbs",
-      `SELECT COUNT(*) as count FROM information_schema.tables 
-       WHERE table_schema = DATABASE() AND table_name = 'kz_player_map_pbs'`,
-    );
+    const hasPbsTable = await tableExists(connection, "kz_player_map_pbs");
 
     if (hasPbsTable) {
       // Update player PB cache
@@ -635,13 +607,10 @@ async function updatePBAndWROnNewRecord(connection, recordData) {
     }
 
     // Check if kz_map_statistics table has new WR columns (expanded to all modes)
-    const hasWrColumns = await schemaHas(
+    const hasWrColumns = await columnExists(
       connection,
-      "kz_map_statistics.wr_kz_timer_pro_time",
-      `SELECT COUNT(*) as count FROM information_schema.columns 
-       WHERE table_schema = DATABASE() 
-       AND table_name = 'kz_map_statistics' 
-       AND column_name = 'wr_kz_timer_pro_time'`,
+      "kz_map_statistics",
+      "wr_kz_timer_pro_time",
     );
 
     // Only update WR for stage 0 (main course)

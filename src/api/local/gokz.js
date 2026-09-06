@@ -7,10 +7,7 @@
 
 const express = require("express");
 const router = express.Router();
-const {
-  getKzLocalCSGO128Pool,
-  getKzLocalCSGO64Pool,
-} = require("../../db/kzLocal");
+const { getKzLocalCSGOPool } = require("../../db/kzLocal");
 const {
   validatePagination,
   paginationMeta,
@@ -45,10 +42,6 @@ const {
  * @param {string} tickrate - "128" or "64"
  * @returns {object} Database pool
  */
-function getPoolForTickrate(tickrate) {
-  return tickrate === "64" ? getKzLocalCSGO64Pool() : getKzLocalCSGO128Pool();
-}
-
 // ==================== MAPS ENDPOINTS ====================
 
 /**
@@ -114,7 +107,7 @@ router.get("/maps", cacheMiddleware(60, kzKeyGenerator), async (req, res) => {
       offset,
     } = validatePagination(page, limit, 100);
 
-    const pool = getPoolForTickrate(tickrate);
+    const pool = getKzLocalCSGOPool(tickrate);
 
     const validSortFields = ["name", "last_played", "created", "records"];
     const sortFieldMap = {
@@ -216,7 +209,7 @@ router.get(
     try {
       const { mapname } = req.params;
       const { tickrate } = req.query;
-      const pool = getPoolForTickrate(tickrate);
+      const pool = getKzLocalCSGOPool(tickrate);
 
       // Get map info
       const [maps] = await pool.query(
@@ -398,7 +391,7 @@ router.get(
         offset,
       } = validatePagination(page, limit, 100);
 
-      const pool = getPoolForTickrate(tickrate);
+      const pool = getKzLocalCSGOPool(tickrate);
 
       const validSortFields = ["time", "created"];
       const sortFieldMap = {
@@ -524,7 +517,7 @@ router.get(
     try {
       const { id } = req.params;
       const { tickrate } = req.query;
-      const pool = getPoolForTickrate(tickrate);
+      const pool = getKzLocalCSGOPool(tickrate);
 
       const [records] = await pool.query(
         `SELECT 
@@ -680,7 +673,7 @@ router.get(
         1000, // Higher limit for jumpstats to allow client-side deduplication
       );
 
-      const pool = getPoolForTickrate(tickrate);
+      const pool = getKzLocalCSGOPool(tickrate);
 
       const validSortFields = ["distance", "created"];
       const sortFieldMap = {
@@ -807,7 +800,7 @@ router.get(
     try {
       const { id } = req.params;
       const { tickrate } = req.query;
-      const pool = getPoolForTickrate(tickrate);
+      const pool = getKzLocalCSGOPool(tickrate);
 
       const [jumpstats] = await pool.query(
         `SELECT 
@@ -932,7 +925,7 @@ router.get(
         offset,
       } = validatePagination(page, limit, 100);
 
-      const pool = getPoolForTickrate(tickrate);
+      const pool = getKzLocalCSGOPool(tickrate);
 
       const validSortFields = ["records", "jumpstats", "last_played", "name"];
       const sortFieldMap = {
@@ -1037,7 +1030,7 @@ router.get(
     try {
       const { player } = req.params;
       const { tickrate } = req.query;
-      const pool = getPoolForTickrate(tickrate);
+      const pool = getKzLocalCSGOPool(tickrate);
 
       // Determine steamid32
       let steamid32;
