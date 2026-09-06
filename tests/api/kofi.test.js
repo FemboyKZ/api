@@ -23,12 +23,18 @@ jest.mock("../../src/utils/logger", () => ({
   debug: jest.fn(),
 }));
 
+jest.mock("../../src/services/vip/kofi", () => ({
+  ...jest.requireActual("../../src/services/vip/kofi"),
+  processKofiWebhook: jest.fn(),
+}));
+
 jest.mock("../../src/services/vip/entitlements", () => ({
   creditSpend: jest.fn().mockResolvedValue(undefined),
 }));
 
 const pool = require("../../src/db");
 const { creditSpend } = require("../../src/services/vip/entitlements");
+const { processKofiWebhook } = require("../../src/services/vip/kofi");
 const kofiRouter = require("../../src/api/kofi");
 
 const app = express();
@@ -223,5 +229,69 @@ describe("POST /kofi/transactions/:id/claim", () => {
 
     expect(conn.rollback).toHaveBeenCalled();
     expect(conn.release).toHaveBeenCalled();
+  });
+});
+
+/**
+ * The router only unwraps Ko-fi's form encoding and maps failures onto status codes;
+ * the decisions live in services/vip/kofi.js. What matters here is which failures Ko-fi is told to retry -
+ * a 200 or 4xx retires the message for good.
+ */
+describe("POST /kofi/webhook", () => {
+  const form = (data) =>
+    request(app)
+      .post("/kofi/webhook")
+      .type("form")
+      .send(data === undefined ? {} : { data });
+
+  it("passes the decoded payload to the service and echoes its answer", async () => {
+    processKofiWebhook.mockResolvedValue({
+      status: 200,
+      body: { success: true, id: 42 },
+    });
+
+    const res = await form(JSON.stringify({ message_id: "m-1", amount: "5" }));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, id: 42 });
+    expect(processKofiWebhook).toHaveBeenCalledWith({
+      message_id: "m-1",
+      amount: "5",
+    });
+  });
+
+  it("forwards a refusal's own status rather than flattening it to 200", async () => {
+    processKofiWebhook.mockResolvedValue({
+      status: 401,
+      body: { error: "Invalid verification token" },
+    });
+
+    const res = await form(JSON.stringify({ message_id: "m-1" }));
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("Invalid verification token");
+  });
+
+  // Neither is worth retrying: the payload will never parse, so refuse it for good.
+  it.each([
+    ["no data field", undefined, "Missing 'data' field"],
+    ["data that is not JSON", "not-json", "Malformed data JSON"],
+  ])("400s on %s, without calling the service", async (_name, data, error) => {
+    const res = await form(data);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe(error);
+    expect(processKofiWebhook).not.toHaveBeenCalled();
+  });
+
+  // A 500 is the one answer that makes Ko-fi resend the same message_id, which the service deduplicates -
+  // so a transient database failure must not ack the payment.
+  it("500s when processing throws, so Ko-fi retries the payment", async () => {
+    processKofiWebhook.mockRejectedValue(new Error("database down"));
+
+    const res = await form(JSON.stringify({ message_id: "m-1" }));
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe("Processing failed");
   });
 });
