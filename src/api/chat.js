@@ -234,6 +234,7 @@ router.get("/stream", (req, res) => {
  *               properties:
  *                 total:
  *                   type: integer
+ *                   description: Total stored messages, not the number returned
  *                 data:
  *                   type: array
  *                   items:
@@ -254,7 +255,10 @@ router.get("/history", async (req, res) => {
        FROM chat_messages ORDER BY id DESC LIMIT ?`,
       [limit],
     );
-    res.json({ total: rows.length, data: rows });
+    const [[{ total }]] = await pool.query(
+      "SELECT COUNT(*) as total FROM chat_messages",
+    );
+    res.json({ total, data: rows });
   } catch (error) {
     logger.error(`Cross-chat history error: ${error.message}`);
     res.status(500).json({ error: "Failed to fetch chat history" });
