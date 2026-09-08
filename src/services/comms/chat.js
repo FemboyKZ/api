@@ -28,8 +28,9 @@ const { emitChatMessage } = require("./websocket");
 
 const RING_CAPACITY = 300; // messages kept in memory for late readers
 const MAX_STREAM_BATCH = 25; // Messages per /chat/stream response.
-const MAX_MESSAGE_LEN = 512;
-const MAX_NAME_LEN = 64;
+// Byte budgets, not code-point counts
+const MAX_MESSAGE_BYTES = 512;
+const MAX_NAME_BYTES = 64;
 const RETENTION_DAYS = 30; // chat_messages older than this are pruned
 
 // ip:port -> { alias, game, region }
@@ -67,11 +68,20 @@ function loadServerLookup() {
 }
 
 /**
- * Cap a string at `max` characters without splitting a surrogate pair.
+ * Cap a string at `maxBytes` of UTF-8 without splitting a code point.
  */
-function truncateChars(text, max) {
-  const chars = [...text]; // iterates by code point
-  return chars.length > max ? chars.slice(0, max).join("") : text;
+function truncateBytes(text, maxBytes) {
+  if (Buffer.byteLength(text) <= maxBytes) return text;
+  let used = 0;
+  let out = "";
+  for (const ch of text) {
+    // iterates by code point, so a surrogate pair is kept or dropped whole
+    const size = Buffer.byteLength(ch);
+    if (used + size > maxBytes) break;
+    used += size;
+    out += ch;
+  }
+  return out;
 }
 
 /**
@@ -82,7 +92,7 @@ function sanitizeMessage(text) {
   if (!text || typeof text !== "string") return "";
   let cleaned = text.replace(/[\x00-\x1F\x7F]/g, ""); // color codes / control
   cleaned = cleaned.replace(/\s+/g, " ").trim();
-  return truncateChars(cleaned, MAX_MESSAGE_LEN);
+  return truncateBytes(cleaned, MAX_MESSAGE_BYTES);
 }
 
 function headId() {
@@ -143,9 +153,9 @@ function addMessage({ ip, port, steamid, name, message, team, muted }) {
   const cfg = serverLookup.get(serverKey);
   if (!cfg) return { error: "Server not registered" };
 
-  const cleanName = truncateChars(
+  const cleanName = truncateBytes(
     sanitizePlayerName(name) || "Unknown",
-    MAX_NAME_LEN,
+    MAX_NAME_BYTES,
   );
   const cleanMsg = sanitizeMessage(message);
   if (!cleanMsg) return null; // empty after sanitization, nothing to relay

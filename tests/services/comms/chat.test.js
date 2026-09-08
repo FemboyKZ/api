@@ -59,21 +59,33 @@ describe("cross-chat ingest", () => {
 
   // The odd-length ASCII prefix is load bearing:
   // it puts the cut-off point on an odd UTF-16 index, so substring() would slice a surrogate pair down the middle.
-  it("truncates long names without splitting a surrogate pair", () => {
+  it("truncates long names to the byte budget, whole code points only", () => {
     const record = addMessage({
       ...SERVER,
       name: "a" + "\u{1F600}".repeat(64),
       message: "hi",
     });
-    expect([...record.name]).toHaveLength(64);
+    expect(Buffer.byteLength(record.name)).toBeLessThanOrEqual(64);
     expect(LONE_SURROGATE.test(record.name)).toBe(false);
     expect(JSON.parse(JSON.stringify(record.name))).toBe(record.name);
   });
 
-  it("truncates long messages without splitting a surrogate pair", () => {
+  it("truncates long messages to the byte budget, whole code points only", () => {
     const cleaned = sanitizeMessage("a" + "\u{1F600}".repeat(600));
-    expect([...cleaned]).toHaveLength(512);
+    expect(Buffer.byteLength(cleaned)).toBeLessThanOrEqual(512);
     expect(LONE_SURROGATE.test(cleaned)).toBe(false);
+  });
+
+  // Multi-byte text passed the old code-point cap at 4x its byte size,
+  // overflowing the fixed byte buffers the plugins print from.
+  it("keeps an all-emoji message inside the byte budget", () => {
+    const cleaned = sanitizeMessage("\u{1F600}".repeat(512));
+    expect(Buffer.byteLength(cleaned)).toBe(512);
+    expect([...cleaned]).toHaveLength(128);
+  });
+
+  it("still allows a full-length ASCII message", () => {
+    expect(sanitizeMessage("a".repeat(600))).toHaveLength(512);
   });
 
   it("leaves short strings untouched", () => {
