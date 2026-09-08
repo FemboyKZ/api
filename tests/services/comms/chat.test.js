@@ -12,6 +12,7 @@ const {
   addMessage,
   sanitizeMessage,
   loadServerLookup,
+  wait,
   _ring,
 } = require("../../../src/services/comms/chat");
 
@@ -77,5 +78,35 @@ describe("cross-chat ingest", () => {
 
   it("leaves short strings untouched", () => {
     expect(sanitizeMessage("  hello   world  ")).toBe("hello world");
+  });
+});
+
+describe("cross-chat stream batching", () => {
+  it("caps a backlog batch and pages the remainder", async () => {
+    const ids = [];
+    for (let i = 0; i < 60; i++) {
+      ids.push(addMessage({ ...SERVER, name: "dots", message: `m${i}` }).id);
+    }
+
+    const first = await wait(ids[0], null, 1000).promise;
+    expect(first.messages).toHaveLength(25);
+    expect(first.cursor).toBe(first.messages[24].id);
+
+    const second = await wait(first.cursor, null, 1000).promise;
+    expect(second.messages).toHaveLength(25);
+    expect(second.messages[0].id).toBe(first.cursor + 1);
+
+    const third = await wait(second.cursor, null, 1000).promise;
+    expect(third.messages).toHaveLength(9);
+    expect(third.cursor).toBe(ids[59]);
+  });
+
+  it("reports the ring head when the batch is not truncated", async () => {
+    const first = addMessage({ ...SERVER, name: "dots", message: "a" });
+    const last = addMessage({ ...SERVER, name: "dots", message: "b" });
+
+    const result = await wait(first.id - 1, null, 1000).promise;
+    expect(result.messages).toHaveLength(2);
+    expect(result.cursor).toBe(last.id);
   });
 });

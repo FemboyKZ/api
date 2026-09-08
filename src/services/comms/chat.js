@@ -27,6 +27,7 @@ const {
 const { emitChatMessage } = require("./websocket");
 
 const RING_CAPACITY = 300; // messages kept in memory for late readers
+const MAX_STREAM_BATCH = 25; // Messages per /chat/stream response.
 const MAX_MESSAGE_LEN = 512;
 const MAX_NAME_LEN = 64;
 const RETENTION_DAYS = 30; // chat_messages older than this are pruned
@@ -98,6 +99,19 @@ function getSince(after, excludeKey) {
     if (m.id > after && m.serverKey !== excludeKey) out.push(toWire(m));
   }
   return out;
+}
+
+/**
+ * One capped batch plus the cursor to send next.
+ * A truncated batch reports its own last id, not the ring head, so the remainder isn't skipped.
+ */
+function batchSince(after, excludeKey) {
+  const messages = getSince(after, excludeKey);
+  if (messages.length > MAX_STREAM_BATCH) {
+    const batch = messages.slice(0, MAX_STREAM_BATCH);
+    return { cursor: batch[batch.length - 1].id, messages: batch };
+  }
+  return { cursor: headId(), messages };
 }
 
 // Lean shape sent to the game servers.
@@ -196,10 +210,10 @@ function persist(record) {
 
 function wakeWaiters() {
   for (const w of [...waiters]) {
-    const msgs = getSince(w.after, w.excludeKey);
-    if (msgs.length > 0) {
+    const batch = batchSince(w.after, w.excludeKey);
+    if (batch.messages.length > 0) {
       removeWaiter(w);
-      w.resolve({ cursor: headId(), messages: msgs, aborted: false });
+      w.resolve({ ...batch, aborted: false });
     }
   }
 }
@@ -229,14 +243,10 @@ function wait(after, excludeKey, timeoutMs) {
     };
   }
 
-  const backlog = getSince(after, excludeKey);
-  if (backlog.length > 0) {
+  const backlog = batchSince(after, excludeKey);
+  if (backlog.messages.length > 0) {
     return {
-      promise: Promise.resolve({
-        cursor: headId(),
-        messages: backlog,
-        aborted: false,
-      }),
+      promise: Promise.resolve({ ...backlog, aborted: false }),
       cancel: () => {},
     };
   }
