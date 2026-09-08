@@ -1329,7 +1329,7 @@ router.put("/players/:steamid/whitelist", async (req, res) => {
  *         description: Server error
  */
 router.post("/cache/invalidate", async (req, res) => {
-  const { pattern } = req.body;
+  const { pattern } = req.body || {};
   if (!pattern || typeof pattern !== "string") {
     return res.status(400).json({ error: "pattern is required" });
   }
