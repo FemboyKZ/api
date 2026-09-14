@@ -322,20 +322,14 @@ router.post("/", async (req, res) => {
         for (const key of ALLOWED_MODES) {
           if (!(key in modeDeltas)) continue; // only modes the plugin reported
           const raw = Number(modeDeltas[key]);
-          if (Number.isFinite(raw) && raw > 0) {
-            // Clamp per report to guard against a buggy/abusive delta.
-            const delta = Math.min(Math.round(raw), 3600);
-            setExprs.push(
-              `'$."${key}"', COALESCE(JSON_EXTRACT(playtime_modes, '$."${key}"'), 0) + ?`,
-            );
-            setVals.push(delta);
-          } else {
-            // No data yet: show the mode key with null, but never clobber a value already accrued.
-            // JSON_EXTRACT returns the existing value, or SQL NULL (-> JSON null) when the key is absent.
-            setExprs.push(
-              `'$."${key}"', JSON_EXTRACT(playtime_modes, '$."${key}"')`,
-            );
-          }
+          if (!Number.isFinite(raw) || raw <= 0) continue; // no data this interval, leave any accrued value alone
+
+          // Clamp per report to guard against a buggy/abusive delta.
+          const delta = Math.min(Math.round(raw), 3600);
+          setExprs.push(
+            `'$."${key}"', COALESCE(JSON_EXTRACT(playtime_modes, '$."${key}"'), 0) + ?`,
+          );
+          setVals.push(delta);
         }
         if (setExprs.length > 0) {
           await pool.query(
