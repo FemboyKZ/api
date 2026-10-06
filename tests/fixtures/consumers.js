@@ -23,6 +23,15 @@ const WITH_METHOD =
   /"(GET|POST|PUT|DELETE|PATCH)"\s*,\s*"(\/[A-Za-z0-9/:%_.-]+)"/g;
 const BARE_PATH = /"(\/[A-Za-z0-9/:%_.-]+)"/g;
 
+// mm-fkz-api concatenates path segments (`"/maps/" + Encode(name) + "/records"`);
+// fold that into the printf form sm-fkz-api uses so both read as one path.
+const CONCAT = /"\s*\+\s*(Encode|std::to_string)\([^)]*\)(\s*\+\s*")?/g;
+const foldConcat = (src) =>
+  src.replace(CONCAT, (_, fn, tail) => {
+    const placeholder = fn === "Encode" ? "%s" : "%d";
+    return tail ? placeholder : placeholder + '"';
+  });
+
 /**
  * Sorted {method, path} calls found in the plugin sources, printf placeholders left intact.
  */
@@ -31,7 +40,7 @@ function scanConsumerCalls() {
 
   for (const file of CONSUMER_SOURCES) {
     if (!fs.existsSync(file)) continue;
-    const src = fs.readFileSync(file, "utf8");
+    const src = foldConcat(fs.readFileSync(file, "utf8"));
 
     // Explicit method first, so it wins over the GET default below.
     for (const [, method, p] of src.matchAll(WITH_METHOD)) {
