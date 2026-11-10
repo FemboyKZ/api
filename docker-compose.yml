@@ -10,7 +10,7 @@ services:
       MARIADB_USER: ${DB_USER:-apiuser}
       MARIADB_PASSWORD: ${DB_PASSWORD:-apipassword}
     ports:
-      - "3307:3306"
+      - "127.0.0.1:3307:3306"
     volumes:
       - mariadb_data:/var/lib/mysql
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
@@ -78,7 +78,7 @@ services:
       MARIADB_USER: ${KZ_DB_USER:-kz_user}
       MARIADB_PASSWORD: ${KZ_DB_PASSWORD:-kz_password}
     ports:
-      - "3308:3306"
+      - "127.0.0.1:3308:3306"
     volumes:
       - mariadb_kz_data:/var/lib/mysql
       - ./db/kz-records-schema.sql:/docker-entrypoint-initdb.d/01-kz-schema.sql:ro
@@ -141,7 +141,7 @@ services:
     container_name: server-api-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
